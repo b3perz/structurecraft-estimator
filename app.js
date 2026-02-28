@@ -95,15 +95,19 @@ function createNewEstimate() {
     rfiNotes: '',
     clientComms: '',
     contractorNotes: '',
-    buildingArea: 0,
-    numStories: 0,
     structuralSystem: 'post-beam',
-    gridSpacing: '',
-    floorToFloor: 0,
-    timberSpecies: 'douglas-fir',
+    materials: {
+      beams: 'glulam-df',
+      columns: 'glulam-df',
+      girders: 'glulam-df',
+      posts: 'glulam-df',
+      floors: 'clt-5ply',
+      roofs: 'clt-3ply',
+    },
     files: { rfp: [], drawings: [], structural: [], narratives: [], other: [] },
     assumptions: getDefaultAssumptions(),
     phases: {},
+    aiNotes: [],
     totalCost: 0,
     status: 'draft',
     createdAt: new Date().toISOString(),
@@ -209,6 +213,111 @@ const BRIDGE_TYPES = {
   'king-post-truss': { name: 'King Post Truss', description: 'Simple truss with single vertical post and two diagonals' },
 };
 
+// ---- SECTION 5C: MATERIAL OPTIONS ----
+const MATERIAL_OPTIONS = {
+  beams: {
+    label: 'Beams',
+    options: [
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 4.25, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 3.80, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.25, unit: 'BF' },
+      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 3.50, unit: 'BF' },
+      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 4.00, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 2800, unit: 'ton' },
+      { value: 'steel-hss-rect', label: 'Steel HSS Rectangular', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
+      { value: 'concrete-precast', label: 'Precast Concrete Beam', category: 'concrete', pricePer: 18, unit: 'LF' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 22, unit: 'LF' },
+    ]
+  },
+  columns: {
+    label: 'Columns',
+    options: [
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 4.50, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.00, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.75, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
+      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 4.25, unit: 'BF' },
+      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 3.75, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 2800, unit: 'ton' },
+      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
+      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3000, unit: 'ton' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 45, unit: 'LF' },
+      { value: 'concrete-precast', label: 'Precast Concrete', category: 'concrete', pricePer: 40, unit: 'LF' },
+    ]
+  },
+  girders: {
+    label: 'Girders',
+    options: [
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 4.50, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.00, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.75, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 2800, unit: 'ton' },
+      { value: 'steel-plate', label: 'Steel Plate Girder', category: 'steel', pricePer: 3500, unit: 'ton' },
+      { value: 'concrete-precast', label: 'Precast Concrete Girder', category: 'concrete', pricePer: 25, unit: 'LF' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 30, unit: 'LF' },
+    ]
+  },
+  posts: {
+    label: 'Posts',
+    options: [
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 4.25, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 3.80, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
+      { value: 'solid-df', label: 'Solid Sawn - Douglas Fir', category: 'timber', pricePer: 2.80, unit: 'BF' },
+      { value: 'solid-spruce', label: 'Solid Sawn - Spruce', category: 'timber', pricePer: 2.40, unit: 'BF' },
+      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
+      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3000, unit: 'ton' },
+      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 2800, unit: 'ton' },
+    ]
+  },
+  floors: {
+    label: 'Floors',
+    options: [
+      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 26, unit: 'SF' },
+      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 34, unit: 'SF' },
+      { value: 'clt-7ply', label: 'CLT 7-Ply (245mm)', category: 'timber', pricePer: 44, unit: 'SF' },
+      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 22, unit: 'SF' },
+      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 15, unit: 'SF' },
+      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 28, unit: 'SF' },
+      { value: 'concrete-metal-deck', label: 'Concrete on Metal Deck', category: 'concrete', pricePer: 14, unit: 'SF' },
+      { value: 'concrete-pt', label: 'Post-Tensioned Concrete Slab', category: 'concrete', pricePer: 18, unit: 'SF' },
+      { value: 'steel-deck', label: 'Steel Deck (bare)', category: 'steel', pricePer: 8, unit: 'SF' },
+      { value: 'composite-deck', label: 'Composite Steel Deck + Concrete', category: 'steel', pricePer: 16, unit: 'SF' },
+    ]
+  },
+  roofs: {
+    label: 'Roof',
+    options: [
+      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 26, unit: 'SF' },
+      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 34, unit: 'SF' },
+      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 22, unit: 'SF' },
+      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 15, unit: 'SF' },
+      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 28, unit: 'SF' },
+      { value: 'steel-deck', label: 'Steel Deck', category: 'steel', pricePer: 8, unit: 'SF' },
+      { value: 'sip', label: 'SIP (Structural Insulated Panel)', category: 'timber', pricePer: 18, unit: 'SF' },
+      { value: 'concrete-slab', label: 'Concrete Roof Slab', category: 'concrete', pricePer: 16, unit: 'SF' },
+    ]
+  },
+};
+
+// Global file storage - keeps actual File objects in memory for PDF extraction
+var FILE_STORE = {};
+
+// AI processing state
+var AI_STATE = {
+  processing: false,
+  estimateId: null,
+  progress: 0,
+  step: '',
+  startTime: null,
+  extractedText: {},
+};
+
 // ---- SECTION 6: PRICING LIBRARY ----
 const PRICING_LIBRARY = {
   'Mass Timber Materials': [
@@ -228,6 +337,29 @@ const PRICING_LIBRARY = {
     { id: 'hold-downs', name: 'Hold-Downs / Tie-Downs', unit: 'each', price: 85, range: [40, 150], supplier: 'Simpson Strong-Tie', updated: '2025-10' },
     { id: 'fasteners-screws', name: 'Structural Screws (SWG ASSY)', unit: 'each', price: 3.50, range: [1.50, 8.00], supplier: 'MTC Solutions', updated: '2025-09' },
     { id: 'lag-bolts', name: 'Lag Bolts (3/4" x 10")', unit: 'each', price: 6.50, range: [4.00, 10.00], supplier: 'Various', updated: '2025-09' },
+  ],
+  'Structural Steel': [
+    { id: 'steel-w-shapes', name: 'W-Shapes (Wide Flange)', unit: 'ton', price: 2800, range: [2400, 3400], supplier: 'Various Mills', updated: '2025-12' },
+    { id: 'steel-hss-rect', name: 'HSS Rectangular Sections', unit: 'ton', price: 3200, range: [2800, 3800], supplier: 'Atlas Tube', updated: '2025-12' },
+    { id: 'steel-hss-sq', name: 'HSS Square Sections', unit: 'ton', price: 3200, range: [2800, 3800], supplier: 'Atlas Tube', updated: '2025-12' },
+    { id: 'steel-hss-round', name: 'HSS Round Sections', unit: 'ton', price: 3400, range: [2900, 4000], supplier: 'Atlas Tube', updated: '2025-12' },
+    { id: 'steel-pipe', name: 'Steel Pipe Sections', unit: 'ton', price: 3000, range: [2600, 3600], supplier: 'Various', updated: '2025-11' },
+    { id: 'steel-angles', name: 'Steel Angles (L-Shapes)', unit: 'ton', price: 2600, range: [2200, 3200], supplier: 'Various Mills', updated: '2025-11' },
+    { id: 'steel-channels', name: 'Steel Channels (C-Shapes)', unit: 'ton', price: 2700, range: [2300, 3300], supplier: 'Various Mills', updated: '2025-11' },
+    { id: 'steel-plate', name: 'Steel Plate (fabricated)', unit: 'ton', price: 3500, range: [3000, 4200], supplier: 'Various', updated: '2025-11' },
+    { id: 'steel-rebar', name: 'Reinforcing Steel (Rebar)', unit: 'ton', price: 1800, range: [1500, 2200], supplier: 'Harris Rebar', updated: '2025-12' },
+  ],
+  'Concrete': [
+    { id: 'concrete-3000', name: 'Ready-Mix Concrete 3000 PSI', unit: 'CY', price: 185, range: [160, 220], supplier: 'Local Ready-Mix', updated: '2025-12' },
+    { id: 'concrete-4000', name: 'Ready-Mix Concrete 4000 PSI', unit: 'CY', price: 200, range: [175, 240], supplier: 'Local Ready-Mix', updated: '2025-12' },
+    { id: 'concrete-5000', name: 'Ready-Mix Concrete 5000 PSI', unit: 'CY', price: 220, range: [190, 260], supplier: 'Local Ready-Mix', updated: '2025-12' },
+    { id: 'concrete-6000', name: 'Ready-Mix Concrete 6000 PSI', unit: 'CY', price: 245, range: [210, 290], supplier: 'Local Ready-Mix', updated: '2025-12' },
+    { id: 'concrete-scc', name: 'Self-Consolidating Concrete', unit: 'CY', price: 280, range: [240, 340], supplier: 'Specialty Mix', updated: '2025-11' },
+    { id: 'concrete-metal-deck', name: 'Concrete on Metal Deck (3")', unit: 'SF', price: 14, range: [11, 18], supplier: 'Various', updated: '2025-11' },
+    { id: 'concrete-pt-slab', name: 'Post-Tensioned Slab', unit: 'SF', price: 18, range: [15, 24], supplier: 'Various', updated: '2025-10' },
+    { id: 'concrete-precast-beam', name: 'Precast Concrete Beam', unit: 'LF', price: 18, range: [14, 24], supplier: 'Various', updated: '2025-10' },
+    { id: 'concrete-precast-col', name: 'Precast Concrete Column', unit: 'LF', price: 40, range: [30, 55], supplier: 'Various', updated: '2025-10' },
+    { id: 'concrete-formwork', name: 'Formwork (standard)', unit: 'SF', price: 12, range: [8, 18], supplier: 'Various', updated: '2025-11' },
   ],
   'Secondary Materials': [
     { id: 'plywood-sheathing', name: 'Plywood Sheathing (3/4")', unit: 'SF', price: 3.75, range: [3.00, 5.00], supplier: 'Various', updated: '2025-11' },
@@ -756,49 +888,41 @@ function renderInputPage() {
       '</div>' +
     '</div>' +
 
-    '<!-- Building Parameters -->' +
+    '<!-- Structural System -->' +
     '<div class="card mb-16">' +
       '<div class="card-header">' +
-        '<div class="card-title">' + ICONS.building + ' Building Parameters</div>' +
+        '<div class="card-title">' + ICONS.building + ' Structural System</div>' +
       '</div>' +
       '<div class="form-row">' +
-        '<div class="form-group">' +
-          '<label class="form-label">Building Area (SF)</label>' +
-          '<input class="form-input" type="number" placeholder="e.g., 45000" value="' + (est.buildingArea || '') + '" onchange="updateEstimate(\'buildingArea\', parseFloat(this.value) || 0)">' +
-        '</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">Number of Stories</label>' +
-          '<input class="form-input" type="number" placeholder="e.g., 6" value="' + (est.numStories || '') + '" onchange="updateEstimate(\'numStories\', parseInt(this.value) || 0)">' +
-        '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Structural System</label>' +
           '<select class="form-select" onchange="updateEstimate(\'structuralSystem\', this.value)">' +
             '<option value="post-beam"' + (est.structuralSystem==='post-beam'?' selected':'') + '>Post-and-Beam</option>' +
             '<option value="panel-system"' + (est.structuralSystem==='panel-system'?' selected':'') + '>Panel System</option>' +
-            '<option value="hybrid"' + (est.structuralSystem==='hybrid'?' selected':'') + '>Hybrid</option>' +
+            '<option value="hybrid"' + (est.structuralSystem==='hybrid'?' selected':'') + '>Hybrid (Timber + Steel/Concrete)</option>' +
             '<option value="heavy-timber"' + (est.structuralSystem==='heavy-timber'?' selected':'') + '>Heavy Timber</option>' +
+            '<option value="mass-timber"' + (est.structuralSystem==='mass-timber'?' selected':'') + '>Mass Timber (CLT/DLT)</option>' +
+            '<option value="steel-frame"' + (est.structuralSystem==='steel-frame'?' selected':'') + '>Steel Frame</option>' +
+            '<option value="concrete-frame"' + (est.structuralSystem==='concrete-frame'?' selected':'') + '>Concrete Frame</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
-      '<div class="form-row">' +
-        '<div class="form-group">' +
-          '<label class="form-label">Grid Spacing</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., 30\' x 30\'" value="' + (est.gridSpacing || '') + '" onchange="updateEstimate(\'gridSpacing\', this.value)">' +
-        '</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">Floor-to-Floor Height (ft)</label>' +
-          '<input class="form-input" type="number" step="0.5" placeholder="e.g., 12" value="' + (est.floorToFloor || '') + '" onchange="updateEstimate(\'floorToFloor\', parseFloat(this.value) || 0)">' +
-        '</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">Timber Species</label>' +
-          '<select class="form-select" onchange="updateEstimate(\'timberSpecies\', this.value)">' +
-            '<option value="douglas-fir"' + (est.timberSpecies==='douglas-fir'?' selected':'') + '>Douglas Fir</option>' +
-            '<option value="spruce"' + (est.timberSpecies==='spruce'?' selected':'') + '>Spruce</option>' +
-            '<option value="yellow-cedar"' + (est.timberSpecies==='yellow-cedar'?' selected':'') + '>Yellow Cedar</option>' +
-            '<option value="western-red-cedar"' + (est.timberSpecies==='western-red-cedar'?' selected':'') + '>Western Red Cedar</option>' +
-          '</select>' +
+    '</div>' +
+
+    '<!-- Material Selections -->' +
+    '<div class="card mb-16">' +
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="card-title">' + ICONS.building + ' Material Selections</div>' +
+          '<div class="card-subtitle">Select the primary material for each structural element. These selections drive pricing in the estimate.</div>' +
         '</div>' +
       '</div>' +
+      renderMaterialSelect('beams', est) +
+      renderMaterialSelect('columns', est) +
+      renderMaterialSelect('girders', est) +
+      renderMaterialSelect('posts', est) +
+      renderMaterialSelect('floors', est) +
+      renderMaterialSelect('roofs', est) +
     '</div>' +
 
     '<!-- Delivery Model Selector -->' +
@@ -911,13 +1035,23 @@ function renderInputPage() {
 
     '<!-- Generate Estimate Button -->' +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
-      '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
-        'Once you have filled in the project details and uploaded documents, generate your estimate. ' +
-        'Results will appear in the <strong>Output</strong> tab.' +
-      '</p>' +
-      '<button class="btn btn-lg btn-accent" onclick="generateEstimate()" style="padding: 14px 40px; font-size: 1rem;">' +
+      (localStorage.getItem('sc-openai-key') ?
+        '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
+          'AI-powered estimation is active. Upload drawings and click <strong>Generate Estimate</strong> to analyze your documents. ' +
+          'The AI will read through your drawing set, perform quantity takeoff, and generate a detailed estimate. ' +
+          'This may take 1-2 minutes depending on document size.' +
+        '</p>'
+      :
+        '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
+          'Upload your drawing set and click <strong>Generate Estimate</strong>. ' +
+          'For AI-powered PDF analysis, add your OpenAI API key in <strong>Settings</strong>. ' +
+          'Without an API key, a template-based estimate will be generated based on your scope description and material selections.' +
+        '</p>'
+      ) +
+      '<button class="btn btn-lg btn-accent" onclick="generateEstimate()" id="btn-generate" style="padding: 14px 40px; font-size: 1rem;">' +
         ICONS.bolt + ' Generate Estimate' +
       '</button>' +
+      '<div id="ai-progress-container" style="display:none; margin-top: 20px;"></div>' +
     '</div>' +
   '</div>';
 }
@@ -934,6 +1068,49 @@ function renderFileList(files, category) {
       '</div>';
     }).join('') +
   '</div>';
+}
+
+function renderMaterialSelect(elementType, est) {
+  var mat = MATERIAL_OPTIONS[elementType];
+  if (!mat) return '';
+  var current = (est.materials && est.materials[elementType]) || mat.options[0].value;
+  var currentOpt = mat.options.find(function(o) { return o.value === current; });
+  var categoryLabel = currentOpt ? currentOpt.category : '';
+  var categoryBadge = '';
+  if (categoryLabel === 'timber') categoryBadge = '<span class="badge badge-won" style="font-size:0.65rem; padding:2px 6px; margin-left:8px;">Timber</span>';
+  else if (categoryLabel === 'steel') categoryBadge = '<span class="badge badge-sent" style="font-size:0.65rem; padding:2px 6px; margin-left:8px;">Steel</span>';
+  else if (categoryLabel === 'concrete') categoryBadge = '<span class="badge badge-draft" style="font-size:0.65rem; padding:2px 6px; margin-left:8px;">Concrete</span>';
+
+  return '<div class="form-row" style="margin-bottom:8px;">' +
+    '<div class="form-group" style="flex:1;">' +
+      '<label class="form-label">' + mat.label + categoryBadge + '</label>' +
+      '<select class="form-select" onchange="updateMaterial(\'' + elementType + '\', this.value)">' +
+        '<optgroup label="Timber">' +
+          mat.options.filter(function(o) { return o.category === 'timber'; }).map(function(o) {
+            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
+          }).join('') +
+        '</optgroup>' +
+        '<optgroup label="Steel">' +
+          mat.options.filter(function(o) { return o.category === 'steel'; }).map(function(o) {
+            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
+          }).join('') +
+        '</optgroup>' +
+        '<optgroup label="Concrete">' +
+          mat.options.filter(function(o) { return o.category === 'concrete'; }).map(function(o) {
+            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
+          }).join('') +
+        '</optgroup>' +
+      '</select>' +
+    '</div>' +
+  '</div>';
+}
+
+function updateMaterial(elementType, value) {
+  if (!STATE.currentEstimate.materials) STATE.currentEstimate.materials = {};
+  STATE.currentEstimate.materials[elementType] = value;
+  STATE.currentEstimate.updatedAt = new Date().toISOString();
+  saveState();
+  renderPage();
 }
 
 function formatFileSize(bytes) {
@@ -1014,10 +1191,12 @@ function renderOutputPage() {
           (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) +
         '</div>';
       }).join('') +
+      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" onclick="switchOutputTab(\'ai-notes\')" style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
     '</div>' +
 
     '<!-- Tab Content -->' +
     (activeTab === 'summary' ? renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) : '') +
+    (activeTab === 'ai-notes' ? renderAINotesTab(est) : '') +
     phaseKeys.map(function(pk) { return activeTab === pk ? renderPhaseTab(est, pk) : ''; }).join('') +
   '</div>';
 }
@@ -1100,6 +1279,39 @@ function renderPhaseTab(est, phaseKey) {
       }).join('') +
       (phase.items.length === 0 ? '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No line items yet. Click "Add Line Item" to start building this phase.</div>' : '') +
       (phase.items.length > 0 ? '<div class="line-item-row subtotal-row"><div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div><div></div><div></div><div></div><div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">' + fmt(phaseSubtotal) + '</div><div></div></div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+
+function renderAINotesTab(est) {
+  var notes = est.aiNotes || [];
+  if (notes.length === 0) return '<div class="slide-up"><div class="card" style="padding: 30px; text-align: center; color: var(--text-muted);">No AI notes available for this estimate.</div></div>';
+
+  return '<div class="slide-up">' +
+    '<div class="card">' +
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="card-title">' + ICONS.info + ' AI Analysis Notes & Context</div>' +
+          '<div class="card-subtitle">Important caveats, exclusions, and assumptions from the AI analysis</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding: 4px 0;">' +
+        notes.map(function(note, i) {
+          var icon = ICONS.info;
+          var color = 'var(--text-secondary)';
+          var bg = 'var(--bg-tertiary)';
+          if (note.toLowerCase().indexOf('could not') >= 0 || note.toLowerCase().indexOf('unable') >= 0 || note.toLowerCase().indexOf('missing') >= 0 || note.toLowerCase().indexOf('excluded') >= 0) {
+            icon = ICONS.warning; color = 'var(--warning)'; bg = 'var(--warning-muted)';
+          } else if (note.toLowerCase().indexOf('completed') >= 0 || note.toLowerCase().indexOf('derived') >= 0) {
+            icon = ICONS.check; color = 'var(--success)'; bg = 'var(--success-muted)';
+          }
+          return '<div style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin-bottom: 4px; background: ' + bg + '; border-radius: 6px; border-left: 3px solid ' + color + ';">' +
+            '<span style="color: ' + color + '; flex-shrink: 0; margin-top: 1px;">' + icon + '</span>' +
+            '<span style="font-size: 0.82rem; color: var(--text-primary); line-height: 1.5;">' + note + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
     '</div>' +
   '</div>';
 }
@@ -1449,7 +1661,8 @@ function renderQAPage() {
     { q: 'How do I use the Connector tool?', a: 'Go to the <strong>Connector</strong> page. Select a past estimate from the dropdown. All its line items will appear in the left panel. You can <strong>drag and drop</strong> items into your current estimate on the right, or <strong>double-click</strong> any item to quick-add it. Items are matched to the appropriate phase in your current estimate.' },
     { q: 'How do I compare past estimates?', a: 'Go to the <strong>Past Estimates</strong> page and click <strong>Compare Mode</strong>. This shows a side-by-side benchmark of all filtered estimates, including phase-by-phase cost breakdowns and totals. Use the filters to narrow down to specific delivery models or statuses.' },
     { q: 'Can I edit the pricing assumptions?', a: 'Yes. In the <strong>Output</strong> tab, the Assumptions box at the top shows all current pricing assumptions. <strong>Click any value</strong> to edit it inline. Changes immediately recalculate the estimate. You can also update default assumptions in <strong>Settings</strong>.' },
-    { q: 'How does the file upload work?', a: 'Each upload zone accepts specific file types (PDF, DOCX, XLSX) up to <strong>40 MB each</strong>. Files are stored locally in your browser. In the future, uploaded files will be processed by AI to automatically extract quantities and requirements. Currently, files are stored for reference.' },
+    { q: 'How does the AI-powered estimation work?', a: 'When you upload PDFs (drawings, specs, RFPs) and have an OpenAI API key configured in <strong>Settings</strong>, the estimator uses AI to analyze your documents. It extracts text from PDFs using PDF.js, sends the content to OpenAI for analysis, and the AI performs a detailed quantity takeoff based on the actual drawing information. The AI identifies building dimensions, structural members, material quantities, and generates line items for each phase. Notes about assumptions and exclusions are provided in the <strong>AI Notes</strong> tab.' },
+    { q: 'How does the file upload work?', a: 'Each upload zone accepts specific file types (PDF, DOCX, XLSX) up to <strong>40 MB each</strong>. Files are stored in your browser session for AI processing. When you click Generate Estimate, the AI reads and analyzes all uploaded documents to perform quantity takeoff. Upload structural drawings, architectural drawings, specs, and RFPs for the most accurate estimates.' },
     { q: 'What do the different themes mean?', a: 'The 10 themes are purely aesthetic -- they change the color scheme and feel of the interface. Go to <strong>Settings</strong> to browse all themes, or click the theme icon in the bottom-left sidebar to cycle through them. Your preference is saved automatically.' },
     { q: 'How are costs calculated?', a: 'Each line item has a Qty x Rate = Total. Phase subtotals are the sum of all line items. The grand total adds Overhead, Margin, Contingency, and Bond/Insurance percentages on top of the direct cost subtotal. All percentages are configurable in the Assumptions box.' },
     { q: 'What does "Load to Workspace" do?', a: 'When you click <strong>Load to Workspace</strong> on a past estimate, it copies that estimate\'s full data into the Input/Output workspace so you can modify it as a starting point for a new estimate. The original estimate is not affected.' },
@@ -1524,6 +1737,28 @@ function renderSettingsPage() {
         '<div class="form-group"><label class="form-label">Shipping ($/BF)</label><input class="form-input" type="number" step="0.05" value="' + assumptions.shippingPerBF + '" onchange="updateAssumption(\'shippingPerBF\', parseFloat(this.value))"></div>' +
         '<div class="form-group"><label class="form-label">Shipping ($/Truck)</label><input class="form-input" type="number" step="100" value="' + assumptions.shippingPerTruck + '" onchange="updateAssumption(\'shippingPerTruck\', parseFloat(this.value))"></div>' +
         '<div class="form-group"><label class="form-label">Escalation %/yr</label><input class="form-input" type="number" step="0.5" value="' + assumptions.escalationPercent + '" onchange="updateAssumption(\'escalationPercent\', parseFloat(this.value))"></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Connect your OpenAI API key to enable AI-powered PDF analysis and quantity takeoff</div></div></div>' +
+      '<div class="form-row">' +
+        '<div class="form-group" style="flex: 2;">' +
+          '<label class="form-label">OpenAI API Key</label>' +
+          '<input class="form-input" type="password" id="openai-key-input" placeholder="sk-..." value="' + (localStorage.getItem('sc-openai-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
+          '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored only in your browser\'s localStorage and sent directly to OpenAI. It is never stored on any server.</div>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">AI Model</label>' +
+          '<select class="form-select" onchange="localStorage.setItem(\'sc-openai-model\', this.value)">' +
+            '<option value="gpt-4o"' + (localStorage.getItem('sc-openai-model') === 'gpt-4o' || !localStorage.getItem('sc-openai-model') ? ' selected' : '') + '>GPT-4o (Recommended)</option>' +
+            '<option value="gpt-4o-mini"' + (localStorage.getItem('sc-openai-model') === 'gpt-4o-mini' ? ' selected' : '') + '>GPT-4o Mini (Faster)</option>' +
+            '<option value="gpt-4-turbo"' + (localStorage.getItem('sc-openai-model') === 'gpt-4-turbo' ? ' selected' : '') + '>GPT-4 Turbo</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top: 12px;">' +
+        '<button class="btn btn-sm" onclick="testAPIKey()">Test Connection</button>' +
+        (localStorage.getItem('sc-openai-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' API key configured</span>' : '') +
       '</div>' +
     '</div>' +
 
@@ -2255,25 +2490,249 @@ function editAssumption(key, el) {
   input.select();
 }
 
-function generateEstimate() {
+// ---- SECTION 10A: AI-POWERED ESTIMATION ----
+
+function extractTextFromPDF(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var typedArray = new Uint8Array(e.target.result);
+      if (typeof pdfjsLib === 'undefined') {
+        resolve('[PDF.js not loaded - file: ' + file.name + ']');
+        return;
+      }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.getDocument(typedArray).promise.then(function(pdf) {
+        var totalPages = pdf.numPages;
+        var textPromises = [];
+        for (var i = 1; i <= totalPages; i++) {
+          textPromises.push(
+            pdf.getPage(i).then(function(page) {
+              return page.getTextContent().then(function(tc) {
+                return tc.items.map(function(item) { return item.str; }).join(' ');
+              });
+            })
+          );
+        }
+        Promise.all(textPromises).then(function(pages) {
+          resolve(pages.join('\n\n--- Page Break ---\n\n'));
+        }).catch(function(err) {
+          resolve('[Error extracting text from ' + file.name + ': ' + err.message + ']');
+        });
+      }).catch(function(err) {
+        resolve('[Error loading PDF ' + file.name + ': ' + err.message + ']');
+      });
+    };
+    reader.onerror = function() { resolve('[Error reading file ' + file.name + ']'); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function getAllUploadedFiles() {
+  var allFiles = [];
   var est = STATE.currentEstimate;
-  var model = DELIVERY_MODELS[est.deliveryModel];
-  if (!model) {
-    showToast('Please select a delivery model first.', 'warning');
-    return;
+  ['rfp', 'drawings', 'structural', 'narratives', 'other'].forEach(function(cat) {
+    if (est.files[cat]) {
+      est.files[cat].forEach(function(f) {
+        if (f.fileKey && FILE_STORE[f.fileKey]) {
+          allFiles.push({ category: cat, meta: f, file: FILE_STORE[f.fileKey] });
+        }
+      });
+    }
+  });
+  return allFiles;
+}
+
+function buildAIPrompt(est, extractedTexts) {
+  var materialDesc = '';
+  if (est.materials) {
+    Object.entries(est.materials).forEach(function(entry) {
+      var element = entry[0], value = entry[1];
+      var opts = MATERIAL_OPTIONS[element];
+      if (opts) {
+        var selected = opts.options.find(function(o) { return o.value === value; });
+        if (selected) materialDesc += '  - ' + opts.label + ': ' + selected.label + ' (' + selected.pricePer + '/' + selected.unit + ')\n';
+      }
+    });
   }
 
+  var pricingRef = 'Key Pricing Reference:\n';
+  pricingRef += '  Glulam DF: $4.25/BF | Glulam Spruce: $3.80/BF | Glulam YC: $5.50/BF\n';
+  pricingRef += '  CLT 3-ply: $26/SF | CLT 5-ply: $34/SF | CLT 7-ply: $44/SF\n';
+  pricingRef += '  DLT: $22/SF | NLT: $15/SF | MPP: $28/SF\n';
+  pricingRef += '  Steel W-Shape: $2,800/ton | HSS: $3,200/ton | Plate: $3,500/ton\n';
+  pricingRef += '  Concrete 4000PSI: $200/CY | Metal Deck+Concrete: $14/SF\n';
+  pricingRef += '  Steel Connections: $4,500/ton | Rebar: $1,800/ton\n';
+  pricingRef += '  Engineering: $195/hr | Drafting: $115/hr | Shop: $82/hr\n';
+  pricingRef += '  Site Carpenter: $95/hr | Laborer: $65/hr | Super: $140/hr\n';
+  pricingRef += '  Crane 50t: $4,200/day | Crane 100t: $7,500/day | PM: $165/hr\n';
+
+  var model = DELIVERY_MODELS[est.deliveryModel];
+  var phases = model ? model.phases : [];
+
+  var prompt = 'You are an expert structural estimator specializing in mass timber, steel, and concrete construction. ' +
+    'Analyze the following project documents and produce a detailed quantity takeoff and cost estimate.\n\n' +
+    'PROJECT INFORMATION:\n' +
+    '  Project Name: ' + (est.name || 'Untitled') + '\n' +
+    '  Client: ' + (est.client || 'N/A') + '\n' +
+    '  Location: ' + (est.location || 'N/A') + '\n' +
+    '  Project Type: ' + (est.projectType || 'commercial') + '\n' +
+    '  Delivery Model: ' + (model ? model.name : 'N/A') + '\n' +
+    '  Structural System: ' + (est.structuralSystem || 'post-beam') + '\n\n' +
+    'SELECTED MATERIALS:\n' + materialDesc + '\n' +
+    'SCOPE DESCRIPTION:\n' + (est.scopeDescription || 'No description provided') + '\n\n' +
+    (est.rfpNotes ? 'RFP NOTES:\n' + est.rfpNotes + '\n\n' : '') +
+    (est.rfiNotes ? 'RFI NOTES:\n' + est.rfiNotes + '\n\n' : '') +
+    pricingRef + '\n' +
+    'REQUIRED PHASES: ' + phases.map(function(p) { return PHASE_DEFS[p] ? PHASE_DEFS[p].name : p; }).join(', ') + '\n\n' +
+    'EXTRACTED DOCUMENT TEXT:\n' + extractedTexts + '\n\n' +
+    'INSTRUCTIONS:\n' +
+    '1. Carefully read ALL the document text above. Extract building dimensions, areas, structural member sizes, quantities, and specifications.\n' +
+    '2. Determine the building area (SF), number of stories, grid spacing, floor-to-floor heights from the documents.\n' +
+    '3. Perform a detailed quantity takeoff based on the actual drawings/specs - calculate real BF, SF, tons, hours.\n' +
+    '4. Use the selected materials and pricing reference above for unit rates.\n' +
+    '5. Generate line items for EACH required phase with realistic quantities.\n\n' +
+    'RESPOND WITH VALID JSON ONLY (no markdown, no explanation outside JSON):\n' +
+    '{\n' +
+    '  "buildingArea": <number in SF>,\n' +
+    '  "numStories": <number>,\n' +
+    '  "gridSpacing": "<string>",\n' +
+    '  "floorToFloor": <number in ft>,\n' +
+    '  "phases": {\n' +
+    '    "<phase-key>": [\n' +
+    '      { "name": "<description>", "qty": <number>, "unit": "<BF|SF|hr|ton|truck|each|LS|LF|day|month>", "rate": <number> }\n' +
+    '    ]\n' +
+    '  },\n' +
+    '  "notes": [\n' +
+    '    "<string: important caveats, exclusions, assumptions, items that could not be determined from the documents>"\n' +
+    '  ]\n' +
+    '}\n\n' +
+    'Phase keys to use: ' + phases.map(function(p) { return '"' + p + '"'; }).join(', ') + '\n' +
+    'Be thorough. Include ALL structural elements visible in the documents. If you cannot determine exact quantities, provide your best professional estimate and note the uncertainty. The estimate should be complete and realistic.';
+
+  return prompt;
+}
+
+async function callOpenAI(prompt, apiKey) {
+  var response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey,
+    },
+    body: JSON.stringify({
+      model: localStorage.getItem('sc-openai-model') || 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'You are an expert structural engineer and cost estimator. Respond only with valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 8000,
+    }),
+  });
+
+  if (!response.ok) {
+    var errText = await response.text();
+    throw new Error('OpenAI API error (' + response.status + '): ' + errText);
+  }
+
+  var data = await response.json();
+  var content = data.choices[0].message.content;
+  // Strip markdown code fences if present
+  content = content.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  return JSON.parse(content);
+}
+
+function updateAIProgress(step, progress) {
+  AI_STATE.step = step;
+  AI_STATE.progress = progress;
+  var container = document.getElementById('ai-progress-container');
+  if (!container) return;
+
+  var elapsed = Date.now() - AI_STATE.startTime;
+  var elapsedSec = Math.round(elapsed / 1000);
+  var estimatedTotal = progress > 5 ? Math.round(elapsed / (progress / 100)) : 120000;
+  var remaining = Math.max(0, Math.round((estimatedTotal - elapsed) / 1000));
+  var remainMin = Math.floor(remaining / 60);
+  var remainSec = remaining % 60;
+
+  container.style.display = 'block';
+  container.innerHTML = '<div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: left;">' +
+    '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
+      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' AI Analysis in Progress</div>' +
+      '<div style="font-size: 0.78rem; color: var(--text-muted);">' + elapsedSec + 's elapsed</div>' +
+    '</div>' +
+    '<div style="font-size: 0.82rem; color: var(--accent); margin-bottom: 8px;">' + step + '</div>' +
+    '<div style="background: var(--bg-input); border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 8px;">' +
+      '<div style="background: var(--accent); height: 100%; width: ' + progress + '%; border-radius: 6px; transition: width 0.5s ease;"></div>' +
+    '</div>' +
+    '<div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">' +
+      '<span>' + Math.round(progress) + '% complete</span>' +
+      '<span>~' + (remainMin > 0 ? remainMin + 'm ' : '') + remainSec + 's remaining</span>' +
+    '</div>' +
+    '<div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">' +
+      'You can navigate to other pages while the AI works. Check back here or the Output tab for results.' +
+    '</div>' +
+  '</div>';
+}
+
+function hideAIProgress() {
+  var container = document.getElementById('ai-progress-container');
+  if (container) container.style.display = 'none';
+  AI_STATE.processing = false;
+}
+
+function generateTemplateEstimate(est, model) {
   if (!est.phases) est.phases = {};
   var a = est.assumptions;
+  var mats = est.materials || {};
 
-  // Use buildingArea and numStories for more accurate quantity estimates
-  var area = est.buildingArea || 30000;
-  var stories = est.numStories || 4;
-  var totalArea = area; // building area already represents total
-  var perFloorArea = stories > 0 ? totalArea / stories : totalArea;
+  // Derive area from scope description as best guess
+  var area = 30000;
+  var stories = 4;
+  var scopeText = (est.scopeDescription || '').toLowerCase();
+  var areaMatch = scopeText.match(/(\d[\d,]*)\s*(?:sf|sq\s*ft|square\s*f)/i);
+  if (areaMatch) area = parseInt(areaMatch[1].replace(/,/g, ''));
+  var storyMatch = scopeText.match(/(\d+)\s*(?:stor|floor|level)/i);
+  if (storyMatch) stories = parseInt(storyMatch[1]);
 
-  var glulamBFCalc = Math.round(totalArea * 0.8);
-  var cltSFCalc = Math.round(totalArea * 0.85);
+  var totalArea = area;
+
+  // Get material pricing
+  function getMatPrice(element) {
+    var val = mats[element] || 'glulam-df';
+    var opts = MATERIAL_OPTIONS[element];
+    if (!opts) return { pricePer: 4.25, unit: 'BF', label: 'Glulam DF', category: 'timber' };
+    var found = opts.options.find(function(o) { return o.value === val; });
+    return found || opts.options[0];
+  }
+
+  var beamMat = getMatPrice('beams');
+  var colMat = getMatPrice('columns');
+  var floorMat = getMatPrice('floors');
+  var roofMat = getMatPrice('roofs');
+
+  // Calculate quantities based on material type
+  var beamQty, beamUnit, beamRate, colQty, colUnit, colRate;
+  if (beamMat.category === 'timber') {
+    beamQty = Math.round(totalArea * 0.56); beamUnit = 'BF'; beamRate = beamMat.pricePer;
+  } else if (beamMat.category === 'steel') {
+    beamQty = Math.round(totalArea / 4000 * 10) / 10; beamUnit = 'ton'; beamRate = beamMat.pricePer;
+  } else {
+    beamQty = Math.round(totalArea * 0.02); beamUnit = 'LF'; beamRate = beamMat.pricePer;
+  }
+
+  if (colMat.category === 'timber') {
+    colQty = Math.round(totalArea * 0.24); colUnit = 'BF'; colRate = colMat.pricePer;
+  } else if (colMat.category === 'steel') {
+    colQty = Math.round(totalArea / 6000 * 10) / 10; colUnit = 'ton'; colRate = colMat.pricePer;
+  } else {
+    colQty = Math.round(totalArea * 0.01); colUnit = 'LF'; colRate = colMat.pricePer;
+  }
+
+  var floorQty = Math.round(totalArea * 0.85);
+  var roofQty = Math.round(totalArea / stories * 0.95);
+
   var steelTonsCalc = Math.round(totalArea / 4000 * 10) / 10;
   var carpHrsCalc = Math.round(totalArea * 0.06);
 
@@ -2301,17 +2760,18 @@ function generateEstimate() {
       { name: 'Construction Drafting', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.draftHourlyRate },
     ],
     'fabrication': [
-      { name: 'Glulam Beams (24F-V8)', qty: Math.round(glulamBFCalc * 0.7), unit: 'BF', rate: a.glulamPriceBF },
-      { name: 'Glulam Columns', qty: Math.round(glulamBFCalc * 0.3), unit: 'BF', rate: a.glulamPriceBF + 0.25 },
-      { name: 'CLT Floor Panels (5-ply)', qty: cltSFCalc, unit: 'SF', rate: a.cltPriceSF5 },
+      { name: beamMat.label + ' Beams', qty: beamQty, unit: beamUnit, rate: beamRate },
+      { name: colMat.label + ' Columns', qty: colQty, unit: colUnit, rate: colRate },
+      { name: floorMat.label + ' Floor Panels', qty: floorQty, unit: floorMat.unit, rate: floorMat.pricePer },
+      { name: roofMat.label + ' Roof', qty: roofQty, unit: roofMat.unit, rate: roofMat.pricePer },
       { name: 'Steel Connections', qty: steelTonsCalc, unit: 'ton', rate: a.steelConnectionsTon || 4500 },
       { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.0) },
-      { name: 'Shop Fabrication Labor', qty: Math.round(glulamBFCalc * 0.05), unit: 'hr', rate: a.shopHourlyRate },
+      { name: 'Shop Fabrication Labor', qty: Math.round(totalArea * 0.04), unit: 'hr', rate: a.shopHourlyRate },
       { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.8) },
     ],
     'shipping': [
-      { name: 'Flatbed Trucks', qty: Math.max(5, Math.round(glulamBFCalc / 2500)), unit: 'truck', rate: a.shippingPerTruck || 4500 },
-      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(glulamBFCalc / 10000)), unit: 'each', rate: 2500 },
+      { name: 'Flatbed Trucks', qty: Math.max(5, Math.round(totalArea / 3000)), unit: 'truck', rate: a.shippingPerTruck || 4500 },
+      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(totalArea / 15000)), unit: 'each', rate: 2500 },
       { name: 'Logistics Coordination', qty: Math.round(totalArea * 0.001), unit: 'hr', rate: a.draftHourlyRate },
     ],
     'installation': [
@@ -2356,15 +2816,146 @@ function generateEstimate() {
     }
   });
 
+  est.aiNotes = [
+    'This estimate was generated using template-based calculations (no AI analysis).',
+    'Building area estimated at ' + fmtNum(area) + ' SF (' + stories + ' stories) based on scope description.',
+    'Material selections were used to determine unit pricing. Quantities are approximate.',
+    'For more accurate estimates, upload drawings and add your OpenAI API key in Settings.',
+  ];
+
   est.totalCost = calcEstimateTotal(est);
   est.updatedAt = new Date().toISOString();
   saveState();
+}
 
-  STATE.currentPage = 'output';
-  STATE.outputActiveTab = 'summary';
-  renderPage();
-  updateNavigation();
-  showToast('Estimate generated successfully! Review in the Output tab.', 'success');
+async function generateAIEstimate(est, model, apiKey) {
+  AI_STATE.processing = true;
+  AI_STATE.estimateId = est.id;
+  AI_STATE.startTime = Date.now();
+  AI_STATE.progress = 0;
+
+  try {
+    // Step 1: Extract text from PDFs
+    updateAIProgress('Extracting text from uploaded documents...', 10);
+    var files = getAllUploadedFiles();
+    var extractedTexts = '';
+
+    if (files.length > 0) {
+      for (var i = 0; i < files.length; i++) {
+        updateAIProgress('Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')...', 10 + (i / files.length * 30));
+        var isPDF = files[i].meta.type === 'application/pdf' || files[i].meta.name.toLowerCase().endsWith('.pdf');
+        if (isPDF) {
+          var text = await extractTextFromPDF(files[i].file);
+          extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + text;
+        } else {
+          // For non-PDF files, try to read as text
+          try {
+            var textContent = await files[i].file.text();
+            extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + textContent;
+          } catch(e) {
+            extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' === [Binary file - could not extract text]';
+          }
+        }
+      }
+    }
+
+    if (!extractedTexts.trim()) {
+      extractedTexts = 'No document text available. Generate estimate based on project scope description and material selections only.';
+    }
+
+    // Truncate if too long (OpenAI token limit)
+    if (extractedTexts.length > 80000) {
+      extractedTexts = extractedTexts.substring(0, 80000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
+    }
+
+    // Step 2: Build and send AI prompt
+    updateAIProgress('Analyzing documents and performing quantity takeoff...', 45);
+    var prompt = buildAIPrompt(est, extractedTexts);
+    var aiResult = await callOpenAI(prompt, apiKey);
+
+    // Step 3: Parse AI response
+    updateAIProgress('Building estimate from AI analysis...', 80);
+
+    if (!est.phases) est.phases = {};
+
+    // Process phases from AI
+    if (aiResult.phases) {
+      model.phases.forEach(function(pk) {
+        if (aiResult.phases[pk] && aiResult.phases[pk].length > 0) {
+          est.phases[pk] = {
+            items: aiResult.phases[pk].map(function(item) {
+              var qty = Number(item.qty) || 0;
+              var rate = Number(item.rate) || 0;
+              return { name: item.name, qty: qty, unit: item.unit || 'LS', rate: rate, total: Math.round(qty * rate) };
+            }),
+          };
+          est.phases[pk].subtotal = calcPhaseTotal(est.phases[pk]);
+        } else if (!est.phases[pk] || est.phases[pk].items.length === 0) {
+          est.phases[pk] = { items: [], subtotal: 0 };
+        }
+      });
+    }
+
+    // Store AI notes
+    est.aiNotes = aiResult.notes || [];
+    est.aiNotes.unshift('AI analysis completed in ' + Math.round((Date.now() - AI_STATE.startTime) / 1000) + ' seconds.');
+    if (aiResult.buildingArea) est.aiNotes.push('Derived building area: ' + fmtNum(aiResult.buildingArea) + ' SF');
+    if (aiResult.numStories) est.aiNotes.push('Derived number of stories: ' + aiResult.numStories);
+    if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
+
+    updateAIProgress('Finalizing estimate...', 95);
+
+    est.totalCost = calcEstimateTotal(est);
+    est.updatedAt = new Date().toISOString();
+    saveState();
+
+    updateAIProgress('Complete!', 100);
+
+    setTimeout(function() {
+      hideAIProgress();
+      STATE.currentPage = 'output';
+      STATE.outputActiveTab = 'summary';
+      renderPage();
+      updateNavigation();
+      showToast('AI-powered estimate generated successfully!', 'success');
+    }, 800);
+
+  } catch(err) {
+    hideAIProgress();
+    console.error('AI estimation error:', err);
+    showToast('AI analysis failed: ' + err.message + '. Falling back to template estimate.', 'warning');
+    generateTemplateEstimate(est, model);
+    STATE.currentPage = 'output';
+    STATE.outputActiveTab = 'summary';
+    renderPage();
+    updateNavigation();
+  }
+}
+
+function generateEstimate() {
+  var est = STATE.currentEstimate;
+  var model = DELIVERY_MODELS[est.deliveryModel];
+  if (!model) {
+    showToast('Please select a delivery model first.', 'warning');
+    return;
+  }
+
+  var apiKey = localStorage.getItem('sc-openai-key');
+  var hasFiles = getAllUploadedFiles().length > 0;
+
+  if (apiKey && apiKey.trim()) {
+    // AI-powered estimation
+    generateAIEstimate(est, model, apiKey.trim());
+    showToast('AI analysis started. You can navigate to other pages while it processes.', 'info');
+  } else {
+    // Template-based estimation (fallback)
+    generateTemplateEstimate(est, model);
+    STATE.currentPage = 'output';
+    STATE.outputActiveTab = 'summary';
+    renderPage();
+    updateNavigation();
+    showToast('Estimate generated using templates. Add an OpenAI API key in Settings for AI-powered analysis.', 'success');
+  }
 }
 
 function saveCurrentEstimate() {
@@ -2474,6 +3065,38 @@ function cycleTheme() {
   var next = THEMES[(idx + 1) % THEMES.length];
   setTheme(next.id);
   showToast('Theme: ' + next.name, 'info');
+}
+
+function saveAPIKey(value) {
+  if (value && value.trim()) {
+    localStorage.setItem('sc-openai-key', value.trim());
+    showToast('OpenAI API key saved.', 'success');
+  } else {
+    localStorage.removeItem('sc-openai-key');
+    showToast('OpenAI API key removed.', 'info');
+  }
+}
+
+async function testAPIKey() {
+  var key = localStorage.getItem('sc-openai-key');
+  if (!key) {
+    showToast('No API key configured. Enter your key first.', 'warning');
+    return;
+  }
+  try {
+    showToast('Testing API connection...', 'info');
+    var response = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': 'Bearer ' + key },
+    });
+    if (response.ok) {
+      showToast('API connection successful! AI-powered estimation is ready.', 'success');
+    } else {
+      var err = await response.text();
+      showToast('API key invalid or expired. Check your key. (' + response.status + ')', 'error');
+    }
+  } catch(e) {
+    showToast('Network error testing API: ' + e.message, 'error');
+  }
 }
 
 function resetAssumptions() {
@@ -2708,6 +3331,20 @@ function exportEstimateXLSX() {
     XLSX.utils.book_append_sheet(wb, wsPhase, tabName);
   });
 
+  // --- AI Notes Tab ---
+  if (est.aiNotes && est.aiNotes.length > 0) {
+    var notesData = [
+      ['AI Analysis Notes & Context'],
+      [''],
+    ];
+    est.aiNotes.forEach(function(note, i) {
+      notesData.push([(i + 1) + '.', note]);
+    });
+    var wsNotes = XLSX.utils.aoa_to_sheet(notesData);
+    wsNotes['!cols'] = [{ wch: 6 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsNotes, 'AI Notes');
+  }
+
   // --- Assumptions Tab ---
   var assumpData = [
     ['Pricing Assumptions'],
@@ -2894,8 +3531,10 @@ function addFiles(files, category) {
     if (!STATE.currentEstimate.files[category]) {
       STATE.currentEstimate.files[category] = [];
     }
+    var fileKey = category + '-' + file.name + '-' + file.size;
+    FILE_STORE[fileKey] = file;
     STATE.currentEstimate.files[category].push({
-      name: file.name, size: file.size, type: file.type, lastModified: file.lastModified,
+      name: file.name, size: file.size, type: file.type, lastModified: file.lastModified, fileKey: fileKey,
     });
   });
   saveState();
@@ -2997,7 +3636,7 @@ function renderUserGuide() {
     '<div class="guide-steps">' +
       '<div class="guide-step"><div class="guide-step-num">1</div><h5>Define Scope</h5><p>Fill in project details, select delivery model, and describe the scope in the Input tab.</p></div>' +
       '<div class="guide-step"><div class="guide-step-num">2</div><h5>Upload Docs</h5><p>Drag and drop RFPs, drawings, and narratives (up to 40 MB each).</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">3</div><h5>Generate</h5><p>Click Generate to create a baseline estimate with all applicable phases.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">3</div><h5>Generate</h5><p>Click Generate -- the AI reads your drawings, performs takeoff, and builds a detailed estimate. This may take 1-2 minutes.</p></div>' +
       '<div class="guide-step"><div class="guide-step-num">4</div><h5>Refine</h5><p>Edit line items, adjust assumptions, and compare with past estimates in the Output tab.</p></div>' +
       '<div class="guide-step"><div class="guide-step-num">5</div><h5>Compare</h5><p>Use Past Estimates and Connector to benchmark against historical data.</p></div>' +
     '</div>' +
@@ -3193,6 +3832,16 @@ function initApp() {
   // Badge counts
   var pastBadge = document.getElementById('badge-past');
   if (pastBadge) pastBadge.textContent = STATE.estimates.length;
+
+  // AI processing badge
+  var inputBadge = document.getElementById('badge-input');
+  if (inputBadge) {
+    if (AI_STATE.processing) {
+      inputBadge.textContent = 'AI';
+      inputBadge.style.background = 'var(--accent)';
+      inputBadge.style.color = 'var(--bg-primary)';
+    }
+  }
 
   // Navigation clicks
   document.querySelectorAll('.nav-item').forEach(function(item) {
