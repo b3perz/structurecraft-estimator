@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='10' y='60' width='12' height='35' fill='%23c8956c' rx='2'/><rect x='28' y='45' width='12' height='50' fill='%23c8956c' rx='2'/><rect x='46' y='30' width='12' height='65' fill='%23c8956c' rx='2'/><rect x='64' y='20' width='12' height='75' fill='%23c8956c' rx='2'/><rect x='82' y='5' width='12' height='90' fill='%23c8956c' rx='2'/><rect x='5' y='92' width='92' height='4' fill='%23e8dcc8' rx='1'/></svg>">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <!-- Loading Screen -->
@@ -65,6 +66,10 @@
             <span class="nav-icon" id="nav-icon-output"></span>
             <span class="nav-label">Output</span>
           </li>
+          <li class="nav-item" data-page="footbridge">
+            <span class="nav-icon" id="nav-icon-footbridge"></span>
+            <span class="nav-label">Footbridges</span>
+          </li>
           <li class="nav-item" data-page="past-estimates">
             <span class="nav-icon" id="nav-icon-past"></span>
             <span class="nav-label">Past Estimates</span>
@@ -108,7 +113,7 @@
           </button>
           <span class="theme-name" id="current-theme-name">Midnight</span>
         </div>
-        <div class="version-info">v1.0.0</div>
+        <div class="version-info">v2.0.0</div>
       </div>
     </nav>
 
@@ -124,7 +129,7 @@
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             <input type="text" id="global-search" placeholder="Search estimates, pricing, docs..." autocomplete="off">
-            <kbd>⌘K</kbd>
+            <kbd>&#8984;K</kbd>
           </div>
           <button id="btn-new-estimate" class="btn btn-accent">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -181,6 +186,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
