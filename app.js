@@ -1,5 +1,5 @@
 // ============================================
-// STRUCTURECRAFT ESTIMATOR PRO v1.0
+// STRUCTURECRAFT ESTIMATOR PRO v2.0
 // Complete Mass Timber Estimating Platform
 // ============================================
 
@@ -31,6 +31,16 @@ const ICONS = {
   arrowUp: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
   arrowDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   filter: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>',
+  footbridge: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18h20"/><path d="M4 18v-4"/><path d="M20 18v-4"/><path d="M4 14h16"/><path d="M4 14c0-4 4-8 8-8s8 4 8 8"/></svg>',
+  calendar: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  palette: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2"/><circle cx="17.5" cy="10.5" r="2"/><circle cx="8.5" cy="7.5" r="2"/><circle cx="6.5" cy="12" r="2"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04-.24-.3-.39-.65-.39-1.04 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.48-9.96-10-9.96z"/></svg>',
+  eorBuild: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1"/></svg>',
+  delegatedDesign: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 20h20"/><path d="M4 20V8l4-4h8l4 4v12"/><path d="M9 20v-6h6v6"/><path d="M2 8l10-6 10 6"/></svg>',
+  dltSupply: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="4" rx="1"/><rect x="2" y="12" width="20" height="4" rx="1"/><rect x="2" y="18" width="20" height="4" rx="1"/><path d="M6 6V4M10 6V3M14 6V4M18 6V2"/></svg>',
+  engineerSupervise: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13l2 2 4-4"/></svg>',
+  generate: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  xlsx: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>',
+  location: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
 };
 
 // ---- SECTION 2: THEME DEFINITIONS ----
@@ -59,6 +69,26 @@ const STATE = {
   estimates: [],
   searchQuery: '',
   outputActiveTab: 'summary',
+  footbridgeConfig: {
+    bridgeType: 'parabolic-arch',
+    spanLength: 30,
+    clearWidth: 3.5,
+    archRise: 0.25,
+    numSpans: 1,
+    projectName: '',
+    client: '',
+    location: '',
+    loading: 'pedestrian',
+    geoCondition: 'dense-soil',
+    structuralMaterial: 'glulam-df',
+    deckSystem: 'dlt',
+    railingType: 'timber-cable',
+    siteAccess: 'standard',
+    coverage: 'open',
+    scScope: 'prime-design-build',
+  },
+  footbridgeEstimate: null,
+  footbridgeOutputTab: 'summary',
 };
 
 function createNewEstimate() {
@@ -74,6 +104,12 @@ function createNewEstimate() {
     rfiNotes: '',
     clientComms: '',
     contractorNotes: '',
+    buildingArea: 0,
+    numStories: 0,
+    structuralSystem: 'post-beam',
+    gridSpacing: '',
+    floorToFloor: 12,
+    timberSpecies: 'douglas-fir',
     files: { rfp: [], drawings: [], structural: [], narratives: [], other: [] },
     assumptions: getDefaultAssumptions(),
     phases: {},
@@ -124,25 +160,25 @@ function generateId() {
 const DELIVERY_MODELS = {
   'eor-build': {
     name: 'EOR Build',
-    icon: '🏗️',
+    icon: 'eorBuild',
     description: 'Engineer of Record + Full Build. StructureCraft is the EOR and handles everything: consulting, structural engineering (SD/DD/CD/CA), timber design, fabrication, shipping, and site installation.',
     phases: ['consulting', 'structural-engineering', 'timber-engineering', 'construction-engineering', 'fabrication', 'shipping', 'installation', 'general-conditions'],
   },
   'delegated-design-build': {
     name: 'Delegated Design Build',
-    icon: '📐',
+    icon: 'delegatedDesign',
     description: 'StructureCraft handles all timber design, engineering, fabrication, shipping, and installation. Not the EOR — no consulting engineering phase.',
     phases: ['timber-engineering', 'construction-engineering', 'fabrication', 'shipping', 'installation', 'general-conditions'],
   },
   'dlt-supply-only': {
     name: 'DLT Supply Only',
-    icon: '🪵',
+    icon: 'dltSupply',
     description: 'Supply Dowel Laminated Timber from our shop only. Material supply, fabrication, and shipping. No design, engineering, or installation.',
     phases: ['dlt-material', 'fabrication', 'shipping'],
   },
   'engineer-supervise': {
     name: 'Engineer + Supervise',
-    icon: '👷',
+    icon: 'engineerSupervise',
     description: 'Structural engineer for superstructure only. Site supervision provided, but no fabrication or installation. Coordinate with third-party fabricators and installers.',
     phases: ['structural-engineering', 'site-supervision', 'coordination'],
   },
@@ -574,6 +610,52 @@ function renderInputPage() {
         </div>
       </div>
 
+      <!-- Building Parameters -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-title">${ICONS.analytics} Building Parameters</div>
+          <div class="card-subtitle">Define structural parameters to auto-populate quantities in your estimate</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Gross Building Area (SF)</label>
+            <input class="form-input" type="number" placeholder="e.g., 45000" value="${est.buildingArea || ''}" onchange="updateEstimate('buildingArea', parseFloat(this.value) || 0)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Number of Stories</label>
+            <input class="form-input" type="number" min="1" max="20" placeholder="e.g., 6" value="${est.numStories || ''}" onchange="updateEstimate('numStories', parseInt(this.value) || 0)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Floor-to-Floor Height (ft)</label>
+            <input class="form-input" type="number" step="0.5" placeholder="e.g., 12" value="${est.floorToFloor || ''}" onchange="updateEstimate('floorToFloor', parseFloat(this.value) || 0)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Structural System</label>
+            <select class="form-select" onchange="updateEstimate('structuralSystem', this.value)">
+              <option value="post-beam" ${est.structuralSystem==='post-beam'?'selected':''}>Post-and-Beam (Glulam)</option>
+              <option value="panel-system" ${est.structuralSystem==='panel-system'?'selected':''}>Panel System (CLT/DLT)</option>
+              <option value="hybrid" ${est.structuralSystem==='hybrid'?'selected':''}>Hybrid (Glulam + CLT)</option>
+              <option value="heavy-timber" ${est.structuralSystem==='heavy-timber'?'selected':''}>Heavy Timber Frame</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Typical Grid Spacing</label>
+            <input class="form-input" type="text" placeholder="e.g., 30' x 30'" value="${est.gridSpacing || ''}" onchange="updateEstimate('gridSpacing', this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Timber Species</label>
+            <select class="form-select" onchange="updateEstimate('timberSpecies', this.value)">
+              <option value="douglas-fir" ${est.timberSpecies==='douglas-fir'?'selected':''}>Douglas Fir</option>
+              <option value="spruce" ${est.timberSpecies==='spruce'?'selected':''}>Spruce (SPF)</option>
+              <option value="yellow-cedar" ${est.timberSpecies==='yellow-cedar'?'selected':''}>Yellow Cedar</option>
+              <option value="western-red-cedar" ${est.timberSpecies==='western-red-cedar'?'selected':''}>Western Red Cedar</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Delivery Model Selector -->
       <div class="card mb-16">
         <div class="card-header">
@@ -585,7 +667,7 @@ function renderInputPage() {
         <div class="delivery-model-grid">
           ${Object.entries(DELIVERY_MODELS).map(([key, model]) => `
             <div class="delivery-model-card ${est.deliveryModel === key ? 'active' : ''}" onclick="setDeliveryModel('${key}')">
-              <div class="dm-icon">${model.icon}</div>
+              <div class="dm-icon-svg">${ICONS[model.icon] || ''}</div>
               <div class="dm-title">${model.name}</div>
               <div class="dm-desc">${model.description}</div>
               <div class="dm-phases">
@@ -692,7 +774,7 @@ function renderInputPage() {
           Results will appear in the <strong>Output</strong> tab.
         </p>
         <button class="btn btn-lg btn-accent" onclick="generateEstimate()" style="padding: 14px 40px; font-size: 1rem;">
-          ⚡ Generate Estimate
+          ${ICONS.generate} Generate Estimate
         </button>
       </div>
     </div>
@@ -750,9 +832,14 @@ function renderOutputPage() {
           <div class="section-desc">${est.name || 'Untitled Project'} — ${model ? model.name : 'No model selected'}</div>
         </div>
         <div class="section-actions">
-          <button class="btn btn-sm" onclick="exportEstimate()">
-            ${ICONS.download} Export
-          </button>
+          <div class="export-btn-group">
+            <button class="btn btn-sm" onclick="exportEstimateXLSX()">
+              ${ICONS.xlsx} Export XLSX
+            </button>
+            <button class="btn btn-sm" onclick="exportEstimate()">
+              ${ICONS.download} CSV
+            </button>
+          </div>
           <button class="btn btn-sm btn-accent" onclick="saveCurrentEstimate()">
             ${ICONS.check} Save
           </button>
@@ -1067,9 +1154,9 @@ function renderEstimateCard(est) {
           <div class="estimate-card-title">${est.name}</div>
           <div class="estimate-card-meta">
             <span>${ICONS.building} ${est.client}</span>
-            <span>📍 ${est.location}</span>
-            <span>📅 ${est.createdAt}</span>
-            <span>${model ? model.icon + ' ' + model.name : ''}</span>
+            <span>${ICONS.location} ${est.location}</span>
+            <span>${ICONS.calendar} ${est.createdAt}</span>
+            <span>${model ? ICONS[model.icon] + ' ' + model.name : ''}</span>
           </div>
         </div>
         <div style="text-align:right;">
@@ -1837,71 +1924,92 @@ function generateEstimate() {
   if (!est.phases) est.phases = {};
   const a = est.assumptions;
 
+  // Use building parameters to auto-calculate quantities where available
+  const area = est.buildingArea || 30000;
+  const stories = est.numStories || 4;
+  const floorArea = area / Math.max(stories, 1);
+  const glulamBF = Math.round(area * 0.75);
+  const glulamColBF = Math.round(area * 0.22);
+  const cltSF = Math.round(floorArea * stories * 0.85);
+  const steelTons = Math.max(Math.round(area / 4000), 6);
+  const fabHrs = Math.round(area * 0.045);
+  const siteHrs = Math.round(area * 0.055);
+  const laborHrs = Math.round(area * 0.02);
+  const superHrs = Math.round(siteHrs * 0.22);
+  const craneDays = Math.round(area / 1400);
+  const craneOpHrs = craneDays * 8;
+  const truckLoads = Math.max(Math.round(area / 2500), 8);
+  const sdHrs = Math.round(60 + area * 0.002);
+  const ddHrs = Math.round(100 + area * 0.003);
+  const cdHrs = Math.round(140 + area * 0.005);
+  const caHrs = Math.round(40 + area * 0.001);
+  const pmHrs = Math.round(120 + area * 0.004);
+
   // Generate template line items based on delivery model
   const templates = {
     'consulting': [
-      { name: 'SD Structural Engineering', qty: 120, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'DD Structural Engineering', qty: 200, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CD Structural Engineering', qty: 300, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CA Services', qty: 80, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'SD Structural Engineering', qty: sdHrs, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'DD Structural Engineering', qty: ddHrs, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'CD Structural Engineering', qty: cdHrs, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'CA Services', qty: caHrs, unit: 'hr', rate: a.engHourlyRate },
     ],
     'structural-engineering': [
-      { name: 'SD Structural Engineering', qty: 140, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'DD Structural Engineering', qty: 240, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CD Structural Engineering', qty: 340, unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CA Services', qty: 100, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'SD Structural Engineering', qty: Math.round(sdHrs * 1.1), unit: 'hr', rate: a.engHourlyRate },
+      { name: 'DD Structural Engineering', qty: Math.round(ddHrs * 1.2), unit: 'hr', rate: a.engHourlyRate },
+      { name: 'CD Structural Engineering', qty: Math.round(cdHrs * 1.15), unit: 'hr', rate: a.engHourlyRate },
+      { name: 'CA Services', qty: Math.round(caHrs * 1.2), unit: 'hr', rate: a.engHourlyRate },
     ],
     'timber-engineering': [
-      { name: 'Shop Drawing Engineering', qty: 250, unit: 'hr', rate: 180 },
-      { name: 'Erection Engineering', qty: 80, unit: 'hr', rate: 180 },
-      { name: 'Connection Design', qty: 140, unit: 'hr', rate: 180 },
-      { name: 'Drafting / Detailing', qty: 350, unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Shop Drawing Engineering', qty: Math.round(area * 0.008), unit: 'hr', rate: 180 },
+      { name: 'Erection Engineering', qty: Math.round(area * 0.0025), unit: 'hr', rate: 180 },
+      { name: 'Connection Design', qty: Math.round(area * 0.005), unit: 'hr', rate: 180 },
+      { name: 'Drafting / Detailing', qty: Math.round(area * 0.012), unit: 'hr', rate: a.draftHourlyRate },
     ],
     'construction-engineering': [
-      { name: 'Construction Phase Engineering', qty: 100, unit: 'hr', rate: 180 },
-      { name: 'Construction Drafting', qty: 60, unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Construction Phase Engineering', qty: Math.round(area * 0.003), unit: 'hr', rate: 180 },
+      { name: 'Construction Drafting', qty: Math.round(area * 0.002), unit: 'hr', rate: a.draftHourlyRate },
     ],
     'fabrication': [
-      { name: 'Glulam Beams (24F-V8)', qty: 20000, unit: 'BF', rate: a.glulamPriceBF },
-      { name: 'Glulam Columns', qty: 8000, unit: 'BF', rate: a.glulamPriceBF + 0.25 },
-      { name: 'CLT Floor Panels (5-ply)', qty: 25000, unit: 'SF', rate: a.cltPriceSF5 },
-      { name: 'Steel Connections', qty: 10, unit: 'ton', rate: a.steelConnectionsTon || 4500 },
-      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: 35000 },
-      { name: 'Shop Fabrication Labor', qty: 1200, unit: 'hr', rate: a.shopHourlyRate },
-      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: 28000 },
+      { name: 'Glulam Beams (24F-V8)', qty: glulamBF, unit: 'BF', rate: a.glulamPriceBF },
+      { name: 'Glulam Columns', qty: glulamColBF, unit: 'BF', rate: a.glulamPriceBF + 0.25 },
+      { name: 'CLT Floor Panels (5-ply)', qty: cltSF, unit: 'SF', rate: a.cltPriceSF5 },
+      { name: 'Steel Connections', qty: steelTons, unit: 'ton', rate: a.steelConnectionsTon || 4500 },
+      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(area * 1.1) },
+      { name: 'Shop Fabrication Labor', qty: fabHrs, unit: 'hr', rate: a.shopHourlyRate },
+      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(area * 0.9) },
     ],
     'shipping': [
-      { name: 'Flatbed Trucks', qty: 12, unit: 'truck', rate: a.shippingPerTruck || 4500 },
-      { name: 'Oversized Load Permits', qty: 2, unit: 'each', rate: 2500 },
-      { name: 'Logistics Coordination', qty: 30, unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Flatbed Trucks', qty: truckLoads, unit: 'truck', rate: a.shippingPerTruck || 4500 },
+      { name: 'Oversized Load Permits', qty: Math.max(Math.round(truckLoads * 0.2), 2), unit: 'each', rate: 2500 },
+      { name: 'Logistics Coordination', qty: Math.round(truckLoads * 2.5), unit: 'hr', rate: a.draftHourlyRate },
     ],
     'installation': [
-      { name: 'Site Carpenters', qty: 1800, unit: 'hr', rate: a.siteCarpentrHourlyRate },
-      { name: 'Site Laborers', qty: 600, unit: 'hr', rate: a.siteLaborHourlyRate },
-      { name: 'Site Superintendent', qty: 360, unit: 'hr', rate: a.siteSuperHourlyRate },
-      { name: 'Mobile Crane', qty: 25, unit: 'day', rate: a.craneDailyRate },
-      { name: 'Crane Operator', qty: 200, unit: 'hr', rate: a.craneOperatorHourlyRate },
-      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: 15000 },
+      { name: 'Site Carpenters', qty: siteHrs, unit: 'hr', rate: a.siteCarpentrHourlyRate },
+      { name: 'Site Laborers', qty: laborHrs, unit: 'hr', rate: a.siteLaborHourlyRate },
+      { name: 'Site Superintendent', qty: superHrs, unit: 'hr', rate: a.siteSuperHourlyRate },
+      { name: 'Mobile Crane', qty: craneDays, unit: 'day', rate: a.craneDailyRate },
+      { name: 'Crane Operator', qty: craneOpHrs, unit: 'hr', rate: a.craneOperatorHourlyRate },
+      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(area * 0.5) },
     ],
     'general-conditions': [
-      { name: 'Project Management', qty: 240, unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: 50000 },
-      { name: 'Contingency', qty: 1, unit: 'LS', rate: 50000 },
+      { name: 'Project Management', qty: pmHrs, unit: 'hr', rate: a.pmHourlyRate },
+      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(area * 1.6) },
+      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(area * 1.5) },
     ],
     'dlt-material': [
-      { name: 'DLT Panels - Standard', qty: 10000, unit: 'SF', rate: a.dltPriceSF },
-      { name: 'Edge Banding & Finish', qty: 10000, unit: 'SF', rate: 2.50 },
+      { name: 'DLT Panels - Standard', qty: Math.round(area * 0.35), unit: 'SF', rate: a.dltPriceSF },
+      { name: 'Edge Banding & Finish', qty: Math.round(area * 0.35), unit: 'SF', rate: 2.50 },
       { name: 'Grading & QC', qty: 1, unit: 'LS', rate: 6500 },
     ],
     'site-supervision': [
-      { name: 'Site Supervisor (full time)', qty: 480, unit: 'hr', rate: a.siteSuperHourlyRate },
-      { name: 'Site Visits - Engineer', qty: 60, unit: 'hr', rate: a.engHourlyRate },
+      { name: 'Site Supervisor (full time)', qty: Math.round(pmHrs * 1.8), unit: 'hr', rate: a.siteSuperHourlyRate },
+      { name: 'Site Visits - Engineer', qty: Math.round(caHrs * 0.8), unit: 'hr', rate: a.engHourlyRate },
       { name: 'Travel & Expenses', qty: 1, unit: 'LS', rate: 6000 },
     ],
     'coordination': [
-      { name: 'Fabricator Coordination', qty: 100, unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Installer Coordination', qty: 80, unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Shop Drawing Review', qty: 60, unit: 'hr', rate: 180 },
+      { name: 'Fabricator Coordination', qty: Math.round(pmHrs * 0.5), unit: 'hr', rate: a.pmHourlyRate },
+      { name: 'Installer Coordination', qty: Math.round(pmHrs * 0.4), unit: 'hr', rate: a.pmHourlyRate },
+      { name: 'Shop Drawing Review', qty: Math.round(pmHrs * 0.3), unit: 'hr', rate: 180 },
     ],
   };
 
@@ -2295,6 +2403,7 @@ function quickAddFromConnector(phaseKey, idx) {
 const PAGE_MAP = {
   'input': { title: 'Input', render: renderInputPage, breadcrumb: 'Workspace → Input' },
   'output': { title: 'Output', render: renderOutputPage, breadcrumb: 'Workspace → Output' },
+  'footbridge': { title: 'Footbridges', render: renderFootbridgePage, breadcrumb: 'Workspace → Footbridges' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Reference → Past Estimates' },
   'connector': { title: 'Connector', render: renderConnectorPage, breadcrumb: 'Workspace → Connector' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Reference → Pricing Library' },
@@ -2400,14 +2509,16 @@ function initCommandPalette() {
     { label: 'Go to Analytics', action: () => navigateTo('analytics'), icon: ICONS.analytics },
     { label: 'Go to Q&A', action: () => navigateTo('qa'), icon: ICONS.qa },
     { label: 'Go to Settings', action: () => navigateTo('settings'), icon: ICONS.settings },
+    { label: 'Go to Footbridges', action: () => navigateTo('footbridge'), icon: ICONS.footbridge },
     { label: 'New Estimate', action: () => { clearCurrentEstimate(); navigateTo('input'); }, icon: ICONS.plus },
-    { label: 'Generate Estimate', action: generateEstimate, icon: '⚡' },
+    { label: 'Generate Estimate', action: generateEstimate, icon: ICONS.generate },
     { label: 'Save Estimate', action: saveCurrentEstimate, icon: ICONS.check },
-    { label: 'Export Estimate', action: exportEstimate, icon: ICONS.download },
+    { label: 'Export Estimate (XLSX)', action: exportEstimateXLSX, icon: ICONS.xlsx },
+    { label: 'Export Estimate (CSV)', action: exportEstimate, icon: ICONS.download },
     { label: 'Export All Data', action: exportAllData, icon: ICONS.download },
     { label: 'Toggle User Guide', action: toggleGuide, icon: ICONS.info },
-    { label: 'Cycle Theme', action: cycleTheme, icon: '🎨' },
-    ...THEMES.map(t => ({ label: 'Theme: ' + t.name, action: () => setTheme(t.id), icon: '🎨' })),
+    { label: 'Cycle Theme', action: cycleTheme, icon: ICONS.palette },
+    ...THEMES.map(t => ({ label: 'Theme: ' + t.name, action: () => setTheme(t.id), icon: ICONS.palette })),
   ];
 
   window._commands = commands;
@@ -2503,12 +2614,13 @@ function initKeyboardShortcuts() {
     const navKeys = {
       '1': 'input',
       '2': 'output',
-      '3': 'past-estimates',
-      '4': 'connector',
-      '5': 'pricing-library',
-      '6': 'analytics',
-      '7': 'qa',
-      '8': 'settings',
+      '3': 'footbridge',
+      '4': 'past-estimates',
+      '5': 'connector',
+      '6': 'pricing-library',
+      '7': 'analytics',
+      '8': 'qa',
+      '9': 'settings',
     };
     if (navKeys[e.key]) {
       navigateTo(navKeys[e.key]);
@@ -2541,6 +2653,7 @@ function initApp() {
   // Set nav icons
   document.getElementById('nav-icon-input').innerHTML = ICONS.input;
   document.getElementById('nav-icon-output').innerHTML = ICONS.output;
+  document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
   document.getElementById('nav-icon-connector').innerHTML = ICONS.connector;
   document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
@@ -2612,6 +2725,1037 @@ function initApp() {
     document.getElementById('loading-screen')?.classList.add('hidden');
   }, 1600);
 }
+
+// ---- SECTION 16: BRIDGE TYPE DEFINITIONS ----
+const BRIDGE_TYPES = {
+  'parabolic-arch': { name: 'Parabolic Arch', description: 'Curved glulam compression arch with deck suspended below or above' },
+  'tied-arch': { name: 'Tied Arch (Bowstring)', description: 'Glulam arch with horizontal tie at deck level resisting thrust' },
+  'warren-truss': { name: 'Warren Truss', description: 'Triangulated web members alternating in orientation' },
+  'pratt-truss': { name: 'Pratt Truss', description: 'Vertical posts with diagonal tension members between chords' },
+  'clear-span-beam': { name: 'Clear Span Beam', description: 'Deep glulam beam(s) spanning continuously between abutments' },
+  'multi-span-beam': { name: 'Multi-Span Beam', description: 'Continuous or simple-span beams over intermediate piers' },
+  'cable-stayed': { name: 'Cable-Stayed', description: 'Timber deck supported by stay cables from mast tower(s)' },
+  'king-post-truss': { name: 'King Post Truss', description: 'Classic truss with single vertical king post and inclined struts' },
+};
+
+const FOOTBRIDGE_PHASE_DEFS = {
+  'fb-engineering': { name: 'Engineering & Design', description: 'Structural design, shop drawings, and construction engineering' },
+  'fb-fabrication': { name: 'Fabrication', description: 'CNC processing, glulam fabrication, steel connections, and QC' },
+  'fb-shipping': { name: 'Shipping & Logistics', description: 'Transport of fabricated elements to site' },
+  'fb-foundations': { name: 'Foundations & Substructure', description: 'Abutments, piers, and foundation systems' },
+  'fb-installation': { name: 'Erection & Installation', description: 'Crane operations, assembly, and structural erection' },
+  'fb-railing': { name: 'Railing & Finishes', description: 'Guard rails, decking, lighting, and surface finishes' },
+  'fb-general': { name: 'General Conditions', description: 'Project management, insurance, bonds, and contingency' },
+};
+
+// ---- SECTION 17: BRIDGE SVG GENERATOR ----
+function generateBridgeSVG(config) {
+  const w = 800, h = 350;
+  const pad = 60;
+  const groundY = h - 40;
+  const deckY = groundY - 80;
+  const span = config.spanLength || 30;
+  const rise = config.archRise || 0.25;
+  const nSpans = config.numSpans || 1;
+  const type = config.bridgeType || 'parabolic-arch';
+
+  const leftX = pad + 40;
+  const rightX = w - pad - 40;
+  const spanPx = rightX - leftX;
+
+  let elements = '';
+
+  // Ground line
+  elements += `<line x1="20" y1="${groundY}" x2="${w-20}" y2="${groundY}" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="6,4"/>`;
+  elements += `<text x="${w/2}" y="${groundY+25}" text-anchor="middle" fill="var(--text-muted)" font-size="11" font-family="Inter,sans-serif">Grade</text>`;
+
+  // Dimension line
+  elements += `<line x1="${leftX}" y1="${groundY+8}" x2="${leftX}" y2="${groundY+18}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+  elements += `<line x1="${rightX}" y1="${groundY+8}" x2="${rightX}" y2="${groundY+18}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+  elements += `<line x1="${leftX}" y1="${groundY+14}" x2="${rightX}" y2="${groundY+14}" stroke="var(--text-secondary)" stroke-width="1" marker-start="url(#arrowL)" marker-end="url(#arrowR)"/>`;
+  elements += `<text x="${(leftX+rightX)/2}" y="${groundY+28}" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600" font-family="JetBrains Mono,monospace">${span}m span</text>`;
+
+  // Abutments
+  const abutW = 16, abutH = deckY - groundY + 30;
+  elements += `<rect x="${leftX - abutW/2}" y="${deckY - 10}" width="${abutW}" height="${groundY - deckY + 10}" fill="var(--text-muted)" opacity="0.5" rx="2"/>`;
+  elements += `<rect x="${rightX - abutW/2}" y="${deckY - 10}" width="${abutW}" height="${groundY - deckY + 10}" fill="var(--text-muted)" opacity="0.5" rx="2"/>`;
+
+  // Deck line
+  elements += `<line x1="${leftX - 10}" y1="${deckY}" x2="${rightX + 10}" y2="${deckY}" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>`;
+
+  if (type === 'parabolic-arch') {
+    const peakY = deckY - spanPx * rise;
+    let path = `M ${leftX} ${deckY}`;
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      const x = leftX + t * spanPx;
+      const y = deckY - 4 * rise * spanPx * t * (1 - t);
+      path += ` L ${x} ${y}`;
+    }
+    elements += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>`;
+    // Hangers
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      const x = leftX + t * spanPx;
+      const archY = deckY - 4 * rise * spanPx * t * (1 - t);
+      elements += `<line x1="${x}" y1="${archY}" x2="${x}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="3,3"/>`;
+    }
+  } else if (type === 'tied-arch') {
+    const peakY = deckY - spanPx * rise;
+    let path = `M ${leftX} ${deckY}`;
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      const x = leftX + t * spanPx;
+      const y = deckY - 4 * rise * spanPx * t * (1 - t);
+      path += ` L ${x} ${y}`;
+    }
+    elements += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="3"/>`;
+    // Vertical hangers
+    for (let i = 1; i < 12; i++) {
+      const t = i / 12;
+      const x = leftX + t * spanPx;
+      const archY = deckY - 4 * rise * spanPx * t * (1 - t);
+      elements += `<line x1="${x}" y1="${archY}" x2="${x}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+    }
+    // Tie member (deck acts as tie)
+    elements += `<line x1="${leftX}" y1="${deckY + 4}" x2="${rightX}" y2="${deckY + 4}" stroke="var(--text-secondary)" stroke-width="2"/>`;
+  } else if (type === 'warren-truss') {
+    const trussH = spanPx * 0.12;
+    const topY = deckY - trussH;
+    elements += `<line x1="${leftX}" y1="${topY}" x2="${rightX}" y2="${topY}" stroke="var(--accent)" stroke-width="2.5"/>`;
+    const nPanels = 10;
+    const panelW = spanPx / nPanels;
+    for (let i = 0; i <= nPanels; i++) {
+      const x = leftX + i * panelW;
+      if (i < nPanels) {
+        const x2 = leftX + (i + 0.5) * panelW;
+        elements += `<line x1="${x}" y1="${deckY}" x2="${x2}" y2="${topY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+        elements += `<line x1="${x2}" y1="${topY}" x2="${x + panelW}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+      }
+    }
+    // Verticals
+    elements += `<line x1="${leftX}" y1="${topY}" x2="${leftX}" y2="${deckY}" stroke="var(--accent)" stroke-width="2"/>`;
+    elements += `<line x1="${rightX}" y1="${topY}" x2="${rightX}" y2="${deckY}" stroke="var(--accent)" stroke-width="2"/>`;
+  } else if (type === 'pratt-truss') {
+    const trussH = spanPx * 0.12;
+    const topY = deckY - trussH;
+    elements += `<line x1="${leftX}" y1="${topY}" x2="${rightX}" y2="${topY}" stroke="var(--accent)" stroke-width="2.5"/>`;
+    const nPanels = 8;
+    const panelW = spanPx / nPanels;
+    for (let i = 0; i <= nPanels; i++) {
+      const x = leftX + i * panelW;
+      elements += `<line x1="${x}" y1="${topY}" x2="${x}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+      if (i < nPanels / 2) {
+        elements += `<line x1="${x}" y1="${deckY}" x2="${x + panelW}" y2="${topY}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+      } else if (i >= nPanels / 2 && i < nPanels) {
+        elements += `<line x1="${x + panelW}" y1="${deckY}" x2="${x}" y2="${topY}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+      }
+    }
+  } else if (type === 'clear-span-beam') {
+    const beamD = Math.max(spanPx * 0.04, 8);
+    elements += `<rect x="${leftX}" y="${deckY - beamD}" width="${spanPx}" height="${beamD}" fill="var(--accent)" opacity="0.3" stroke="var(--accent)" stroke-width="1.5" rx="2"/>`;
+    elements += `<text x="${(leftX+rightX)/2}" y="${deckY - beamD/2 + 4}" text-anchor="middle" fill="var(--accent)" font-size="10" font-family="Inter,sans-serif">Glulam Beam</text>`;
+  } else if (type === 'multi-span-beam') {
+    const beamD = Math.max(spanPx * 0.03, 6);
+    elements += `<rect x="${leftX}" y="${deckY - beamD}" width="${spanPx}" height="${beamD}" fill="var(--accent)" opacity="0.3" stroke="var(--accent)" stroke-width="1.5" rx="2"/>`;
+    for (let i = 1; i < nSpans; i++) {
+      const px = leftX + (spanPx / nSpans) * i;
+      elements += `<rect x="${px - 6}" y="${deckY - 5}" width="12" height="${groundY - deckY + 5}" fill="var(--text-muted)" opacity="0.5" rx="2"/>`;
+      elements += `<text x="${px}" y="${groundY - 8}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="Inter,sans-serif">Pier ${i}</text>`;
+    }
+  } else if (type === 'cable-stayed') {
+    const towerH = spanPx * 0.35;
+    const towerX = (leftX + rightX) / 2;
+    const towerTopY = deckY - towerH;
+    elements += `<line x1="${towerX}" y1="${towerTopY}" x2="${towerX}" y2="${deckY}" stroke="var(--accent)" stroke-width="4"/>`;
+    elements += `<rect x="${towerX - 4}" y="${towerTopY - 6}" width="8" height="6" fill="var(--accent)" rx="1"/>`;
+    for (let i = 1; i <= 6; i++) {
+      const cableTopY = towerTopY + (i * 8);
+      const cableLeftX = towerX - (i * spanPx * 0.075);
+      const cableRightX = towerX + (i * spanPx * 0.075);
+      elements += `<line x1="${towerX}" y1="${cableTopY}" x2="${Math.max(cableLeftX, leftX)}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+      elements += `<line x1="${towerX}" y1="${cableTopY}" x2="${Math.min(cableRightX, rightX)}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1"/>`;
+    }
+  } else if (type === 'king-post-truss') {
+    const trussH = spanPx * 0.18;
+    const midX = (leftX + rightX) / 2;
+    const peakY = deckY - trussH;
+    // King post (vertical)
+    elements += `<line x1="${midX}" y1="${peakY}" x2="${midX}" y2="${deckY}" stroke="var(--accent)" stroke-width="3"/>`;
+    // Top chords
+    elements += `<line x1="${leftX}" y1="${deckY}" x2="${midX}" y2="${peakY}" stroke="var(--accent)" stroke-width="2.5"/>`;
+    elements += `<line x1="${midX}" y1="${peakY}" x2="${rightX}" y2="${deckY}" stroke="var(--accent)" stroke-width="2.5"/>`;
+    // Struts
+    const qx1 = leftX + spanPx * 0.25;
+    const qx2 = rightX - spanPx * 0.25;
+    elements += `<line x1="${midX}" y1="${peakY + trussH * 0.3}" x2="${qx1}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+    elements += `<line x1="${midX}" y1="${peakY + trussH * 0.3}" x2="${qx2}" y2="${deckY}" stroke="var(--text-secondary)" stroke-width="1.5"/>`;
+  }
+
+  // Width label
+  elements += `<text x="${w - 30}" y="${deckY - 20}" text-anchor="end" fill="var(--text-muted)" font-size="10" font-family="Inter,sans-serif">Width: ${config.clearWidth || 3.5}m</text>`;
+
+  // Title
+  const typeName = BRIDGE_TYPES[type]?.name || type;
+  elements += `<text x="${w/2}" y="22" text-anchor="middle" fill="var(--text-primary)" font-size="13" font-weight="600" font-family="Inter,sans-serif">${typeName} — Elevation</text>`;
+
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowL" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M6,0 L0,3 L6,6" fill="var(--text-secondary)"/></marker>
+      <marker id="arrowR" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--text-secondary)"/></marker>
+    </defs>
+    ${elements}
+  </svg>`;
+}
+
+
+// ---- SECTION 18: FOOTBRIDGE PAGE ----
+function renderFootbridgePage() {
+  const cfg = STATE.footbridgeConfig;
+  const fbEst = STATE.footbridgeEstimate;
+  const activeTab = STATE.footbridgeOutputTab || 'summary';
+
+  return `
+    <div class="fade-in">
+      <div class="section-header">
+        <div>
+          <div class="section-title">${ICONS.footbridge} Footbridge Estimator</div>
+          <div class="section-desc">Configure bridge geometry, select structural parameters, and generate a detailed footbridge estimate</div>
+        </div>
+        <div class="section-actions">
+          ${fbEst ? `
+            <div class="export-btn-group">
+              <button class="btn btn-sm" onclick="exportFootbridgeXLSX()">
+                ${ICONS.xlsx} Export XLSX
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Bridge Type Selector -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <div class="card-title">${ICONS.footbridge} Bridge Configuration</div>
+          <div class="card-subtitle">Select the structural typology and adjust span parameters</div>
+        </div>
+        <div class="bridge-type-selector">
+          ${Object.entries(BRIDGE_TYPES).map(([key, bt]) => `
+            <div class="bridge-type-option ${cfg.bridgeType === key ? 'active' : ''}" onclick="updateFootbridgeConfig('bridgeType', '${key}')">
+              <div class="bto-name">${bt.name}</div>
+              <div class="bto-desc">${bt.description}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Bridge SVG Visualizer -->
+      <div class="bridge-visualizer">
+        <div class="bridge-svg-container">
+          ${generateBridgeSVG(cfg)}
+        </div>
+        <div class="bridge-controls">
+          <div class="bridge-control-group">
+            <div class="bridge-control-label">Span Length</div>
+            <div class="bridge-control-value">${cfg.spanLength}m</div>
+            <input type="range" class="bridge-slider" min="10" max="120" step="5" value="${cfg.spanLength}" oninput="updateFootbridgeConfig('spanLength', parseInt(this.value))">
+          </div>
+          <div class="bridge-control-group">
+            <div class="bridge-control-label">Clear Width</div>
+            <div class="bridge-control-value">${cfg.clearWidth}m</div>
+            <input type="range" class="bridge-slider" min="2" max="6" step="0.5" value="${cfg.clearWidth}" oninput="updateFootbridgeConfig('clearWidth', parseFloat(this.value))">
+          </div>
+          ${['parabolic-arch','tied-arch','king-post-truss'].includes(cfg.bridgeType) ? `
+            <div class="bridge-control-group">
+              <div class="bridge-control-label">Rise-to-Span Ratio</div>
+              <div class="bridge-control-value">${cfg.archRise}</div>
+              <input type="range" class="bridge-slider" min="0.1" max="0.45" step="0.05" value="${cfg.archRise}" oninput="updateFootbridgeConfig('archRise', parseFloat(this.value))">
+            </div>
+          ` : ''}
+          ${cfg.bridgeType === 'multi-span-beam' ? `
+            <div class="bridge-control-group">
+              <div class="bridge-control-label">Number of Spans</div>
+              <div class="bridge-control-value">${cfg.numSpans}</div>
+              <input type="range" class="bridge-slider" min="2" max="5" step="1" value="${cfg.numSpans}" oninput="updateFootbridgeConfig('numSpans', parseInt(this.value))">
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Footbridge Scope & Parameters -->
+      <div class="section-divider">Project Scope & Site Parameters</div>
+      <div class="fb-scope-grid mb-16">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Project Information</div></div>
+          <div class="form-group">
+            <label class="form-label">Project Name</label>
+            <input class="form-input" type="text" placeholder="e.g., Stanley Park Pedestrian Crossing" value="${cfg.projectName || ''}" onchange="updateFootbridgeConfig('projectName', this.value)">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Client</label>
+              <input class="form-input" type="text" placeholder="e.g., City of Vancouver" value="${cfg.client || ''}" onchange="updateFootbridgeConfig('client', this.value)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input class="form-input" type="text" placeholder="e.g., Vancouver, BC" value="${cfg.location || ''}" onchange="updateFootbridgeConfig('location', this.value)">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Loading Condition</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('loading', this.value)">
+                <option value="pedestrian" ${cfg.loading==='pedestrian'?'selected':''}>Pedestrian Only (5.0 kPa)</option>
+                <option value="ped-cyclist" ${cfg.loading==='ped-cyclist'?'selected':''}>Pedestrian + Cyclist (5.0 kPa + point loads)</option>
+                <option value="light-vehicle" ${cfg.loading==='light-vehicle'?'selected':''}>Light Vehicle &lt; 5t (CL-625 reduced)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">StructureCraft Scope</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('scScope', this.value)">
+                <option value="prime-design-build" ${cfg.scScope==='prime-design-build'?'selected':''}>Prime Contractor (Design-Build)</option>
+                <option value="eng-supply" ${cfg.scScope==='eng-supply'?'selected':''}>Engineering + Supply</option>
+                <option value="supply-only" ${cfg.scScope==='supply-only'?'selected':''}>Supply Only</option>
+                <option value="eng-supervision" ${cfg.scScope==='eng-supervision'?'selected':''}>Engineering + Supervision</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">Site & Material Specifications</div></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Geotechnical Conditions</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('geoCondition', this.value)">
+                <option value="competent-rock" ${cfg.geoCondition==='competent-rock'?'selected':''}>Competent Rock</option>
+                <option value="dense-soil" ${cfg.geoCondition==='dense-soil'?'selected':''}>Dense Soil / Gravel</option>
+                <option value="soft-soil" ${cfg.geoCondition==='soft-soil'?'selected':''}>Soft Soil / Clay</option>
+                <option value="piled" ${cfg.geoCondition==='piled'?'selected':''}>Piled Foundation Required</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Structural Material</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('structuralMaterial', this.value)">
+                <option value="glulam-df" ${cfg.structuralMaterial==='glulam-df'?'selected':''}>Glulam (Douglas Fir, 24F-V8)</option>
+                <option value="glulam-spruce" ${cfg.structuralMaterial==='glulam-spruce'?'selected':''}>Glulam (Spruce)</option>
+                <option value="clt-hybrid" ${cfg.structuralMaterial==='clt-hybrid'?'selected':''}>CLT + Glulam Hybrid</option>
+                <option value="steel-timber" ${cfg.structuralMaterial==='steel-timber'?'selected':''}>Steel + Timber Hybrid</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Deck System</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('deckSystem', this.value)">
+                <option value="dlt" ${cfg.deckSystem==='dlt'?'selected':''}>Timber Deck (DLT)</option>
+                <option value="clt-deck" ${cfg.deckSystem==='clt-deck'?'selected':''}>Timber Deck (CLT)</option>
+                <option value="concrete-timber" ${cfg.deckSystem==='concrete-timber'?'selected':''}>Concrete on Timber</option>
+                <option value="frp" ${cfg.deckSystem==='frp'?'selected':''}>FRP Composite</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Railing Type</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('railingType', this.value)">
+                <option value="timber-cable" ${cfg.railingType==='timber-cable'?'selected':''}>Timber Posts + Steel Cable</option>
+                <option value="steel-mesh" ${cfg.railingType==='steel-mesh'?'selected':''}>Steel Mesh Panels</option>
+                <option value="glass" ${cfg.railingType==='glass'?'selected':''}>Glass Panel</option>
+                <option value="aluminum" ${cfg.railingType==='aluminum'?'selected':''}>Aluminum</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Site Access</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('siteAccess', this.value)">
+                <option value="standard" ${cfg.siteAccess==='standard'?'selected':''}>Standard Vehicular Access</option>
+                <option value="restricted" ${cfg.siteAccess==='restricted'?'selected':''}>Restricted / Pedestrian Only</option>
+                <option value="helicopter" ${cfg.siteAccess==='helicopter'?'selected':''}>Helicopter Required</option>
+                <option value="barge" ${cfg.siteAccess==='barge'?'selected':''}>Barge / Water Access</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Coverage</label>
+              <select class="form-select" onchange="updateFootbridgeConfig('coverage', this.value)">
+                <option value="open" ${cfg.coverage==='open'?'selected':''}>Open (Uncovered)</option>
+                <option value="covered" ${cfg.coverage==='covered'?'selected':''}>Covered / Canopy</option>
+                <option value="partial" ${cfg.coverage==='partial'?'selected':''}>Partially Covered</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generate Button -->
+      <div class="card mb-16" style="text-align:center; padding: 24px;">
+        <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.82rem;">
+          Configure bridge parameters above, then generate a detailed footbridge estimate.
+        </p>
+        <button class="btn btn-lg btn-accent" onclick="generateFootbridgeEstimate()" style="padding: 14px 40px; font-size: 1rem;">
+          ${ICONS.generate} Generate Footbridge Estimate
+        </button>
+      </div>
+
+      ${fbEst ? renderFootbridgeOutput(fbEst, activeTab) : ''}
+    </div>
+  `;
+}
+
+function renderFootbridgeOutput(fbEst, activeTab) {
+  const phaseKeys = Object.keys(fbEst.phases || {});
+  let subtotal = 0;
+  phaseKeys.forEach(pk => { subtotal += calcPhaseTotal(fbEst.phases[pk]); });
+  const a = fbEst.assumptions || getDefaultAssumptions();
+  const margin = subtotal * (a.marginPercent / 100);
+  const overhead = subtotal * (a.overheadPercent / 100);
+  const contingency = subtotal * (a.contingencyPercent / 100);
+  const bondIns = subtotal * (a.bondInsurancePercent / 100);
+  const grandTotal = subtotal + margin + overhead + bondIns;
+
+  return `
+    <div class="fb-output-section">
+      <div class="section-divider">Footbridge Estimate Output</div>
+
+      <!-- Assumptions -->
+      <div class="assumptions-box mb-20">
+        <div class="assumptions-header">
+          ${ICONS.warning} Pricing Assumptions
+          <span style="margin-left:auto; font-size:0.72rem; font-weight:400; color:var(--text-secondary);">Click any value to edit</span>
+        </div>
+        <div class="assumptions-grid">
+          <div class="assumption-item">
+            <div class="assumption-label">Margin</div>
+            <div class="assumption-value editable" onclick="editFBAssumption('marginPercent', this)">${fmtPct(a.marginPercent)}</div>
+          </div>
+          <div class="assumption-item">
+            <div class="assumption-label">Overhead</div>
+            <div class="assumption-value editable" onclick="editFBAssumption('overheadPercent', this)">${fmtPct(a.overheadPercent)}</div>
+          </div>
+          <div class="assumption-item">
+            <div class="assumption-label">Contingency</div>
+            <div class="assumption-value editable" onclick="editFBAssumption('contingencyPercent', this)">${fmtPct(a.contingencyPercent)}</div>
+          </div>
+          <div class="assumption-item">
+            <div class="assumption-label">Glulam (per BF)</div>
+            <div class="assumption-value editable" onclick="editFBAssumption('glulamPriceBF', this)">${fmtDec(a.glulamPriceBF)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase Tabs -->
+      <div class="tabs">
+        <div class="tab ${activeTab === 'summary' ? 'active' : ''}" onclick="STATE.footbridgeOutputTab='summary'; renderPage();">Summary</div>
+        ${phaseKeys.map(pk => `
+          <div class="tab ${activeTab === pk ? 'active' : ''}" onclick="STATE.footbridgeOutputTab='${pk}'; renderPage();">
+            ${FOOTBRIDGE_PHASE_DEFS[pk]?.name || pk}
+          </div>
+        `).join('')}
+      </div>
+
+      ${activeTab === 'summary' ? `
+        <div class="slide-up">
+          <div class="output-summary">
+            <div>
+              <div class="card">
+                <div class="card-title mb-12">Cost Breakdown by Phase</div>
+                <div class="mini-chart">
+                  ${phaseKeys.map(pk => {
+                    const pt = calcPhaseTotal(fbEst.phases[pk]);
+                    const pct = subtotal > 0 ? (pt / subtotal * 100) : 0;
+                    return `
+                      <div class="bar-chart-row">
+                        <div class="bar-chart-label">${FOOTBRIDGE_PHASE_DEFS[pk]?.name || pk}</div>
+                        <div class="bar-chart-track">
+                          <div class="bar-chart-fill" style="width:${Math.max(pct, 2)}%">
+                            ${pct > 15 ? `<span class="bar-chart-value">${fmtPct(pct)}</span>` : ''}
+                          </div>
+                        </div>
+                        <div class="bar-chart-amount">${fmt(pt)}</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="card">
+                <div class="card-title mb-12">Cost Summary</div>
+                <div class="summary-row"><span class="summary-row-label">Direct Costs (Subtotal)</span><span class="summary-row-value">${fmt(subtotal)}</span></div>
+                <div class="summary-divider"></div>
+                <div class="summary-row"><span class="summary-row-label">Overhead (${fmtPct(a.overheadPercent)})</span><span class="summary-row-value">${fmt(overhead)}</span></div>
+                <div class="summary-row"><span class="summary-row-label">Margin (${fmtPct(a.marginPercent)})</span><span class="summary-row-value">${fmt(margin)}</span></div>
+                <div class="summary-row"><span class="summary-row-label">Contingency (${fmtPct(a.contingencyPercent)})</span><span class="summary-row-value">${fmt(contingency)}</span></div>
+                <div class="summary-row"><span class="summary-row-label">Bond & Insurance (${fmtPct(a.bondInsurancePercent)})</span><span class="summary-row-value">${fmt(bondIns)}</span></div>
+                <div class="summary-divider"></div>
+                <div class="summary-total mt-8">
+                  <div class="summary-total-label">Grand Total</div>
+                  <div class="summary-total-value">${fmt(grandTotal)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      ${phaseKeys.map(pk => activeTab === pk ? renderFBPhaseTab(fbEst, pk) : '').join('')}
+    </div>
+  `;
+}
+
+function renderFBPhaseTab(fbEst, phaseKey) {
+  const phase = fbEst.phases[phaseKey] || { items: [] };
+  const phaseDef = FOOTBRIDGE_PHASE_DEFS[phaseKey] || { name: phaseKey, description: '' };
+  const phaseSubtotal = calcPhaseTotal(phase);
+  return `
+    <div class="slide-up">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">${phaseDef.name}</div>
+            <div class="card-subtitle">${phaseDef.description}</div>
+          </div>
+        </div>
+        <div class="line-items-header">
+          <div></div><div>Description</div><div class="cell-right">Qty</div><div class="cell-center">Unit</div><div class="cell-right">Rate</div><div class="cell-right">Total</div><div></div>
+        </div>
+        ${phase.items.map((item, idx) => `
+          <div class="line-item-row">
+            <div class="line-item-grip">${ICONS.grip}</div>
+            <div><input class="line-item-input" value="${item.name}" onchange="updateFBLineItem('${phaseKey}', ${idx}, 'name', this.value)"></div>
+            <div><input class="line-item-input numeric" type="number" value="${item.qty}" onchange="updateFBLineItem('${phaseKey}', ${idx}, 'qty', parseFloat(this.value))"></div>
+            <div><input class="line-item-input" value="${item.unit}" style="text-align:center" onchange="updateFBLineItem('${phaseKey}', ${idx}, 'unit', this.value)"></div>
+            <div><input class="line-item-input numeric" type="number" step="0.01" value="${item.rate}" onchange="updateFBLineItem('${phaseKey}', ${idx}, 'rate', parseFloat(this.value))"></div>
+            <div class="cell-right cell-mono cell-bold" style="padding:4px 6px;">${fmt(item.total)}</div>
+            <div class="line-item-delete" onclick="removeFBLineItem('${phaseKey}', ${idx})">${ICONS.trash}</div>
+          </div>
+        `).join('')}
+        ${phase.items.length > 0 ? `
+          <div class="line-item-row subtotal-row">
+            <div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div>
+            <div></div><div></div><div></div>
+            <div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">${fmt(phaseSubtotal)}</div>
+            <div></div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function updateFootbridgeConfig(key, value) {
+  STATE.footbridgeConfig[key] = value;
+  renderPage();
+}
+
+function editFBAssumption(key, el) {
+  if (!STATE.footbridgeEstimate) return;
+  const current = STATE.footbridgeEstimate.assumptions[key];
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = key.includes('Percent') ? '0.5' : '0.01';
+  input.value = current;
+  input.className = 'form-input';
+  input.style.cssText = 'width:100px; padding:4px 6px; font-size:0.85rem; font-family:JetBrains Mono,monospace;';
+  input.onblur = function() {
+    STATE.footbridgeEstimate.assumptions[key] = parseFloat(this.value) || 0;
+    renderPage();
+  };
+  input.onkeydown = function(e) {
+    if (e.key === 'Enter') this.blur();
+    if (e.key === 'Escape') renderPage();
+  };
+  el.innerHTML = '';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function updateFBLineItem(phaseKey, idx, field, value) {
+  if (!STATE.footbridgeEstimate) return;
+  const item = STATE.footbridgeEstimate.phases[phaseKey].items[idx];
+  if (!item) return;
+  item[field] = value;
+  item.total = (item.qty || 0) * (item.rate || 0);
+  renderPage();
+}
+
+function removeFBLineItem(phaseKey, idx) {
+  if (!STATE.footbridgeEstimate) return;
+  STATE.footbridgeEstimate.phases[phaseKey].items.splice(idx, 1);
+  renderPage();
+}
+
+// ---- SECTION 19: FOOTBRIDGE ESTIMATE GENERATOR ----
+function generateFootbridgeEstimate() {
+  const cfg = STATE.footbridgeConfig;
+  const a = getDefaultAssumptions();
+  const span = cfg.spanLength || 30;
+  const width = cfg.clearWidth || 3.5;
+  const deckArea = span * width;
+  const type = cfg.bridgeType;
+
+  // Material factors based on bridge type
+  const typeFactors = {
+    'parabolic-arch': { glulamMult: 1.4, steelMult: 1.2, complexityHrs: 1.3 },
+    'tied-arch': { glulamMult: 1.5, steelMult: 1.4, complexityHrs: 1.4 },
+    'warren-truss': { glulamMult: 1.2, steelMult: 1.6, complexityHrs: 1.2 },
+    'pratt-truss': { glulamMult: 1.3, steelMult: 1.5, complexityHrs: 1.3 },
+    'clear-span-beam': { glulamMult: 1.8, steelMult: 0.8, complexityHrs: 0.8 },
+    'multi-span-beam': { glulamMult: 1.0, steelMult: 0.7, complexityHrs: 0.9 },
+    'cable-stayed': { glulamMult: 1.1, steelMult: 2.0, complexityHrs: 1.6 },
+    'king-post-truss': { glulamMult: 1.3, steelMult: 1.3, complexityHrs: 1.1 },
+  };
+  const tf = typeFactors[type] || { glulamMult: 1.2, steelMult: 1.0, complexityHrs: 1.0 };
+
+  // Geotechnical cost multiplier
+  const geoMult = { 'competent-rock': 0.7, 'dense-soil': 1.0, 'soft-soil': 1.4, 'piled': 2.2 }[cfg.geoCondition] || 1.0;
+  // Access cost multiplier
+  const accessMult = { 'standard': 1.0, 'restricted': 1.3, 'helicopter': 3.0, 'barge': 1.8 }[cfg.siteAccess] || 1.0;
+
+  // Glulam quantity (BF) based on span, width, type
+  const glulamBF = Math.round(deckArea * 3.2 * tf.glulamMult * (span / 30));
+  const glulamRate = cfg.structuralMaterial === 'glulam-spruce' ? 3.80 : 4.25;
+  // Steel connections
+  const steelTons = Math.max(Math.round(glulamBF / 8000 * tf.steelMult * 10) / 10, 1);
+  // Deck material
+  const deckRates = { 'dlt': 22, 'clt-deck': 28, 'concrete-timber': 35, 'frp': 45 };
+  const deckRate = deckRates[cfg.deckSystem] || 22;
+  // Railing
+  const railRates = { 'timber-cable': 180, 'steel-mesh': 220, 'glass': 450, 'aluminum': 280 };
+  const railRate = railRates[cfg.railingType] || 180;
+  const railLength = (span + 2) * 2;
+  // Foundation costs
+  const foundationBase = 35000 * geoMult;
+  const numAbutments = cfg.bridgeType === 'multi-span-beam' ? 2 + (cfg.numSpans - 1) : 2;
+  // Engineering hours
+  const engHrs = Math.round((80 + span * 2.5) * tf.complexityHrs);
+  const draftHrs = Math.round(engHrs * 1.2);
+  // Coverage add-on
+  const coverageCost = cfg.coverage === 'covered' ? deckArea * 65 : cfg.coverage === 'partial' ? deckArea * 35 : 0;
+
+  const phases = {};
+
+  // Engineering
+  if (cfg.scScope !== 'supply-only') {
+    phases['fb-engineering'] = { items: [
+      { name: 'Structural Design & Analysis', qty: engHrs, unit: 'hr', rate: a.engHourlyRate, total: engHrs * a.engHourlyRate },
+      { name: 'Shop Drawing Production', qty: draftHrs, unit: 'hr', rate: a.draftHourlyRate, total: draftHrs * a.draftHourlyRate },
+      { name: 'Connection Design', qty: Math.round(engHrs * 0.4), unit: 'hr', rate: 180, total: Math.round(engHrs * 0.4) * 180 },
+      { name: 'Construction Engineering', qty: Math.round(engHrs * 0.3), unit: 'hr', rate: 180, total: Math.round(engHrs * 0.3) * 180 },
+      { name: 'Geotechnical Review', qty: 1, unit: 'LS', rate: 8500, total: 8500 },
+    ] };
+  }
+
+  // Fabrication
+  phases['fb-fabrication'] = { items: [
+    { name: `Glulam Members (${cfg.structuralMaterial === 'glulam-spruce' ? 'Spruce' : '24F-V8 DF'})`, qty: glulamBF, unit: 'BF', rate: glulamRate, total: glulamBF * glulamRate },
+    { name: 'Steel Connections & Hardware', qty: steelTons, unit: 'ton', rate: 4500, total: Math.round(steelTons * 4500) },
+    { name: `Deck Panels (${cfg.deckSystem.toUpperCase()})`, qty: Math.round(deckArea), unit: 'SF', rate: deckRate, total: Math.round(deckArea * deckRate) },
+    { name: 'Shop Fabrication Labour', qty: Math.round(glulamBF / 25), unit: 'hr', rate: a.shopHourlyRate, total: Math.round(glulamBF / 25) * a.shopHourlyRate },
+    { name: 'CNC Processing & Assembly', qty: 1, unit: 'LS', rate: Math.round(glulamBF * 0.8), total: Math.round(glulamBF * 0.8) },
+    { name: 'Protective Coatings & Finishes', qty: 1, unit: 'LS', rate: Math.round(deckArea * 8), total: Math.round(deckArea * 8) },
+  ] };
+
+  // Shipping
+  phases['fb-shipping'] = { items: [
+    { name: 'Flatbed Trucks', qty: Math.max(Math.ceil(glulamBF / 6000), 2), unit: 'truck', rate: 4800, total: Math.max(Math.ceil(glulamBF / 6000), 2) * 4800 },
+    { name: 'Oversized Load Permits', qty: span > 40 ? 2 : 1, unit: 'each', rate: 2800, total: (span > 40 ? 2 : 1) * 2800 },
+    { name: 'Logistics Coordination', qty: 20, unit: 'hr', rate: a.draftHourlyRate, total: 20 * a.draftHourlyRate },
+  ] };
+
+  // Foundations
+  if (cfg.scScope === 'prime-design-build') {
+    phases['fb-foundations'] = { items: [
+      { name: 'Abutment Construction', qty: 2, unit: 'each', rate: Math.round(foundationBase), total: Math.round(foundationBase * 2) },
+      ...(cfg.bridgeType === 'multi-span-beam' && cfg.numSpans > 1 ? [{ name: 'Intermediate Pier(s)', qty: cfg.numSpans - 1, unit: 'each', rate: Math.round(foundationBase * 0.8), total: Math.round(foundationBase * 0.8 * (cfg.numSpans - 1)) }] : []),
+      { name: 'Excavation & Earthworks', qty: 1, unit: 'LS', rate: Math.round(18000 * geoMult), total: Math.round(18000 * geoMult) },
+      { name: 'Reinforcing Steel', qty: 1, unit: 'LS', rate: Math.round(12000 * numAbutments * geoMult * 0.5), total: Math.round(12000 * numAbutments * geoMult * 0.5) },
+      { name: 'Concrete Supply & Placement', qty: 1, unit: 'LS', rate: Math.round(15000 * numAbutments * geoMult * 0.5), total: Math.round(15000 * numAbutments * geoMult * 0.5) },
+    ] };
+  }
+
+  // Installation
+  if (cfg.scScope !== 'supply-only' && cfg.scScope !== 'eng-supply') {
+    const installDays = Math.max(Math.ceil(span / 8 * accessMult), 5);
+    phases['fb-installation'] = { items: [
+      { name: 'Site Carpenters', qty: Math.round(installDays * 8 * 3), unit: 'hr', rate: a.siteCarpentrHourlyRate, total: Math.round(installDays * 8 * 3 * a.siteCarpentrHourlyRate) },
+      { name: 'Site Labourers', qty: Math.round(installDays * 8 * 1.5), unit: 'hr', rate: a.siteLaborHourlyRate, total: Math.round(installDays * 8 * 1.5 * a.siteLaborHourlyRate) },
+      { name: 'Site Superintendent', qty: Math.round(installDays * 8), unit: 'hr', rate: a.siteSuperHourlyRate, total: Math.round(installDays * 8 * a.siteSuperHourlyRate) },
+      { name: 'Mobile Crane (100-ton)', qty: installDays, unit: 'day', rate: Math.round(7500 * accessMult), total: Math.round(installDays * 7500 * accessMult) },
+      { name: 'Crane Operator', qty: Math.round(installDays * 8), unit: 'hr', rate: a.craneOperatorHourlyRate, total: Math.round(installDays * 8 * a.craneOperatorHourlyRate) },
+      { name: 'Rigging & Temporary Works', qty: 1, unit: 'LS', rate: Math.round(8000 * accessMult), total: Math.round(8000 * accessMult) },
+    ] };
+  }
+
+  // Railing & Finishes
+  phases['fb-railing'] = { items: [
+    { name: `Railing System (${cfg.railingType.replace('-', ' ')})`, qty: Math.round(railLength), unit: 'LF', rate: railRate, total: Math.round(railLength * railRate) },
+    { name: 'Anti-Slip Surface Treatment', qty: Math.round(deckArea), unit: 'SF', rate: 4.50, total: Math.round(deckArea * 4.50) },
+    ...(coverageCost > 0 ? [{ name: 'Canopy / Cover Structure', qty: 1, unit: 'LS', rate: Math.round(coverageCost), total: Math.round(coverageCost) }] : []),
+    { name: 'Approach Ramps & Transitions', qty: 2, unit: 'each', rate: 6500, total: 13000 },
+  ] };
+
+  // General Conditions
+  phases['fb-general'] = { items: [
+    { name: 'Project Management', qty: Math.round(engHrs * 0.6), unit: 'hr', rate: a.pmHourlyRate, total: Math.round(engHrs * 0.6 * a.pmHourlyRate) },
+    { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: 25000, total: 25000 },
+    { name: 'Permits & Approvals', qty: 1, unit: 'LS', rate: 8000, total: 8000 },
+    { name: 'Site Safety & Environmental', qty: 1, unit: 'LS', rate: 6000, total: 6000 },
+  ] };
+
+  // Compute subtotals
+  Object.values(phases).forEach(phase => {
+    phase.subtotal = phase.items.reduce((s, i) => s + (i.total || 0), 0);
+  });
+
+  STATE.footbridgeEstimate = {
+    name: cfg.projectName || 'Footbridge Estimate',
+    client: cfg.client || '',
+    location: cfg.location || '',
+    bridgeType: type,
+    spanLength: span,
+    clearWidth: width,
+    assumptions: { ...a },
+    phases,
+    totalCost: Object.values(phases).reduce((s, p) => s + p.subtotal, 0),
+  };
+  STATE.footbridgeOutputTab = 'summary';
+  renderPage();
+  showToast('Footbridge estimate generated. Review output below.', 'success');
+}
+
+
+// ---- SECTION 20: XLSX EXPORT ----
+function exportEstimateXLSX() {
+  if (typeof XLSX === 'undefined') {
+    showToast('XLSX library not loaded. Please check your internet connection.', 'warning');
+    exportEstimate(); // Fallback to CSV
+    return;
+  }
+
+  const est = STATE.currentEstimate;
+  if (!est.phases || Object.keys(est.phases).length === 0) {
+    showToast('No estimate data to export. Generate an estimate first.', 'warning');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const modelKey = est.deliveryModel || 'eor-build';
+  const model = DELIVERY_MODELS[modelKey];
+  const phaseKeys = model ? model.phases : Object.keys(est.phases);
+
+  // Calculate totals
+  let subtotal = 0;
+  phaseKeys.forEach(pk => {
+    if (est.phases && est.phases[pk]) subtotal += calcPhaseTotal(est.phases[pk]);
+  });
+  const a = est.assumptions;
+  const margin = subtotal * (a.marginPercent / 100);
+  const overhead = subtotal * (a.overheadPercent / 100);
+  const contingency = subtotal * (a.contingencyPercent / 100);
+  const bondIns = subtotal * (a.bondInsurancePercent / 100);
+  const grandTotal = subtotal + margin + overhead + bondIns;
+
+  // --- SUMMARY TAB ---
+  const summaryData = [
+    ['STRUCTURECRAFT ESTIMATOR PRO'],
+    ['Estimate Summary'],
+    [],
+    ['Project Name', est.name || 'Untitled'],
+    ['Client', est.client || ''],
+    ['Location', est.location || ''],
+    ['Project Type', est.projectType || ''],
+    ['Delivery Model', model ? model.name : ''],
+    ['Date', new Date().toLocaleDateString()],
+    ['Status', est.status || 'draft'],
+    [],
+    ['COST SUMMARY'],
+    [],
+    ['Phase', 'Subtotal'],
+  ];
+  phaseKeys.forEach(pk => {
+    const pt = est.phases[pk] ? calcPhaseTotal(est.phases[pk]) : 0;
+    summaryData.push([PHASE_DEFS[pk]?.name || pk, pt]);
+  });
+  summaryData.push([]);
+  summaryData.push(['Direct Costs (Subtotal)', subtotal]);
+  summaryData.push(['Overhead (' + a.overheadPercent + '%)', overhead]);
+  summaryData.push(['Margin (' + a.marginPercent + '%)', margin]);
+  summaryData.push(['Contingency (' + a.contingencyPercent + '%)', contingency]);
+  summaryData.push(['Bond & Insurance (' + a.bondInsurancePercent + '%)', bondIns]);
+  summaryData.push([]);
+  summaryData.push(['GRAND TOTAL', grandTotal]);
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  wsSummary['!cols'] = [{ wch: 35 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // --- ESTIMATE DETAIL TAB ---
+  const detailData = [
+    ['STRUCTURECRAFT ESTIMATOR PRO — FULL ESTIMATE DETAIL'],
+    [est.name || 'Untitled', est.client, est.location, model ? model.name : ''],
+    [],
+    ['Phase', 'Line Item', 'Qty', 'Unit', 'Rate', 'Total'],
+  ];
+  phaseKeys.forEach(pk => {
+    const phase = est.phases[pk];
+    if (!phase || !phase.items) return;
+    const phaseName = PHASE_DEFS[pk]?.name || pk;
+    phase.items.forEach(item => {
+      detailData.push([phaseName, item.name, item.qty, item.unit, item.rate, item.total]);
+    });
+    detailData.push(['', phaseName + ' SUBTOTAL', '', '', '', calcPhaseTotal(phase)]);
+    detailData.push([]);
+  });
+  detailData.push([]);
+  detailData.push(['', 'DIRECT COSTS SUBTOTAL', '', '', '', subtotal]);
+  detailData.push(['', 'Overhead (' + a.overheadPercent + '%)', '', '', '', overhead]);
+  detailData.push(['', 'Margin (' + a.marginPercent + '%)', '', '', '', margin]);
+  detailData.push(['', 'Bond & Insurance (' + a.bondInsurancePercent + '%)', '', '', '', bondIns]);
+  detailData.push(['', 'GRAND TOTAL', '', '', '', grandTotal]);
+
+  const wsDetail = XLSX.utils.aoa_to_sheet(detailData);
+  wsDetail['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsDetail, 'Estimate Detail');
+
+  // --- INDIVIDUAL PHASE TABS ---
+  phaseKeys.forEach(pk => {
+    const phase = est.phases[pk];
+    if (!phase || !phase.items || phase.items.length === 0) return;
+    const phaseName = (PHASE_DEFS[pk]?.name || pk).substring(0, 28);
+    const phaseData = [
+      [phaseName],
+      [],
+      ['Line Item', 'Qty', 'Unit', 'Rate', 'Total'],
+    ];
+    phase.items.forEach(item => {
+      phaseData.push([item.name, item.qty, item.unit, item.rate, item.total]);
+    });
+    phaseData.push([]);
+    phaseData.push(['PHASE SUBTOTAL', '', '', '', calcPhaseTotal(phase)]);
+
+    const ws = XLSX.utils.aoa_to_sheet(phaseData);
+    ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, ws, phaseName);
+  });
+
+  // --- ASSUMPTIONS TAB ---
+  const assumpData = [
+    ['PRICING ASSUMPTIONS'],
+    [],
+    ['Category', 'Parameter', 'Value'],
+    ['Markup', 'Margin %', a.marginPercent],
+    ['Markup', 'Overhead %', a.overheadPercent],
+    ['Markup', 'Contingency %', a.contingencyPercent],
+    ['Markup', 'Bond & Insurance %', a.bondInsurancePercent],
+    [],
+    ['Materials', 'Glulam 24F-V8 ($/BF)', a.glulamPriceBF],
+    ['Materials', 'CLT 3-ply ($/SF)', a.cltPriceSF3],
+    ['Materials', 'CLT 5-ply ($/SF)', a.cltPriceSF5],
+    ['Materials', 'CLT 7-ply ($/SF)', a.cltPriceSF7],
+    ['Materials', 'DLT ($/SF)', a.dltPriceSF],
+    ['Materials', 'MPP ($/SF)', a.mppPriceSF],
+    ['Materials', 'NLT ($/SF)', a.nltPriceSF],
+    ['Materials', 'Steel Connections ($/ton)', a.steelConnectionsTon],
+    [],
+    ['Labour', 'Engineering ($/hr)', a.engHourlyRate],
+    ['Labour', 'Drafting ($/hr)', a.draftHourlyRate],
+    ['Labour', 'Shop Fabrication ($/hr)', a.shopHourlyRate],
+    ['Labour', 'Site Carpenter ($/hr)', a.siteCarpentrHourlyRate],
+    ['Labour', 'Site Labourer ($/hr)', a.siteLaborHourlyRate],
+    ['Labour', 'Site Superintendent ($/hr)', a.siteSuperHourlyRate],
+    ['Labour', 'Crane Operator ($/hr)', a.craneOperatorHourlyRate],
+    ['Labour', 'Project Manager ($/hr)', a.pmHourlyRate],
+    [],
+    ['Equipment', 'Crane Daily Rate ($)', a.craneDailyRate],
+    ['Shipping', 'Shipping per BF ($)', a.shippingPerBF],
+    ['Shipping', 'Shipping per Truck ($)', a.shippingPerTruck],
+    ['Escalation', 'Escalation %/yr', a.escalationPercent],
+  ];
+
+  const wsAssump = XLSX.utils.aoa_to_sheet(assumpData);
+  wsAssump['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsAssump, 'Assumptions');
+
+  // Write file
+  const filename = (est.name || 'estimate').replace(/[^a-zA-Z0-9_-]/g, '_') + '.xlsx';
+  XLSX.writeFile(wb, filename);
+  showToast('Estimate exported as XLSX spreadsheet.', 'success');
+}
+
+function exportFootbridgeXLSX() {
+  if (typeof XLSX === 'undefined' || !STATE.footbridgeEstimate) {
+    showToast('Cannot export. Generate a footbridge estimate first.', 'warning');
+    return;
+  }
+  const fbEst = STATE.footbridgeEstimate;
+  const wb = XLSX.utils.book_new();
+  const phaseKeys = Object.keys(fbEst.phases);
+  let subtotal = 0;
+  phaseKeys.forEach(pk => { subtotal += calcPhaseTotal(fbEst.phases[pk]); });
+  const a = fbEst.assumptions;
+  const grandTotal = subtotal + subtotal * (a.marginPercent + a.overheadPercent + a.bondInsurancePercent) / 100;
+
+  const summaryData = [
+    ['STRUCTURECRAFT ESTIMATOR PRO — FOOTBRIDGE ESTIMATE'],
+    [],
+    ['Project', fbEst.name], ['Client', fbEst.client], ['Location', fbEst.location],
+    ['Bridge Type', BRIDGE_TYPES[fbEst.bridgeType]?.name || fbEst.bridgeType],
+    ['Span', fbEst.spanLength + 'm'], ['Width', fbEst.clearWidth + 'm'],
+    [],
+    ['Phase', 'Subtotal'],
+  ];
+  phaseKeys.forEach(pk => {
+    summaryData.push([FOOTBRIDGE_PHASE_DEFS[pk]?.name || pk, calcPhaseTotal(fbEst.phases[pk])]);
+  });
+  summaryData.push([]); summaryData.push(['GRAND TOTAL (incl. markups)', grandTotal]);
+  const ws = XLSX.utils.aoa_to_sheet(summaryData);
+  ws['!cols'] = [{ wch: 35 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, ws, 'Summary');
+
+  phaseKeys.forEach(pk => {
+    const phase = fbEst.phases[pk];
+    if (!phase || !phase.items) return;
+    const name = (FOOTBRIDGE_PHASE_DEFS[pk]?.name || pk).substring(0, 28);
+    const data = [[name], [], ['Line Item', 'Qty', 'Unit', 'Rate', 'Total']];
+    phase.items.forEach(i => data.push([i.name, i.qty, i.unit, i.rate, i.total]));
+    data.push([]); data.push(['SUBTOTAL', '', '', '', calcPhaseTotal(phase)]);
+    const pws = XLSX.utils.aoa_to_sheet(data);
+    pws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, pws, name);
+  });
+
+  XLSX.writeFile(wb, (fbEst.name || 'footbridge-estimate').replace(/[^a-zA-Z0-9_-]/g, '_') + '.xlsx');
+  showToast('Footbridge estimate exported as XLSX.', 'success');
+}
+
+
+// ---- SECTION 21: FOOTBRIDGE SAMPLE ESTIMATES ----
+SAMPLE_ESTIMATES.push(
+  {
+    id: 'est-fb-001',
+    name: 'Stanley Park Pedestrian Bridge',
+    client: 'City of Vancouver',
+    location: 'Vancouver, BC',
+    projectType: 'institutional',
+    deliveryModel: 'eor-build',
+    status: 'won',
+    createdAt: '2025-09-12',
+    updatedAt: '2025-11-05',
+    scopeDescription: '45m parabolic arch pedestrian footbridge spanning Beaver Creek in Stanley Park. Glulam Douglas Fir structure with DLT deck, timber + steel cable railings. StructureCraft as prime contractor (design-build).',
+    assumptions: getDefaultAssumptions(),
+    phases: {
+      'consulting': { items: [
+        { name: 'SD Structural Engineering', qty: 60, unit: 'hr', rate: 195, total: 11700 },
+        { name: 'DD Structural Engineering', qty: 100, unit: 'hr', rate: 195, total: 19500 },
+        { name: 'CD Structural Engineering', qty: 140, unit: 'hr', rate: 195, total: 27300 },
+        { name: 'CA Services', qty: 40, unit: 'hr', rate: 195, total: 7800 },
+      ], subtotal: 66300 },
+      'timber-engineering': { items: [
+        { name: 'Shop Drawing Engineering', qty: 160, unit: 'hr', rate: 180, total: 28800 },
+        { name: 'Erection Engineering', qty: 60, unit: 'hr', rate: 180, total: 10800 },
+        { name: 'Connection Design', qty: 80, unit: 'hr', rate: 180, total: 14400 },
+        { name: 'Drafting / Detailing', qty: 200, unit: 'hr', rate: 115, total: 23000 },
+      ], subtotal: 77000 },
+      'fabrication': { items: [
+        { name: 'Glulam Arch Members (24F-V8)', qty: 6200, unit: 'BF', rate: 4.50, total: 27900 },
+        { name: 'Glulam Deck Beams', qty: 3800, unit: 'BF', rate: 4.25, total: 16150 },
+        { name: 'DLT Deck Panels', qty: 1580, unit: 'SF', rate: 22, total: 34760 },
+        { name: 'Steel Connections', qty: 3.5, unit: 'ton', rate: 4500, total: 15750 },
+        { name: 'Stainless Steel Tension Rods', qty: 1, unit: 'LS', rate: 18000, total: 18000 },
+        { name: 'Shop Fabrication Labour', qty: 420, unit: 'hr', rate: 82, total: 34440 },
+        { name: 'CNC Processing', qty: 1, unit: 'LS', rate: 22000, total: 22000 },
+        { name: 'Protective Coatings', qty: 1, unit: 'LS', rate: 14000, total: 14000 },
+      ], subtotal: 183000 },
+      'shipping': { items: [
+        { name: 'Flatbed Trucks (local)', qty: 4, unit: 'truck', rate: 4500, total: 18000 },
+        { name: 'Oversized Load Permits', qty: 2, unit: 'each', rate: 2800, total: 5600 },
+      ], subtotal: 23600 },
+      'installation': { items: [
+        { name: 'Site Carpenters', qty: 640, unit: 'hr', rate: 95, total: 60800 },
+        { name: 'Site Labourers', qty: 240, unit: 'hr', rate: 65, total: 15600 },
+        { name: 'Site Superintendent', qty: 160, unit: 'hr', rate: 140, total: 22400 },
+        { name: 'Mobile Crane 100-ton', qty: 12, unit: 'day', rate: 7500, total: 90000 },
+        { name: 'Crane Operator', qty: 96, unit: 'hr', rate: 115, total: 11040 },
+        { name: 'Temporary Falsework', qty: 1, unit: 'LS', rate: 35000, total: 35000 },
+        { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: 12000, total: 12000 },
+      ], subtotal: 246840 },
+      'general-conditions': { items: [
+        { name: 'Project Management', qty: 160, unit: 'hr', rate: 165, total: 26400 },
+        { name: 'Foundations (Abutments)', qty: 1, unit: 'LS', rate: 85000, total: 85000 },
+        { name: 'Railing (Timber + Steel Cable)', qty: 94, unit: 'LF', rate: 180, total: 16920 },
+        { name: 'Approach Ramps', qty: 2, unit: 'each', rate: 8500, total: 17000 },
+        { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: 22000, total: 22000 },
+        { name: 'Permits & Approvals', qty: 1, unit: 'LS', rate: 8500, total: 8500 },
+      ], subtotal: 175820 },
+    },
+    totalCost: 772560,
+  },
+  {
+    id: 'est-fb-002',
+    name: 'Kicking Horse River Crossing',
+    client: 'Town of Golden',
+    location: 'Golden, BC',
+    projectType: 'institutional',
+    deliveryModel: 'eor-build',
+    status: 'sent',
+    createdAt: '2025-11-08',
+    updatedAt: '2026-01-15',
+    scopeDescription: '65m tied arch (bowstring) footbridge crossing the Kicking Horse River. Glulam Douglas Fir arch with steel hangers, concrete-on-timber deck for durability. Piled foundations due to riverbank geotechnical conditions. StructureCraft as EOR and prime contractor.',
+    assumptions: getDefaultAssumptions(),
+    phases: {
+      'consulting': { items: [
+        { name: 'SD Structural Engineering', qty: 80, unit: 'hr', rate: 195, total: 15600 },
+        { name: 'DD Structural Engineering', qty: 140, unit: 'hr', rate: 195, total: 27300 },
+        { name: 'CD Structural Engineering', qty: 200, unit: 'hr', rate: 195, total: 39000 },
+        { name: 'CA Services', qty: 60, unit: 'hr', rate: 195, total: 11700 },
+        { name: 'Geotechnical Coordination', qty: 30, unit: 'hr', rate: 195, total: 5850 },
+      ], subtotal: 99450 },
+      'timber-engineering': { items: [
+        { name: 'Shop Drawing Engineering', qty: 240, unit: 'hr', rate: 180, total: 43200 },
+        { name: 'Erection Engineering', qty: 100, unit: 'hr', rate: 180, total: 18000 },
+        { name: 'Connection Design', qty: 120, unit: 'hr', rate: 180, total: 21600 },
+        { name: 'Drafting / Detailing', qty: 300, unit: 'hr', rate: 115, total: 34500 },
+      ], subtotal: 117300 },
+      'fabrication': { items: [
+        { name: 'Glulam Arch Members (24F-V8)', qty: 12800, unit: 'BF', rate: 4.50, total: 57600 },
+        { name: 'Glulam Deck Beams', qty: 5600, unit: 'BF', rate: 4.25, total: 23800 },
+        { name: 'CLT Deck Panels (5-ply)', qty: 2275, unit: 'SF', rate: 34, total: 77350 },
+        { name: 'Concrete Topping (2")', qty: 2275, unit: 'SF', rate: 10, total: 22750 },
+        { name: 'Steel Connections & Hangers', qty: 6.5, unit: 'ton', rate: 4500, total: 29250 },
+        { name: 'Steel Tie Member', qty: 1, unit: 'LS', rate: 42000, total: 42000 },
+        { name: 'Shop Fabrication Labour', qty: 680, unit: 'hr', rate: 82, total: 55760 },
+        { name: 'CNC Processing', qty: 1, unit: 'LS', rate: 35000, total: 35000 },
+        { name: 'Protective Coatings', qty: 1, unit: 'LS', rate: 22000, total: 22000 },
+      ], subtotal: 365510 },
+      'shipping': { items: [
+        { name: 'Flatbed Trucks (regional)', qty: 8, unit: 'truck', rate: 5400, total: 43200 },
+        { name: 'Oversized Load Permits', qty: 3, unit: 'each', rate: 3200, total: 9600 },
+        { name: 'Logistics Coordination', qty: 30, unit: 'hr', rate: 115, total: 3450 },
+      ], subtotal: 56250 },
+      'installation': { items: [
+        { name: 'Site Carpenters', qty: 1200, unit: 'hr', rate: 95, total: 114000 },
+        { name: 'Site Labourers', qty: 480, unit: 'hr', rate: 65, total: 31200 },
+        { name: 'Site Superintendent', qty: 320, unit: 'hr', rate: 140, total: 44800 },
+        { name: 'Mobile Crane 100-ton', qty: 22, unit: 'day', rate: 7500, total: 165000 },
+        { name: 'Crane Operator', qty: 176, unit: 'hr', rate: 115, total: 20240 },
+        { name: 'Temporary Falsework / Shoring', qty: 1, unit: 'LS', rate: 65000, total: 65000 },
+        { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: 18000, total: 18000 },
+      ], subtotal: 458240 },
+      'general-conditions': { items: [
+        { name: 'Project Management', qty: 260, unit: 'hr', rate: 165, total: 42900 },
+        { name: 'Piled Foundations (2 abutments)', qty: 1, unit: 'LS', rate: 145000, total: 145000 },
+        { name: 'Railing (Steel Mesh)', qty: 134, unit: 'LF', rate: 220, total: 29480 },
+        { name: 'Approach Ramps & Transitions', qty: 2, unit: 'each', rate: 12000, total: 24000 },
+        { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: 35000, total: 35000 },
+        { name: 'Permits & Environmental', qty: 1, unit: 'LS', rate: 15000, total: 15000 },
+        { name: 'Travel & Accommodation', qty: 1, unit: 'LS', rate: 18000, total: 18000 },
+      ], subtotal: 309380 },
+    },
+    totalCost: 1406130,
+  }
+);
+
 
 // Boot
 document.addEventListener('DOMContentLoaded', initApp);
