@@ -1721,7 +1721,7 @@ function renderSettingsPage() {
         </div>
         <div class="flex gap-8 flex-wrap">
           <button class="btn" onclick="exportAllData()">
-            ${ICONS.download} Export All Data (JSON)
+            ${ICONS.download} Export All Data (CSV)
           </button>
           <button class="btn" onclick="document.getElementById('import-file').click()">
             ${ICONS.upload} Import Data
@@ -2050,17 +2050,117 @@ function resetAssumptions() {
   showToast('Assumptions reset to defaults.', 'info');
 }
 
+function estimateToCSVRows(est) {
+  const rows = [];
+  const model = DELIVERY_MODELS[est.deliveryModel];
+  const phases = est.phases || {};
+  for (const [phaseKey, phase] of Object.entries(phases)) {
+    const phaseName = PHASE_DEFS[phaseKey]?.name || phaseKey;
+    const items = phase.items || [];
+    for (const item of items) {
+      rows.push({
+        estimateName: est.name || '',
+        client: est.client || '',
+        location: est.location || '',
+        projectType: est.projectType || '',
+        deliveryModel: model ? model.name : est.deliveryModel || '',
+        status: est.status || '',
+        createdAt: est.createdAt || '',
+        phase: phaseName,
+        lineItem: item.name || '',
+        qty: item.qty ?? '',
+        unit: item.unit || '',
+        rate: item.rate ?? '',
+        total: item.total ?? '',
+      });
+    }
+    // Phase subtotal row
+    if (phase.subtotal != null) {
+      rows.push({
+        estimateName: est.name || '',
+        client: est.client || '',
+        location: est.location || '',
+        projectType: est.projectType || '',
+        deliveryModel: model ? model.name : est.deliveryModel || '',
+        status: est.status || '',
+        createdAt: est.createdAt || '',
+        phase: phaseName,
+        lineItem: 'SUBTOTAL',
+        qty: '',
+        unit: '',
+        rate: '',
+        total: phase.subtotal,
+      });
+    }
+  }
+  // Grand total row
+  if (est.totalCost != null) {
+    rows.push({
+      estimateName: est.name || '',
+      client: est.client || '',
+      location: est.location || '',
+      projectType: est.projectType || '',
+      deliveryModel: model ? model.name : est.deliveryModel || '',
+      status: est.status || '',
+      createdAt: est.createdAt || '',
+      phase: 'TOTAL',
+      lineItem: 'GRAND TOTAL',
+      qty: '',
+      unit: '',
+      rate: '',
+      total: est.totalCost,
+    });
+  }
+  return rows;
+}
+
+function csvEscape(val) {
+  const s = String(val == null ? '' : val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function rowsToCSV(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.map(csvEscape).join(',')];
+  for (const row of rows) {
+    lines.push(headers.map(h => csvEscape(row[h])).join(','));
+  }
+  return lines.join('\n');
+}
+
 function exportEstimate() {
   const est = STATE.currentEstimate;
-  const data = JSON.stringify(est, null, 2);
-  downloadFile(data, (est.name || 'estimate') + '.json', 'application/json');
-  showToast('Estimate exported.', 'success');
+  const rows = estimateToCSVRows(est);
+  if (!rows.length) {
+    showToast('No estimate data to export. Generate an estimate first.', 'warning');
+    return;
+  }
+  const csv = rowsToCSV(rows);
+  downloadFile(csv, (est.name || 'estimate').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv', 'text/csv');
+  showToast('Estimate exported as CSV.', 'success');
 }
 
 function exportAllData() {
-  const data = JSON.stringify({ estimates: STATE.estimates, currentEstimate: STATE.currentEstimate }, null, 2);
-  downloadFile(data, 'structurecraft-estimator-data.json', 'application/json');
-  showToast('All data exported.', 'success');
+  const allRows = [];
+  const allEstimates = [...STATE.estimates];
+  if (STATE.currentEstimate && STATE.currentEstimate.name) {
+    const exists = allEstimates.some(e => e.id === STATE.currentEstimate.id);
+    if (!exists) allEstimates.push(STATE.currentEstimate);
+  }
+  for (const est of allEstimates) {
+    allRows.push(...estimateToCSVRows(est));
+  }
+  if (!allRows.length) {
+    showToast('No estimate data to export.', 'warning');
+    return;
+  }
+  const csv = rowsToCSV(allRows);
+  downloadFile(csv, 'structurecraft-all-estimates.csv', 'text/csv');
+  showToast('All estimates exported as CSV.', 'success');
 }
 
 function importData(event) {
