@@ -341,8 +341,10 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: center;
   transition: opacity 0.5s ease, visibility 0.5s ease;
+  animation: autoHideLoader 0.5s ease 3s forwards;
 }
 #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+@keyframes autoHideLoader { to { opacity: 0; visibility: hidden; pointer-events: none; } }
 .loader-content { text-align: center; }
 .loader-logo { margin-bottom: 16px; animation: pulse 2s infinite; }
 .loader-text { color: var(--text-primary); font-size: 1.25rem; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 24px; }
