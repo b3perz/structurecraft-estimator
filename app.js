@@ -1035,16 +1035,16 @@ function renderInputPage() {
 
     '<!-- Generate Estimate Button -->' +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
-      (localStorage.getItem('sc-openai-key') ?
+      (localStorage.getItem('sc-anthropic-key') ?
         '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
-          'AI-powered estimation is active. Upload drawings and click <strong>Generate Estimate</strong> to analyze your documents. ' +
-          'The AI will read through your drawing set, perform quantity takeoff, and generate a detailed estimate. ' +
+          'Claude AI-powered estimation is active. Upload drawings and click <strong>Generate Estimate</strong> to analyze your documents. ' +
+          'Claude Opus 4.6 with extended thinking will read through your drawing set, perform a detailed quantity takeoff, and generate a comprehensive estimate. ' +
           'This may take 1-2 minutes depending on document size.' +
         '</p>'
       :
         '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
           'Upload your drawing set and click <strong>Generate Estimate</strong>. ' +
-          'For AI-powered PDF analysis, add your OpenAI API key in <strong>Settings</strong>. ' +
+          'For AI-powered PDF analysis, add your Anthropic API key in <strong>Settings</strong>. ' +
           'Without an API key, a template-based estimate will be generated based on your scope description and material selections.' +
         '</p>'
       ) +
@@ -1661,7 +1661,7 @@ function renderQAPage() {
     { q: 'How do I use the Connector tool?', a: 'Go to the <strong>Connector</strong> page. Select a past estimate from the dropdown. All its line items will appear in the left panel. You can <strong>drag and drop</strong> items into your current estimate on the right, or <strong>double-click</strong> any item to quick-add it. Items are matched to the appropriate phase in your current estimate.' },
     { q: 'How do I compare past estimates?', a: 'Go to the <strong>Past Estimates</strong> page and click <strong>Compare Mode</strong>. This shows a side-by-side benchmark of all filtered estimates, including phase-by-phase cost breakdowns and totals. Use the filters to narrow down to specific delivery models or statuses.' },
     { q: 'Can I edit the pricing assumptions?', a: 'Yes. In the <strong>Output</strong> tab, the Assumptions box at the top shows all current pricing assumptions. <strong>Click any value</strong> to edit it inline. Changes immediately recalculate the estimate. You can also update default assumptions in <strong>Settings</strong>.' },
-    { q: 'How does the AI-powered estimation work?', a: 'When you upload PDFs (drawings, specs, RFPs) and have an OpenAI API key configured in <strong>Settings</strong>, the estimator uses AI to analyze your documents. It extracts text from PDFs using PDF.js, sends the content to OpenAI for analysis, and the AI performs a detailed quantity takeoff based on the actual drawing information. The AI identifies building dimensions, structural members, material quantities, and generates line items for each phase. Notes about assumptions and exclusions are provided in the <strong>AI Notes</strong> tab.' },
+    { q: 'How does the AI-powered estimation work?', a: 'When you upload PDFs (drawings, specs, RFPs) and have an Anthropic API key configured in <strong>Settings</strong>, the estimator uses Claude Opus 4.6 with extended thinking to analyze your documents. It extracts text from PDFs using PDF.js, sends the content to Claude for deep analysis, and the AI performs a meticulous quantity takeoff based on the actual drawing information. Claude identifies building dimensions, structural members, material quantities, and generates line items for each phase. Notes about assumptions, exclusions, and items that could not be determined are provided in the <strong>AI Notes</strong> tab.' },
     { q: 'How does the file upload work?', a: 'Each upload zone accepts specific file types (PDF, DOCX, XLSX) up to <strong>40 MB each</strong>. Files are stored in your browser session for AI processing. When you click Generate Estimate, the AI reads and analyzes all uploaded documents to perform quantity takeoff. Upload structural drawings, architectural drawings, specs, and RFPs for the most accurate estimates.' },
     { q: 'What do the different themes mean?', a: 'The 10 themes are purely aesthetic -- they change the color scheme and feel of the interface. Go to <strong>Settings</strong> to browse all themes, or click the theme icon in the bottom-left sidebar to cycle through them. Your preference is saved automatically.' },
     { q: 'How are costs calculated?', a: 'Each line item has a Qty x Rate = Total. Phase subtotals are the sum of all line items. The grand total adds Overhead, Margin, Contingency, and Bond/Insurance percentages on top of the direct cost subtotal. All percentages are configurable in the Assumptions box.' },
@@ -1740,25 +1740,25 @@ function renderSettingsPage() {
       '</div>' +
     '</div>' +
 
-    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Connect your OpenAI API key to enable AI-powered PDF analysis and quantity takeoff</div></div></div>' +
+    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Connect your Anthropic API key to enable Claude-powered PDF analysis and quantity takeoff</div></div></div>' +
       '<div class="form-row">' +
         '<div class="form-group" style="flex: 2;">' +
-          '<label class="form-label">OpenAI API Key</label>' +
-          '<input class="form-input" type="password" id="openai-key-input" placeholder="sk-..." value="' + (localStorage.getItem('sc-openai-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
-          '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored only in your browser\'s localStorage and sent directly to OpenAI. It is never stored on any server.</div>' +
+          '<label class="form-label">Anthropic API Key</label>' +
+          '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
+          '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored only in your browser\'s localStorage and sent directly to Anthropic. It is never stored on any server.</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<label class="form-label">AI Model</label>' +
-          '<select class="form-select" onchange="localStorage.setItem(\'sc-openai-model\', this.value)">' +
-            '<option value="gpt-4o"' + (localStorage.getItem('sc-openai-model') === 'gpt-4o' || !localStorage.getItem('sc-openai-model') ? ' selected' : '') + '>GPT-4o (Recommended)</option>' +
-            '<option value="gpt-4o-mini"' + (localStorage.getItem('sc-openai-model') === 'gpt-4o-mini' ? ' selected' : '') + '>GPT-4o Mini (Faster)</option>' +
-            '<option value="gpt-4-turbo"' + (localStorage.getItem('sc-openai-model') === 'gpt-4-turbo' ? ' selected' : '') + '>GPT-4 Turbo</option>' +
+          '<label class="form-label">Claude Model</label>' +
+          '<select class="form-select" onchange="localStorage.setItem(\'sc-anthropic-model\', this.value)">' +
+            '<option value="claude-opus-4-6"' + (localStorage.getItem('sc-anthropic-model') === 'claude-opus-4-6' || !localStorage.getItem('sc-anthropic-model') ? ' selected' : '') + '>Claude Opus 4.6 (Extended Thinking)</option>' +
+            '<option value="claude-sonnet-4-6"' + (localStorage.getItem('sc-anthropic-model') === 'claude-sonnet-4-6' ? ' selected' : '') + '>Claude Sonnet 4.6 (Faster)</option>' +
+            '<option value="claude-haiku-4-5-20251001"' + (localStorage.getItem('sc-anthropic-model') === 'claude-haiku-4-5-20251001' ? ' selected' : '') + '>Claude Haiku 4.5 (Fastest)</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
       '<div style="margin-top: 12px;">' +
         '<button class="btn btn-sm" onclick="testAPIKey()">Test Connection</button>' +
-        (localStorage.getItem('sc-openai-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' API key configured</span>' : '') +
+        (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' API key configured</span>' : '') +
       '</div>' +
     '</div>' +
 
@@ -2613,31 +2613,56 @@ function buildAIPrompt(est, extractedTexts) {
   return prompt;
 }
 
-async function callOpenAI(prompt, apiKey) {
-  var response = await fetch('https://api.openai.com/v1/chat/completions', {
+async function callClaude(prompt, apiKey) {
+  var selectedModel = localStorage.getItem('sc-anthropic-model') || 'claude-opus-4-6';
+  var useExtendedThinking = selectedModel === 'claude-opus-4-6';
+
+  var requestBody = {
+    model: selectedModel,
+    max_tokens: 16000,
+    messages: [
+      { role: 'user', content: prompt },
+    ],
+  };
+
+  // Enable extended thinking for Opus to get deeper analysis
+  if (useExtendedThinking) {
+    requestBody.temperature = 1; // Required for extended thinking
+    requestBody.thinking = {
+      type: 'enabled',
+      budget_tokens: 10000,
+    };
+    requestBody.max_tokens = 16000;
+  } else {
+    requestBody.temperature = 0.3;
+  }
+
+  // Add system prompt
+  requestBody.system = 'You are an expert structural engineer and cost estimator with decades of experience in mass timber, steel, and concrete construction. You perform meticulous quantity takeoffs from construction documents. Respond only with valid JSON. Do not include any markdown formatting, code fences, or explanation outside the JSON object.';
+
+  var response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey,
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({
-      model: localStorage.getItem('sc-openai-model') || 'gpt-4o',
-      messages: [
-        { role: 'system', content: 'You are an expert structural engineer and cost estimator. Respond only with valid JSON.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 8000,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     var errText = await response.text();
-    throw new Error('OpenAI API error (' + response.status + '): ' + errText);
+    throw new Error('Claude API error (' + response.status + '): ' + errText);
   }
 
   var data = await response.json();
-  var content = data.choices[0].message.content;
+  // Find the text content block (skip thinking blocks)
+  var textBlock = data.content.find(function(block) { return block.type === 'text'; });
+  if (!textBlock) {
+    throw new Error('No text response from Claude API');
+  }
+  var content = textBlock.text;
   // Strip markdown code fences if present
   content = content.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
   return JSON.parse(content);
@@ -2659,7 +2684,7 @@ function updateAIProgress(step, progress) {
   container.style.display = 'block';
   container.innerHTML = '<div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: left;">' +
     '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
-      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' AI Analysis in Progress</div>' +
+      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' Claude AI Analysis in Progress</div>' +
       '<div style="font-size: 0.78rem; color: var(--text-muted);">' + elapsedSec + 's elapsed</div>' +
     '</div>' +
     '<div style="font-size: 0.82rem; color: var(--accent); margin-bottom: 8px;">' + step + '</div>' +
@@ -2820,7 +2845,7 @@ function generateTemplateEstimate(est, model) {
     'This estimate was generated using template-based calculations (no AI analysis).',
     'Building area estimated at ' + fmtNum(area) + ' SF (' + stories + ' stories) based on scope description.',
     'Material selections were used to determine unit pricing. Quantities are approximate.',
-    'For more accurate estimates, upload drawings and add your OpenAI API key in Settings.',
+    'For more accurate estimates, upload drawings and add your Anthropic API key in Settings for Claude-powered analysis.',
   ];
 
   est.totalCost = calcEstimateTotal(est);
@@ -2863,15 +2888,15 @@ async function generateAIEstimate(est, model, apiKey) {
       extractedTexts = 'No document text available. Generate estimate based on project scope description and material selections only.';
     }
 
-    // Truncate if too long (OpenAI token limit)
-    if (extractedTexts.length > 80000) {
-      extractedTexts = extractedTexts.substring(0, 80000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
+    // Truncate if too long (Claude supports much larger context but we still cap for practical reasons)
+    if (extractedTexts.length > 180000) {
+      extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
     }
 
     // Step 2: Build and send AI prompt
-    updateAIProgress('Analyzing documents and performing quantity takeoff...', 45);
+    updateAIProgress('Claude is analyzing documents and performing quantity takeoff (extended thinking active)...', 45);
     var prompt = buildAIPrompt(est, extractedTexts);
-    var aiResult = await callOpenAI(prompt, apiKey);
+    var aiResult = await callClaude(prompt, apiKey);
 
     // Step 3: Parse AI response
     updateAIProgress('Building estimate from AI analysis...', 80);
@@ -2940,13 +2965,13 @@ function generateEstimate() {
     return;
   }
 
-  var apiKey = localStorage.getItem('sc-openai-key');
+  var apiKey = localStorage.getItem('sc-anthropic-key');
   var hasFiles = getAllUploadedFiles().length > 0;
 
   if (apiKey && apiKey.trim()) {
-    // AI-powered estimation
+    // AI-powered estimation using Claude
     generateAIEstimate(est, model, apiKey.trim());
-    showToast('AI analysis started. You can navigate to other pages while it processes.', 'info');
+    showToast('Claude AI analysis started. You can navigate to other pages while it processes.', 'info');
   } else {
     // Template-based estimation (fallback)
     generateTemplateEstimate(est, model);
@@ -2954,7 +2979,7 @@ function generateEstimate() {
     STATE.outputActiveTab = 'summary';
     renderPage();
     updateNavigation();
-    showToast('Estimate generated using templates. Add an OpenAI API key in Settings for AI-powered analysis.', 'success');
+    showToast('Estimate generated using templates. Add your Anthropic API key in Settings for Claude-powered analysis.', 'success');
   }
 }
 
@@ -3069,27 +3094,38 @@ function cycleTheme() {
 
 function saveAPIKey(value) {
   if (value && value.trim()) {
-    localStorage.setItem('sc-openai-key', value.trim());
-    showToast('OpenAI API key saved.', 'success');
+    localStorage.setItem('sc-anthropic-key', value.trim());
+    showToast('Anthropic API key saved.', 'success');
   } else {
-    localStorage.removeItem('sc-openai-key');
-    showToast('OpenAI API key removed.', 'info');
+    localStorage.removeItem('sc-anthropic-key');
+    showToast('Anthropic API key removed.', 'info');
   }
 }
 
 async function testAPIKey() {
-  var key = localStorage.getItem('sc-openai-key');
+  var key = localStorage.getItem('sc-anthropic-key');
   if (!key) {
     showToast('No API key configured. Enter your key first.', 'warning');
     return;
   }
   try {
-    showToast('Testing API connection...', 'info');
-    var response = await fetch('https://api.openai.com/v1/models', {
-      headers: { 'Authorization': 'Bearer ' + key },
+    showToast('Testing Claude API connection...', 'info');
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 32,
+        messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+      }),
     });
     if (response.ok) {
-      showToast('API connection successful! AI-powered estimation is ready.', 'success');
+      showToast('Claude API connection successful! AI-powered estimation is ready.', 'success');
     } else {
       var err = await response.text();
       showToast('API key invalid or expired. Check your key. (' + response.status + ')', 'error');
