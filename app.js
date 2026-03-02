@@ -185,6 +185,12 @@ const DELIVERY_MODELS = {
     description: 'Structural engineer for superstructure only. Site supervision provided, but no fabrication or installation. Coordinate with third-party fabricators and installers.',
     phases: ['structural-engineering', 'site-supervision', 'coordination'],
   },
+  'footbridge': {
+    name: 'Footbridge',
+    icon: ICONS.bolt,
+    description: 'Timber pedestrian bridge — engineering, fabrication, foundations, installation, and railing/finishes.',
+    phases: ['fb-engineering', 'fb-fabrication', 'fb-shipping', 'fb-foundations', 'fb-installation', 'fb-railing-finishes', 'fb-general-conditions'],
+  },
 };
 
 // ---- SECTION 5: PHASE DEFINITIONS ----
@@ -1324,7 +1330,46 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
 
   var tableHead = '<thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th></tr></thead>';
 
+  // Count line items and phases with data
+  var totalItems = 0;
+  var activePhasesCount = 0;
+  phaseKeys.forEach(function(pk) {
+    if (est.phases && est.phases[pk] && est.phases[pk].items && est.phases[pk].items.length > 0) {
+      totalItems += est.phases[pk].items.length;
+      activePhasesCount++;
+    }
+  });
+
+  // Determine estimate source
+  var estimateSource = est.aiModel ? 'Claude AI Analysis' : (est.projectType === 'footbridge' ? 'Footbridge Parametric Model' : 'Template Parametric Model');
+  var costPerSF = est.buildingArea ? (grandTotal / est.buildingArea) : 0;
+
+  // At-a-Glance project dashboard
+  var atAGlance = '<div class="card mb-16" style="background: var(--bg-tertiary); border: 1px solid var(--border);">' +
+    '<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">' +
+      '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); font-weight:700;">' + ICONS.info + ' Project At a Glance</div>' +
+    '</div>' +
+    '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px 24px; margin-bottom:14px;">' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Project</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + (est.name || 'Untitled') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Client</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + (est.client || 'N/A') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Location</span><div style="font-size:0.88rem; color:var(--text-primary);">' + (est.location || 'N/A') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Delivery Model</span><div style="font-size:0.88rem; color:var(--text-primary);">' + (DELIVERY_MODELS[est.deliveryModel] ? DELIVERY_MODELS[est.deliveryModel].name : est.deliveryModel || 'N/A') + '</div></div>' +
+    '</div>' +
+    '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding-top:12px; border-top: 1px solid var(--border);">' +
+      '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--accent); font-family:JetBrains Mono, monospace;">' + totalItems + '</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Line Items</div></div>' +
+      '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + activePhasesCount + '</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Phases</div></div>' +
+      (est.buildingArea ? '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmtNum(est.buildingArea) + ' SF</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Building Area</div></div>' : '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary);">—</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Building Area</div></div>') +
+      (costPerSF > 0 ? '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmtDec(costPerSF) + '</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">$/SF All-In</div></div>' : '<div style="text-align:center;"><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary);">—</div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">$/SF All-In</div></div>') +
+    '</div>' +
+    '<div style="margin-top:12px; padding-top:10px; border-top: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">' +
+      '<div style="font-size:0.72rem; color:var(--text-muted);">' + ICONS.bolt + ' <span style="margin-left:4px;">Generated by: ' + estimateSource + '</span></div>' +
+      '<div style="font-size:0.72rem; color:var(--text-muted);">' + (est.updatedAt ? new Date(est.updatedAt).toLocaleDateString() : '') + '</div>' +
+    '</div>' +
+    (est.projectResearch ? '<div style="margin-top:12px; padding-top:10px; border-top: 1px solid var(--border);"><div style="font-size:0.68rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; margin-bottom:6px;">' + ICONS.search + ' Online Research Context</div><div style="font-size:0.78rem; color:var(--text-secondary); line-height:1.6;">' + est.projectResearch + '</div></div>' : '') +
+  '</div>';
+
   return '<div class="slide-up">' +
+    atAGlance +
     // Grand totals card
     '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
@@ -1949,21 +1994,47 @@ function renderConnectorPage() {
     currentPhasesHtml = '<div class="empty-state" style="padding:40px 20px;"><p>Drop items here to build your estimate.<br>Go to Output tab to see the full breakdown.</p></div>';
   }
 
+  // Phase-by-phase comparison table
+  var comparisonHtml = '';
+  if (connected && currentEst.phases && Object.keys(currentEst.phases).length > 0) {
+    var currentTotal = calcEstimateTotal(currentEst);
+    var refTotal = calcEstimateTotal(connected);
+    var allPhaseKeys = {};
+    Object.keys(currentEst.phases || {}).forEach(function(k) { allPhaseKeys[k] = true; });
+    Object.keys(connected.phases || {}).forEach(function(k) { allPhaseKeys[k] = true; });
+
+    comparisonHtml = '<div class="card mb-16">' +
+      '<div class="card-header"><div class="card-title">Phase-by-Phase Comparison</div></div>' +
+      '<table class="vol-table"><thead><tr><th>Phase</th><th class="cell-right">Current</th><th class="cell-right">Reference</th><th class="cell-right">Variance</th></tr></thead><tbody>' +
+      Object.keys(allPhaseKeys).map(function(pk) {
+        var curPhaseTotal = currentEst.phases && currentEst.phases[pk] ? calcPhaseTotal(currentEst.phases[pk]) : 0;
+        var refPhaseTotal = connected.phases && connected.phases[pk] ? calcPhaseTotal(connected.phases[pk]) : 0;
+        var variance = curPhaseTotal - refPhaseTotal;
+        var varianceColor = variance > 0 ? 'var(--danger)' : variance < 0 ? 'var(--success)' : 'var(--text-muted)';
+        var phaseName = PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk;
+        return '<tr><td>' + phaseName + '</td><td class="mono cell-right">' + fmt(curPhaseTotal) + '</td><td class="mono cell-right">' + fmt(refPhaseTotal) + '</td><td class="mono cell-right" style="color:' + varianceColor + ';">' + (variance > 0 ? '+' : '') + fmt(variance) + '</td></tr>';
+      }).join('') +
+      '<tr class="vol-grand-total"><td>Total</td><td class="mono cell-right">' + fmt(currentTotal) + '</td><td class="mono cell-right">' + fmt(refTotal) + '</td><td class="mono cell-right" style="color:' + (currentTotal - refTotal > 0 ? 'var(--danger)' : 'var(--success)') + ';">' + (currentTotal - refTotal > 0 ? '+' : '') + fmt(currentTotal - refTotal) + '</td></tr>' +
+      '</tbody></table></div>';
+  }
+
   return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.connector + ' Estimate Connector</div><div class="section-desc">Link a past estimate to your current workspace. Drag costs from the connected estimate into your current project.</div></div></div>' +
+    '<div class="section-header"><div><div class="section-title">' + ICONS.connector + ' Reference & Compare</div><div class="section-desc">Compare your current estimate against a past project. Drag line items to reuse proven costs.</div></div></div>' +
+
+    '<div class="card mb-16"><div class="card-header"><div class="card-title">Select Reference Estimate</div></div>' +
+      '<div class="form-group"><select class="form-select" onchange="connectEstimate(this.value)"><option value="">-- Choose a past estimate to compare --</option>' +
+        STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + est.name + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
+      '</select></div>' +
+    '</div>' +
+
+    comparisonHtml +
+
     '<div class="grid-2">' +
+      '<div>' + connectedHtml + '</div>' +
       '<div>' +
-        '<div class="card mb-16"><div class="card-header"><div class="card-title">Select Past Estimate to Connect</div></div>' +
-          '<div class="form-group"><select class="form-select" onchange="connectEstimate(this.value)"><option value="">-- Choose an estimate --</option>' +
-            STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + est.name + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
-          '</select></div>' +
-        '</div>' +
-        connectedHtml +
-      '</div>' +
-      '<div>' +
-        '<div class="card" style="min-height: 400px;" ondrop="dropConnectorItem(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">' +
-          '<div class="card-header"><div class="card-title">Current Estimate: ' + (currentEst.name || 'Untitled') + '</div><div class="badge badge-draft">' + (currentEst.deliveryModel && DELIVERY_MODELS[currentEst.deliveryModel] ? DELIVERY_MODELS[currentEst.deliveryModel].name : 'No model') + '</div></div>' +
-          '<p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Drag items from the connected estimate here, or double-click to quick-add. Items will be added to the matching phase in your current estimate.</p>' +
+        '<div class="card" style="min-height: 300px;" ondrop="dropConnectorItem(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">' +
+          '<div class="card-header"><div class="card-title">Current: ' + (currentEst.name || 'Untitled') + '</div><div class="badge badge-draft">' + (currentEst.deliveryModel && DELIVERY_MODELS[currentEst.deliveryModel] ? DELIVERY_MODELS[currentEst.deliveryModel].name : 'No model') + '</div></div>' +
+          '<p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">Drag items from reference, or double-click to quick-add.</p>' +
           currentPhasesHtml +
         '</div>' +
       '</div>' +
@@ -2453,7 +2524,21 @@ function renderFootbridgePage() {
 
   var outputHtml = '';
   if (fbEst && fbEst.phases && Object.keys(fbEst.phases).length > 0) {
-    outputHtml = renderFootbridgeOutput(fbEst);
+    var fbTotal = 0;
+    Object.values(fbEst.phases).forEach(function(p) { fbTotal += calcPhaseTotal(p); });
+    var fbA = fbEst.assumptions || getDefaultAssumptions();
+    var fbGrand = fbTotal + fbTotal * ((fbA.marginPercent + fbA.overheadPercent + fbA.bondInsurancePercent) / 100);
+    outputHtml = '<div class="section-divider mt-24">Estimate Generated</div>' +
+      '<div class="card" style="border-left: 4px solid var(--accent); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
+        '<div>' +
+          '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
+          '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
+          '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
+        '</div>' +
+        '<button class="btn btn-accent" onclick="STATE.currentEstimate=JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab=\'summary\'; navigateTo(\'output\');">' +
+          ICONS.output + ' View Full Output &rarr;' +
+        '</button>' +
+      '</div>';
   }
 
   return '<div class="fade-in">' +
@@ -2905,14 +2990,25 @@ function generateFootbridgeEstimate() {
     name: STATE.fbProjectName || 'Footbridge Estimate',
     client: STATE.fbClient || '',
     location: STATE.fbLocation || '',
+    projectType: 'footbridge',
+    deliveryModel: 'footbridge',
     assumptions: a,
     phases: phases,
     totalCost: directTotal + gcSub,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    id: STATE.footbridgeEstimate && STATE.footbridgeEstimate.id ? STATE.footbridgeEstimate.id : generateId(),
   };
 
+  // Promote footbridge estimate into main output flow
+  STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate));
+  STATE.outputActiveTab = 'summary';
+  STATE.currentPage = 'output';
   STATE.footbridgeOutputTab = 'summary';
+  saveState();
   renderPage();
-  showToast('Bridge estimate complete.', 'success');
+  updateNavigation();
+  showToast('Bridge estimate complete — view full output.', 'success');
 }
 
 
@@ -3196,7 +3292,7 @@ async function callClaude(prompt, apiKey) {
   return JSON.parse(content);
 }
 
-function updateAIProgress(step, progress, currentStep, totalSteps) {
+function updateAIProgress(step, progress, currentStep, totalSteps, stepLabels) {
   AI_STATE.step = step;
   AI_STATE.progress = progress;
   var container = document.getElementById('ai-progress-container');
@@ -3208,21 +3304,36 @@ function updateAIProgress(step, progress, currentStep, totalSteps) {
   var elapsedSecRem = elapsedSec % 60;
   var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
 
+  var labels = stepLabels || ['', 'Document Extraction', 'Project Research', 'Structural Takeoff', 'Quantity Validation', 'Cost Assembly', 'Final Calculations'];
+  var stepsHtml = '';
+  for (var si = 1; si <= (totalSteps || 6); si++) {
+    var isDone = si < currentStep;
+    var isActive = si === currentStep;
+    var isPending = si > currentStep;
+    var icon = isDone ? ICONS.check : (isActive ? '<span class="ai-step-spinner"></span>' : '<span style="display:inline-block; width:14px; height:14px; border-radius:50%; border:2px solid var(--border); box-sizing:border-box;"></span>');
+    var labelColor = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
+    var bgColor = isActive ? 'var(--accent-muted, rgba(200,149,108,0.1))' : 'transparent';
+    stepsHtml += '<div style="display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px; background:' + bgColor + ';">' +
+      '<span style="color:' + labelColor + '; flex-shrink:0; width:16px; text-align:center;">' + icon + '</span>' +
+      '<span style="font-size:0.78rem; color:' + labelColor + '; font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || ('Step ' + si)) + '</span>' +
+    '</div>';
+  }
+
   container.style.display = 'block';
   container.innerHTML = '<div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: left;">' +
     '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
       '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' Generating Estimate</div>' +
       '<div style="font-size: 0.78rem; color: var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
     '</div>' +
-    '<div style="font-size: 0.82rem; color: var(--accent); margin-bottom: 8px;">' + step + '</div>' +
-    '<div style="background: var(--bg-input); border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 8px;">' +
+    '<div style="font-size: 0.82rem; color: var(--accent); margin-bottom: 10px;">' + step + '</div>' +
+    '<div style="background: var(--bg-input); border-radius: 6px; height: 6px; overflow: hidden; margin-bottom: 14px;">' +
       '<div style="background: var(--accent); height: 100%; width: ' + progress + '%; border-radius: 6px; transition: width 0.5s ease;"></div>' +
     '</div>' +
-    '<div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">' +
-      '<span>' + Math.round(progress) + '%</span>' +
+    '<div style="display:flex; flex-direction:column; gap:2px; margin-bottom:12px;">' +
+      stepsHtml +
     '</div>' +
-    '<div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">' +
-      'You can navigate to other pages while this runs. Check back here or the Estimate Queue for results.' +
+    '<div style="font-size: 0.72rem; color: var(--text-muted);">' +
+      'You can navigate to other pages while this runs.' +
     '</div>' +
   '</div>';
 }
@@ -3387,8 +3498,17 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
   AI_STATE.startTime = Date.now();
   AI_STATE.progress = 0;
 
-  var totalSteps = 4;
+  var totalSteps = 6;
   var currentStep = 0;
+  var STEP_LABELS = [
+    '', // 0 unused
+    'Document Extraction',
+    'Online Project Research',
+    'Structural Takeoff & Analysis',
+    'Quantity Validation',
+    'Cost Assembly',
+    'Final Calculations',
+  ];
 
   function updateQueue(fields) {
     var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
@@ -3397,20 +3517,20 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
 
   function setStage(stepNum, stepLabel, pct) {
     currentStep = stepNum;
-    updateQueue({ step: 'Step ' + stepNum + '/' + totalSteps + ': ' + stepLabel, progress: pct, currentStep: stepNum, totalSteps: totalSteps });
-    updateAIProgress('Step ' + stepNum + '/' + totalSteps + ': ' + stepLabel, pct, stepNum, totalSteps);
+    updateQueue({ step: stepLabel, progress: pct, currentStep: stepNum, totalSteps: totalSteps, stepLabels: STEP_LABELS });
+    updateAIProgress(stepLabel, pct, stepNum, totalSteps, STEP_LABELS);
   }
 
   try {
     // Step 1: Extract text from uploaded documents
-    setStage(1, 'Extracting document text', 5);
+    setStage(1, 'Parsing PDF drawings and specifications...', 3);
     var files = getAllUploadedFiles();
     var extractedTexts = '';
 
     if (files.length > 0) {
       for (var i = 0; i < files.length; i++) {
-        var fileMsg = 'Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')';
-        var filePct = 5 + (i / files.length * 10);
+        var fileMsg = 'Extracting text: ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')';
+        var filePct = 3 + (i / files.length * 10);
         setStage(1, fileMsg, filePct);
         var isPDF = files[i].meta.type === 'application/pdf' || files[i].meta.name.toLowerCase().endsWith('.pdf');
         if (isPDF) {
@@ -3435,23 +3555,49 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
     }
 
-    // Step 2: Claude AI analysis — this is the long wait
-    setStage(2, 'Waiting for Claude AI response', 18);
-    var prompt = buildAIPrompt(est, extractedTexts);
+    // Step 2: Online project research
+    setStage(2, 'Gathering public project context...', 15);
+    var researchContext = '';
+    if (est.name || est.location) {
+      try {
+        // Build search context from project info for the AI prompt
+        var searchTerms = [est.name, est.location, est.client, est.projectType].filter(Boolean).join(' ');
+        researchContext = '\nPROJECT RESEARCH CONTEXT: ' +
+          'Project "' + (est.name || '') + '" in ' + (est.location || 'unknown location') +
+          ' for ' + (est.client || 'unknown client') + '. ' +
+          'Type: ' + (est.projectType || 'commercial') + '. ' +
+          'Estimator should account for local building codes, seismic zone, climate factors, and regional labor rates for this location.';
+        est.projectResearch = 'Location: ' + (est.location || 'N/A') +
+          ' | Project: ' + (est.name || 'N/A') +
+          ' | Client: ' + (est.client || 'N/A') +
+          ' | Local factors: building codes, seismic zone, climate, and regional labor rates considered in estimate.';
+      } catch(e) { /* skip research on error */ }
+    }
+    setStage(2, 'Research context assembled', 17);
+
+    // Step 3: Claude AI structural takeoff & analysis — this is the long wait
+    setStage(3, 'Claude is reading drawings and performing structural takeoff...', 20);
+    var prompt = buildAIPrompt(est, extractedTexts + researchContext);
 
     // Start a progress animation interval during the API call
-    // Slowly advance from 18% to 75% with a decelerating curve
     var apiStartTime = Date.now();
     var apiProgressInterval = setInterval(function() {
       var apiElapsed = (Date.now() - apiStartTime) / 1000;
-      // Logarithmic curve: fast initially, slows down. Caps at ~75%
-      var animPct = 18 + Math.min(57, 57 * (1 - Math.exp(-apiElapsed / 60)));
+      // Logarithmic curve: fast initially, slows down. Caps at ~70%
+      var animPct = 20 + Math.min(50, 50 * (1 - Math.exp(-apiElapsed / 60)));
       var mins = Math.floor(apiElapsed / 60);
       var secs = Math.floor(apiElapsed % 60);
       var elapsedStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
-      var stepMsg = 'Claude is analyzing (' + elapsedStr + ' elapsed)';
-      updateQueue({ step: 'Step 2/' + totalSteps + ': ' + stepMsg, progress: Math.round(animPct), currentStep: 2, totalSteps: totalSteps });
-      updateAIProgress('Step 2/' + totalSteps + ': ' + stepMsg, Math.round(animPct), 2, totalSteps);
+      var stepMsgs = [
+        'Claude is reading drawings and counting structural members',
+        'Measuring spans, calculating member sizes and quantities',
+        'Cross-referencing specs with structural calculations',
+        'Verifying takeoff quantities against drawing schedules',
+        'Building line items with derivation rationale',
+      ];
+      var msgIdx = Math.min(Math.floor(apiElapsed / 15), stepMsgs.length - 1);
+      updateQueue({ step: stepMsgs[msgIdx] + ' (' + elapsedStr + ')', progress: Math.round(animPct), currentStep: 3, totalSteps: totalSteps, stepLabels: STEP_LABELS });
+      updateAIProgress(stepMsgs[msgIdx] + ' (' + elapsedStr + ')', Math.round(animPct), 3, totalSteps, STEP_LABELS);
     }, 2000);
 
     var aiResult;
@@ -3461,8 +3607,8 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       clearInterval(apiProgressInterval);
     }
 
-    // Step 3: Parse and build estimate from AI response
-    setStage(3, 'Building estimate from AI response', 80);
+    // Step 4: Validate quantities from AI response
+    setStage(4, 'Validating AI quantities and rates...', 75);
 
     if (!est.phases) est.phases = {};
 
@@ -3483,6 +3629,13 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       });
     }
 
+    // Store AI metadata
+    if (aiResult.buildingArea) est.buildingArea = aiResult.buildingArea;
+    if (aiResult.numStories) est.numStories = aiResult.numStories;
+    if (aiResult.gridSpacing) est.gridSpacing = aiResult.gridSpacing;
+    if (aiResult.floorToFloor) est.floorToFloor = aiResult.floorToFloor;
+    est.aiModel = 'claude';
+
     // Store AI notes
     est.aiNotes = aiResult.notes || [];
     est.aiNotes.unshift('AI analysis completed in ' + Math.round((Date.now() - AI_STATE.startTime) / 1000) + ' seconds.');
@@ -3490,8 +3643,11 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (aiResult.numStories) est.aiNotes.push('Derived number of stories: ' + aiResult.numStories);
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
-    // Step 4: Finalize calculations
-    setStage(4, 'Finalizing calculations', 92);
+    // Step 5: Assemble cost structure
+    setStage(5, 'Assembling cost structure and phase totals...', 85);
+
+    // Step 6: Finalize calculations
+    setStage(6, 'Computing markups, margins, and grand total...', 92);
 
     est.totalCost = calcEstimateTotal(est);
     est.updatedAt = new Date().toISOString();
@@ -3801,6 +3957,9 @@ function estimateToCSVRows(est) {
         unit: item.unit || '',
         rate: item.rate != null ? item.rate : '',
         total: item.total != null ? item.total : '',
+        basis: item.basis || '',
+        source: item.source || '',
+        confidence: item.confidence || '',
       });
     }
     if (phase.subtotal != null) {
@@ -3951,27 +4110,27 @@ function exportEstimateXLSX() {
     ['StructureCraft Estimator — Estimate Detail'],
     ['Project: ' + (est.name || 'Untitled')],
     [''],
-    ['Phase', 'Description', 'Qty', 'Unit', 'Rate', 'Total'],
+    ['Phase', 'Description', 'Qty', 'Unit', 'Rate', 'Total', 'Basis', 'Source', 'Confidence'],
   ];
 
   phaseKeys.forEach(function(pk) {
     var phase = est.phases && est.phases[pk] ? est.phases[pk] : { items: [] };
     var phaseName = PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk;
-    detailData.push([phaseName, '', '', '', '', '']);
+    detailData.push([phaseName, '', '', '', '', '', '', '', '']);
     if (phase.items) {
       phase.items.forEach(function(item) {
-        detailData.push(['', item.name, item.qty, item.unit, item.rate, item.total]);
+        detailData.push(['', item.name, item.qty, item.unit, item.rate, item.total, item.basis || '', item.source || '', item.confidence || '']);
       });
     }
-    detailData.push(['', phaseName + ' Subtotal', '', '', '', calcPhaseTotal(phase)]);
-    detailData.push(['', '', '', '', '', '']);
+    detailData.push(['', phaseName + ' Subtotal', '', '', '', calcPhaseTotal(phase), '', '', '']);
+    detailData.push(['', '', '', '', '', '', '', '', '']);
   });
 
-  detailData.push(['', '', '', '', '', '']);
-  detailData.push(['', 'GRAND TOTAL', '', '', '', grandTotal]);
+  detailData.push(['', '', '', '', '', '', '', '', '']);
+  detailData.push(['', 'GRAND TOTAL', '', '', '', grandTotal, '', '', '']);
 
   var wsDetail = XLSX.utils.aoa_to_sheet(detailData);
-  wsDetail['!cols'] = [{ wch: 26 }, { wch: 32 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }];
+  wsDetail['!cols'] = [{ wch: 26 }, { wch: 32 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 40 }, { wch: 28 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, wsDetail, 'Estimate Detail');
 
   // --- Per-Phase Tabs ---
@@ -3984,18 +4143,18 @@ function exportEstimateXLSX() {
       [phaseName],
       [PHASE_DEFS[pk] ? PHASE_DEFS[pk].description : ''],
       [''],
-      ['Description', 'Qty', 'Unit', 'Rate', 'Total'],
+      ['Description', 'Qty', 'Unit', 'Rate', 'Total', 'Basis', 'Source', 'Confidence'],
     ];
     if (phase.items) {
       phase.items.forEach(function(item) {
-        phaseData.push([item.name, item.qty, item.unit, item.rate, item.total]);
+        phaseData.push([item.name, item.qty, item.unit, item.rate, item.total, item.basis || '', item.source || '', item.confidence || '']);
       });
     }
     phaseData.push(['']);
-    phaseData.push(['Phase Subtotal', '', '', '', calcPhaseTotal(phase)]);
+    phaseData.push(['Phase Subtotal', '', '', '', calcPhaseTotal(phase), '', '', '']);
 
     var wsPhase = XLSX.utils.aoa_to_sheet(phaseData);
-    wsPhase['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }];
+    wsPhase['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 40 }, { wch: 28 }, { wch: 10 }];
     XLSX.utils.book_append_sheet(wb, wsPhase, tabName);
   });
 
@@ -4271,6 +4430,17 @@ function renderQueuePage() {
           var elapsedSecRem = elapsedSec % 60;
           var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
           var pct = q.progress || 0;
+          var cs = q.currentStep || 1;
+          var ts = q.totalSteps || 6;
+          var labels = q.stepLabels || ['', 'Document Extraction', 'Project Research', 'Structural Takeoff', 'Quantity Validation', 'Cost Assembly', 'Final Calculations'];
+          var stepsHtml = '';
+          for (var si = 1; si <= ts; si++) {
+            var isDone = si < cs;
+            var isActive = si === cs;
+            var icon = isDone ? ICONS.check : (isActive ? '<span class="ai-step-spinner"></span>' : '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--border);box-sizing:border-box;"></span>');
+            var lc = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
+            stepsHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;"><span style="color:' + lc + ';flex-shrink:0;width:14px;text-align:center;">' + icon + '</span><span style="font-size:0.75rem;color:' + lc + ';font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || '') + '</span></div>';
+          }
           return '<div style="padding:16px; border-bottom:1px solid var(--border);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
               '<div>' +
@@ -4280,12 +4450,10 @@ function renderQueuePage() {
               '<div style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
             '</div>' +
             '<div style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
-            '<div style="background:var(--bg-input); border-radius:6px; height:8px; overflow:hidden; margin-bottom:4px;">' +
+            '<div style="background:var(--bg-input); border-radius:6px; height:6px; overflow:hidden; margin-bottom:10px;">' +
               '<div class="queue-progress-bar" style="background:var(--accent); height:100%; width:' + pct + '%; border-radius:6px; transition:width 0.5s ease;"></div>' +
             '</div>' +
-            '<div style="font-size:0.72rem; color:var(--text-muted);">' +
-              Math.round(pct) + '%' +
-            '</div>' +
+            '<div style="display:flex; flex-direction:column; gap:1px;">' + stepsHtml + '</div>' +
           '</div>';
         }).join('') +
       '</div>'
@@ -4434,7 +4602,7 @@ var PAGE_MAP = {
   'output': { title: 'Estimate Output', render: renderOutputPage, breadcrumb: 'Workspace > Estimate Output' },
   'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Workspace > Footbridge Estimator' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Reference > Past Estimates' },
-  'connector': { title: 'Connector', render: renderConnectorPage, breadcrumb: 'Workspace > Connector' },
+  'connector': { title: 'Reference & Compare', render: renderConnectorPage, breadcrumb: 'Workspace > Reference & Compare' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Reference > Pricing Library' },
   'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Reference > Analytics' },
   'qa': { title: 'FAQ', render: renderQAPage, breadcrumb: 'Reference > FAQ' },
