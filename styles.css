@@ -1,6 +1,5 @@
 /* ============================================
-   QUARTERSAW — Structural Estimation Studio
-   Design System v1.0
+   STRUCTURECRAFT ESTIMATOR - Design System
    ============================================ */
 
 /* --- RESET & BASE --- */
@@ -25,7 +24,7 @@ a { color: var(--accent); text-decoration: none; }
 
 /* --- THEME SYSTEM: 10 Themes --- */
 
-/* 1. Sawdust After Dark (Default) - Deep navy + warm beige */
+/* 1. Midnight (Default) - Deep navy + warm beige */
 [data-theme="midnight"] {
   --bg-primary: #0a0e1a;
   --bg-secondary: #111827;
@@ -55,7 +54,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(200,149,108,0.1);
 }
 
-/* 2. Morning Workshop - Clean white + dark text */
+/* 2. Daylight - Clean white + dark text */
 [data-theme="daylight"] {
   --bg-primary: #f5f2ed;
   --bg-secondary: #ebe7e0;
@@ -85,7 +84,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: none;
 }
 
-/* 3. Weathered Oak - Japanese minimalism, muted earth tones */
+/* 3. Wabi-Sabi - Japanese minimalism, muted earth tones */
 [data-theme="wabi-sabi"] {
   --bg-primary: #1a1916;
   --bg-secondary: #22211c;
@@ -145,7 +144,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(74,158,255,0.08);
 }
 
-/* 5. Raw Cedar - Warm wood tones */
+/* 5. Timber - Warm wood tones */
 [data-theme="timber"] {
   --bg-primary: #1a1210;
   --bg-secondary: #221a16;
@@ -175,7 +174,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(184,115,51,0.08);
 }
 
-/* 6. Glacial - Cool blue-white-ice */
+/* 6. Arctic - Cool blue-white-ice */
 [data-theme="arctic"] {
   --bg-primary: #0f1923;
   --bg-secondary: #152030;
@@ -205,7 +204,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(91,164,207,0.08);
 }
 
-/* 7. Graphite - Sophisticated gray */
+/* 7. Slate - Sophisticated gray */
 [data-theme="slate"] {
   --bg-primary: #18181b;
   --bg-secondary: #1e1e22;
@@ -235,7 +234,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: none;
 }
 
-/* 8. Old Growth - Deep rich greens */
+/* 8. Forest - Deep rich greens */
 [data-theme="forest"] {
   --bg-primary: #0a1a0e;
   --bg-secondary: #102216;
@@ -265,7 +264,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(74,140,92,0.08);
 }
 
-/* 9. Patina - Industrial warm metallic */
+/* 9. Copper - Industrial warm metallic */
 [data-theme="copper"] {
   --bg-primary: #1a1410;
   --bg-secondary: #221c16;
@@ -295,7 +294,7 @@ a { color: var(--accent); text-decoration: none; }
   --glow: 0 0 20px rgba(205,127,50,0.08);
 }
 
-/* 10. High-Vis - Accessibility */
+/* 10. High Contrast - Accessibility */
 [data-theme="high-contrast"] {
   --bg-primary: #000000;
   --bg-secondary: #0a0a0a;
@@ -347,12 +346,12 @@ a { color: var(--accent); text-decoration: none; }
 #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 @keyframes autoHideLoader { to { opacity: 0; visibility: hidden; pointer-events: none; } }
 .loader-content { text-align: center; }
-.loader-logo { margin-bottom: 16px; animation: pulse 2s infinite; filter: drop-shadow(0 0 12px var(--accent)); }
-.loader-text { color: var(--text-primary); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 4px; text-transform: uppercase; }
-.loader-bar { width: 200px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 20px auto 0; }
-.loader-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover, var(--accent))); border-radius: 2px; animation: loading 1.5s ease-in-out forwards; }
+.loader-logo { margin-bottom: 16px; animation: pulse 2s infinite; }
+.loader-text { color: var(--text-primary); font-size: 1.25rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 4px; }
+.loader-bar { width: 200px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 16px auto 0; }
+.loader-fill { width: 0%; height: 100%; background: var(--accent); border-radius: 2px; animation: loading 1.5s ease-in-out forwards; }
 @keyframes loading { 0% { width: 0%; } 100% { width: 100%; } }
-@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.97); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 /* --- SIDEBAR --- */
 #sidebar {
@@ -384,11 +383,10 @@ a { color: var(--accent); text-decoration: none; }
   padding: 16px 16px 12px;
   border-bottom: 1px solid var(--border);
 }
-.logo-mark { flex-shrink: 0; filter: drop-shadow(0 0 6px var(--accent)); transition: filter 0.3s ease; }
-.logo-mark:hover { filter: drop-shadow(0 0 10px var(--accent)); }
+.logo-mark { flex-shrink: 0; }
 .logo-text { flex: 1; min-width: 0; }
-.logo-title { display: block; font-weight: 700; font-size: 0.92rem; color: var(--text-primary); letter-spacing: 0.06em; white-space: nowrap; text-transform: uppercase; }
-.logo-subtitle { display: block; font-size: 0.68rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.logo-title { display: block; font-weight: 700; font-size: 0.92rem; color: var(--text-primary); letter-spacing: 0.02em; white-space: nowrap; }
+.logo-subtitle { display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
 
 .sidebar-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
 .nav-section-label {
