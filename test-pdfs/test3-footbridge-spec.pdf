@@ -1,0 +1,114 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1913 >>
+stream
+BT
+/F1 10 Tf
+1 0 0 1 50 750 Tm
+(PRELIMINARY STRUCTURAL SPECIFICATION) Tj
+1 0 0 1 50 736 Tm
+(Project: Riverwalk Pedestrian Bridge) Tj
+1 0 0 1 50 722 Tm
+(Client: City of Kelowna Parks) Tj
+1 0 0 1 50 708 Tm
+(Location: Kelowna, BC) Tj
+1 0 0 1 50 694 Tm
+() Tj
+1 0 0 1 50 680 Tm
+(BRIDGE DESCRIPTION:) Tj
+1 0 0 1 50 666 Tm
+(Single-span parabolic arch pedestrian bridge) Tj
+1 0 0 1 50 652 Tm
+(Span: 35 meters clear) Tj
+1 0 0 1 50 638 Tm
+(Clear deck width: 3.5 meters) Tj
+1 0 0 1 50 624 Tm
+(Arch rise-to-span ratio: 0.25) Tj
+1 0 0 1 50 610 Tm
+() Tj
+1 0 0 1 50 596 Tm
+(STRUCTURAL SYSTEM:) Tj
+1 0 0 1 50 582 Tm
+(- Glulam parabolic arch ribs \(Douglas Fir 24F-V8\)) Tj
+1 0 0 1 50 568 Tm
+(- Estimated arch cross-section: 400mm x 800mm) Tj
+1 0 0 1 50 554 Tm
+(- DLT deck panels \(3-ply, 130mm\)) Tj
+1 0 0 1 50 540 Tm
+(- Steel tension rod hangers at 3.5m spacing) Tj
+1 0 0 1 50 526 Tm
+(- Steel pin connections at arch spring points) Tj
+1 0 0 1 50 512 Tm
+() Tj
+1 0 0 1 50 498 Tm
+(DECK AREA:) Tj
+1 0 0 1 50 484 Tm
+(35m x 3.5m = 122.5 m2 \(approx. 1,320 SF\)) Tj
+1 0 0 1 50 470 Tm
+() Tj
+1 0 0 1 50 456 Tm
+(ESTIMATED GLULAM VOLUME:) Tj
+1 0 0 1 50 442 Tm
+(Arch ribs: ~4,200 BF) Tj
+1 0 0 1 50 428 Tm
+(Cross beams: ~1,400 BF) Tj
+1 0 0 1 50 414 Tm
+(Total glulam: ~5,600 BF) Tj
+1 0 0 1 50 400 Tm
+() Tj
+1 0 0 1 50 386 Tm
+(FOUNDATION:) Tj
+1 0 0 1 50 372 Tm
+(- Reinforced concrete abutments) Tj
+1 0 0 1 50 358 Tm
+(- Spread footings on competent rock) Tj
+1 0 0 1 50 344 Tm
+(- Abutment size: approx. 3m x 4m x 2.5m each) Tj
+1 0 0 1 50 330 Tm
+() Tj
+1 0 0 1 50 316 Tm
+(RAILING:) Tj
+1 0 0 1 50 302 Tm
+(- Timber posts with steel cable infill) Tj
+1 0 0 1 50 288 Tm
+(- Post height: 1.07m \(42 inches\)) Tj
+1 0 0 1 50 274 Tm
+(- Cable spacing: 3 inches o.c.) Tj
+1 0 0 1 50 260 Tm
+() Tj
+1 0 0 1 50 246 Tm
+(SITE ACCESS: Standard vehicular) Tj
+1 0 0 1 50 232 Tm
+(DESIGN LIFE: 75 years) Tj
+1 0 0 1 50 218 Tm
+(LOADING: CAN/CSA S6 pedestrian loading) Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002212 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2282
+%%EOF
