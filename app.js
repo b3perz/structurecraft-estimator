@@ -372,6 +372,45 @@ var AI_STATE = {
   extractedText: {},
 };
 
+// Estimate queue: tracks in-progress and completed estimates
+var ESTIMATE_QUEUE = JSON.parse(localStorage.getItem('sc-estimate-queue') || '[]');
+
+function saveQueue() {
+  try { localStorage.setItem('sc-estimate-queue', JSON.stringify(ESTIMATE_QUEUE)); } catch(e) {}
+}
+
+// Activity log
+var ACTIVITY_LOG = JSON.parse(localStorage.getItem('sc-activity-log') || '[]');
+
+function logActivity(action, detail) {
+  ACTIVITY_LOG.unshift({ action: action, detail: detail || '', time: new Date().toISOString() });
+  if (ACTIVITY_LOG.length > 100) ACTIVITY_LOG.length = 100;
+  try { localStorage.setItem('sc-activity-log', JSON.stringify(ACTIVITY_LOG)); } catch(e) {}
+  updateNotificationBadge();
+}
+
+function updateNotificationBadge() {
+  var btn = document.getElementById('btn-notifications');
+  if (!btn) return;
+  var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; }).length;
+  if (inProgress > 0) {
+    btn.style.position = 'relative';
+    var existing = btn.querySelector('.notif-badge');
+    if (!existing) {
+      var badge = document.createElement('span');
+      badge.className = 'notif-badge';
+      badge.style.cssText = 'position:absolute;top:-2px;right:-2px;background:var(--accent);color:var(--bg-primary);font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;';
+      badge.textContent = inProgress;
+      btn.appendChild(badge);
+    } else {
+      existing.textContent = inProgress;
+    }
+  } else {
+    var existing2 = btn.querySelector('.notif-badge');
+    if (existing2) existing2.remove();
+  }
+}
+
 // ---- SECTION 6: PRICING LIBRARY ----
 const PRICING_LIBRARY = {
   'Mass Timber Materials': [
@@ -1281,10 +1320,29 @@ function renderOutputPage() {
 }
 
 function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) {
+  // Extract material volumes from line items across all phases
+  var materialVolumes = extractMaterialVolumes(est, phaseKeys);
+
   return '<div class="slide-up">' +
+    // Grand totals card
+    '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
+        '<div>' +
+          '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Grand Total</div>' +
+          '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(grandTotal) + '</div>' +
+        '</div>' +
+        '<div style="display:flex; gap:24px; flex-wrap:wrap;">' +
+          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Direct Costs</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(subtotal) + '</div></div>' +
+          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Markup Total</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-secondary);">' + fmt(grandTotal - subtotal) + '</div></div>' +
+          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Eff. Margin</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--accent);">' + (subtotal > 0 ? fmtPct((grandTotal - subtotal) / grandTotal * 100) : '0.0%') + '</div></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
     '<div class="output-summary">' +
+      // Left column: Phase breakdown + Material volumes
       '<div>' +
-        '<div class="card">' +
+        '<div class="card mb-16">' +
           '<div class="card-title mb-12">Cost Breakdown by Phase</div>' +
           '<div class="mini-chart">' +
             phaseKeys.map(function(pk) {
@@ -1302,9 +1360,24 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
             }).join('') +
           '</div>' +
         '</div>' +
+
+        // Material volume breakout
+        (materialVolumes.rows.length > 0 ?
+          '<div class="card mb-16">' +
+            '<div class="card-title mb-12">Material Volume Breakout</div>' +
+            '<table class="vol-table">' +
+              '<thead><tr><th>Material / Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th></tr></thead>' +
+              '<tbody>' +
+                materialVolumes.rows.join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>'
+        : '') +
       '</div>' +
+
+      // Right column: Cost summary + Markup breakdown
       '<div>' +
-        '<div class="card">' +
+        '<div class="card mb-16">' +
           '<div class="card-title mb-12">Cost Summary</div>' +
           '<div class="summary-row"><span class="summary-row-label">Direct Costs (Subtotal)</span><span class="summary-row-value">' + fmt(subtotal) + '</span></div>' +
           '<div class="summary-divider"></div>' +
@@ -1317,13 +1390,87 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
             '<div class="summary-total-label">Grand Total</div>' +
             '<div class="summary-total-value">' + fmt(grandTotal) + '</div>' +
           '</div>' +
-          '<div class="mt-12">' +
-            '<div class="summary-row"><span class="summary-row-label">Effective Margin</span><span class="summary-row-value text-accent">' + (subtotal > 0 ? fmtPct((grandTotal - subtotal) / grandTotal * 100) : '0.0%') + '</span></div>' +
-          '</div>' +
         '</div>' +
+
+        // Category totals summary
+        (materialVolumes.catTotals.length > 0 ?
+          '<div class="card">' +
+            '<div class="card-title mb-12">Material Cost by Category</div>' +
+            materialVolumes.catTotals.map(function(cat) {
+              var pct2 = subtotal > 0 ? (cat.cost / subtotal * 100) : 0;
+              return '<div class="summary-row" style="margin-bottom:6px;">' +
+                '<span class="summary-row-label">' + cat.name + '</span>' +
+                '<span class="summary-row-value">' + fmt(cat.cost) + ' <span style="font-size:0.72rem; color:var(--text-muted);">(' + fmtPct(pct2) + ')</span></span>' +
+              '</div>';
+            }).join('') +
+          '</div>'
+        : '') +
       '</div>' +
     '</div>' +
   '</div>';
+}
+
+function extractMaterialVolumes(est, phaseKeys) {
+  var timber = [], steel = [], concrete = [], other = [];
+  var timberCost = 0, steelCost = 0, concreteCost = 0, otherCost = 0;
+
+  // Classify each line item by material category based on keywords
+  phaseKeys.forEach(function(pk) {
+    if (!est.phases || !est.phases[pk] || !est.phases[pk].items) return;
+    est.phases[pk].items.forEach(function(item) {
+      var name = (item.name || '').toLowerCase();
+      var unit = (item.unit || '').toLowerCase();
+      var isTimber = /glulam|clt|dlt|mpp|nlt|timber|lumber|wood|plywood|lvl/i.test(name) || unit === 'bf' || unit === 'mbf';
+      var isSteel = /steel|connection|bolt|plate|hss|wf|w-shape|rebar|reinforc/i.test(name) || unit === 'ton' || unit === 'tons';
+      var isConcrete = /concrete|pour|slab|footing|foundation|formwork|grout|topping/i.test(name) || unit === 'cy' || unit === 'cu yd';
+
+      var row = '<tr>' +
+        '<td>' + item.name + '</td>' +
+        '<td class="mono">' + fmtNum(item.qty) + '</td>' +
+        '<td>' + item.unit + '</td>' +
+        '<td class="mono">' + fmtDec(item.rate) + '</td>' +
+        '<td class="mono">' + fmt(item.total) + '</td>' +
+      '</tr>';
+
+      if (isTimber) { timber.push(row); timberCost += (item.total || 0); }
+      else if (isSteel) { steel.push(row); steelCost += (item.total || 0); }
+      else if (isConcrete) { concrete.push(row); concreteCost += (item.total || 0); }
+      else { other.push(row); otherCost += (item.total || 0); }
+    });
+  });
+
+  var rows = [];
+  var catTotals = [];
+
+  if (timber.length > 0) {
+    rows.push('<tr class="vol-cat-header"><td colspan="5">Timber</td></tr>');
+    rows = rows.concat(timber);
+    rows.push('<tr class="vol-total"><td>Timber Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost) + '</td></tr>');
+    catTotals.push({ name: 'Timber', cost: timberCost });
+  }
+  if (steel.length > 0) {
+    rows.push('<tr class="vol-cat-header"><td colspan="5">Steel</td></tr>');
+    rows = rows.concat(steel);
+    rows.push('<tr class="vol-total"><td>Steel Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(steelCost) + '</td></tr>');
+    catTotals.push({ name: 'Steel', cost: steelCost });
+  }
+  if (concrete.length > 0) {
+    rows.push('<tr class="vol-cat-header"><td colspan="5">Concrete</td></tr>');
+    rows = rows.concat(concrete);
+    rows.push('<tr class="vol-total"><td>Concrete Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(concreteCost) + '</td></tr>');
+    catTotals.push({ name: 'Concrete', cost: concreteCost });
+  }
+  if (other.length > 0) {
+    rows.push('<tr class="vol-cat-header"><td colspan="5">Other / Labor / Services</td></tr>');
+    rows = rows.concat(other);
+    rows.push('<tr class="vol-total"><td>Other Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(otherCost) + '</td></tr>');
+    catTotals.push({ name: 'Other / Labor', cost: otherCost });
+  }
+  if (rows.length > 0) {
+    rows.push('<tr class="vol-grand-total"><td>All Materials Total</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost + steelCost + concreteCost + otherCost) + '</td></tr>');
+  }
+
+  return { rows: rows, catTotals: catTotals };
 }
 
 function renderPhaseTab(est, phaseKey) {
@@ -1893,85 +2040,97 @@ function renderSettingsPage() {
 
 // ---- SECTION 9B: FOOTBRIDGE SVG GENERATOR ----
 function generateBridgeSVG(config) {
-  var w = 800, h = 400;
-  var pad = 60;
-  var groundY = h - 40;
-  var deckY = groundY - 80;
+  var w = 800, h = 420;
+  var pad = 40;
   var span = config.spanLength || 30;
   var rise = config.archRise || 0.25;
   var nSpans = config.numSpans || 1;
+  var clearW = config.clearWidth || 3.5;
   var bType = config.bridgeType || 'parabolic-arch';
 
-  var leftX = pad + 40;
-  var rightX = w - pad - 40;
-  var spanPx = rightX - leftX;
+  // Scale: map real meters to pixels. Reference: 30m = 600px base span.
+  // Longer spans compress, shorter spans expand, so the shape visually changes.
+  var maxSpanPx = w - pad * 2 - 40;
+  var pxPerM = Math.min(maxSpanPx / span, 22); // cap so short spans don't overflow
+  var spanPx = span * pxPerM;
+  var centerX = w / 2;
+  var leftX = centerX - spanPx / 2;
+  var rightX = centerX + spanPx / 2;
 
-  var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-height:340px;">';
+  // Deck width in pixels (used for deck thickness visual)
+  var deckThickPx = Math.max(3, Math.min(10, clearW * 1.8));
 
-  // Background grid (subtle)
+  // Ground and deck positions
+  var groundY = h - 50;
+  // Abutment height proportional to span (taller for longer bridges)
+  var abutH = Math.max(50, Math.min(120, span * 2.2));
+  var deckY = groundY - abutH;
+
+  var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-height:360px;">';
+
+  // Background grid
   svg += '<defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--border)" stroke-width="0.3" opacity="0.3"/></pattern></defs>';
   svg += '<rect width="' + w + '" height="' + h + '" fill="url(#grid)" opacity="0.5"/>';
 
-  // Ground line
+  // Ground line + hatching
   svg += '<line x1="0" y1="' + groundY + '" x2="' + w + '" y2="' + groundY + '" stroke="var(--text-primary)" stroke-width="2"/>';
-  // Ground hatching
   for (var gi = 0; gi < w; gi += 12) {
     svg += '<line x1="' + gi + '" y1="' + groundY + '" x2="' + (gi - 8) + '" y2="' + (groundY + 10) + '" stroke="var(--text-primary)" stroke-width="0.8" opacity="0.5"/>';
   }
 
-  // Draw abutments (wireframe - no fill)
-  var abutW = 16, abutH = 80;
-  svg += '<rect x="' + (leftX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
-  svg += '<rect x="' + (rightX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
+  // Abutments (scale with span)
+  var abutW = Math.max(12, Math.min(20, span * 0.4));
+  svg += '<rect x="' + (leftX - abutW/2) + '" y="' + deckY + '" width="' + abutW + '" height="' + (groundY - deckY) + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
+  svg += '<rect x="' + (rightX - abutW/2) + '" y="' + deckY + '" width="' + abutW + '" height="' + (groundY - deckY) + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
+
+  // Rise in pixels (for arch types, relative to span)
+  var risePx = spanPx * rise;
 
   if (bType === 'parabolic-arch') {
-    var archTopY = deckY - spanPx * rise;
-    // Draw arch
+    // Arch curve
     var archPath = 'M ' + leftX + ' ' + deckY;
     for (var i = 0; i <= 40; i++) {
       var t = i / 40;
       var x = leftX + t * spanPx;
-      var y = deckY - 4 * rise * spanPx * t * (1 - t);
+      var y = deckY - 4 * risePx * t * (1 - t);
       archPath += ' L ' + x.toFixed(1) + ' ' + y.toFixed(1);
     }
     svg += '<path d="' + archPath + '" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>';
-    // Hangers
-    for (var hi = 1; hi < 10; hi++) {
-      var ht = hi / 10;
+    // Hangers (count scales with span)
+    var nHangers = Math.max(4, Math.min(14, Math.round(span / 4)));
+    for (var hi = 1; hi < nHangers; hi++) {
+      var ht = hi / nHangers;
       var hx = leftX + ht * spanPx;
-      var archY = deckY - 4 * rise * spanPx * ht * (1 - ht);
+      var archY = deckY - 4 * risePx * ht * (1 - ht);
       svg += '<line x1="' + hx.toFixed(1) + '" y1="' + archY.toFixed(1) + '" x2="' + hx.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
     }
     // Deck
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
 
   } else if (bType === 'tied-arch') {
-    var archTopY2 = deckY - spanPx * rise;
-    // Arch
     var archPath2 = 'M ' + leftX + ' ' + deckY;
     for (var i2 = 0; i2 <= 40; i2++) {
       var t2 = i2 / 40;
       var x2 = leftX + t2 * spanPx;
-      var y2 = deckY - 4 * rise * spanPx * t2 * (1 - t2);
+      var y2 = deckY - 4 * risePx * t2 * (1 - t2);
       archPath2 += ' L ' + x2.toFixed(1) + ' ' + y2.toFixed(1);
     }
     svg += '<path d="' + archPath2 + '" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>';
-    // Tie (deck level)
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
-    // Hangers
-    for (var hi2 = 1; hi2 < 10; hi2++) {
-      var ht2 = hi2 / 10;
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
+    var nHangers2 = Math.max(4, Math.min(14, Math.round(span / 4)));
+    for (var hi2 = 1; hi2 < nHangers2; hi2++) {
+      var ht2 = hi2 / nHangers2;
       var hx2 = leftX + ht2 * spanPx;
-      var archY2 = deckY - 4 * rise * spanPx * ht2 * (1 - ht2);
+      var archY2 = deckY - 4 * risePx * ht2 * (1 - ht2);
       svg += '<line x1="' + hx2.toFixed(1) + '" y1="' + archY2.toFixed(1) + '" x2="' + hx2.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
     }
 
   } else if (bType === 'warren-truss') {
-    var trussH = spanPx * 0.12;
+    var trussH = Math.max(30, spanPx * 0.12);
     var topChord = deckY - trussH;
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
     svg += '<line x1="' + leftX + '" y1="' + topChord + '" x2="' + rightX + '" y2="' + topChord + '" stroke="var(--accent)" stroke-width="3"/>';
-    var nPanels = 10;
+    var nPanels = Math.max(4, Math.min(16, Math.round(span / 3)));
     var panelW = spanPx / nPanels;
     for (var wi = 0; wi <= nPanels; wi++) {
       var wx = leftX + wi * panelW;
@@ -1988,11 +2147,11 @@ function generateBridgeSVG(config) {
     }
 
   } else if (bType === 'pratt-truss') {
-    var trussHP = spanPx * 0.12;
+    var trussHP = Math.max(30, spanPx * 0.12);
     var topChordP = deckY - trussHP;
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
     svg += '<line x1="' + leftX + '" y1="' + topChordP + '" x2="' + rightX + '" y2="' + topChordP + '" stroke="var(--accent)" stroke-width="3"/>';
-    var nP = 10;
+    var nP = Math.max(4, Math.min(16, Math.round(span / 3)));
     var pW = spanPx / nP;
     for (var pi = 0; pi <= nP; pi++) {
       var px = leftX + pi * pW;
@@ -2010,70 +2169,84 @@ function generateBridgeSVG(config) {
     }
 
   } else if (bType === 'clear-span-beam') {
-    var beamH = 8;
+    var beamH = Math.max(6, Math.min(14, span * 0.2));
     svg += '<rect x="' + leftX + '" y="' + (deckY - beamH) + '" width="' + spanPx + '" height="' + beamH + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="2"/>';
-    // Camber indication
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
+    // Camber scales with span
+    var camberPx = Math.max(3, span * 0.15);
     var camberPath = 'M ' + leftX + ' ' + (deckY - beamH);
     for (var ci = 0; ci <= 20; ci++) {
       var ct = ci / 20;
       var cx = leftX + ct * spanPx;
-      var cy = (deckY - beamH) - 6 * Math.sin(ct * Math.PI);
+      var cy = (deckY - beamH) - camberPx * Math.sin(ct * Math.PI);
       camberPath += ' L ' + cx.toFixed(1) + ' ' + cy.toFixed(1);
     }
     svg += '<path d="' + camberPath + '" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>';
 
   } else if (bType === 'multi-span-beam') {
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="2"/>';
-    var beamHM = 8;
+    var beamHM = Math.max(6, Math.min(14, span * 0.15));
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
     svg += '<rect x="' + leftX + '" y="' + (deckY - beamHM) + '" width="' + spanPx + '" height="' + beamHM + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
-    // Intermediate piers (wireframe)
-    var pierW = 12;
+    // Intermediate piers
+    var pierW = Math.max(10, Math.min(16, span * 0.3));
     for (var si = 1; si < nSpans; si++) {
       var pierX = leftX + (si / nSpans) * spanPx;
-      svg += '<rect x="' + (pierX - pierW/2) + '" y="' + (deckY) + '" width="' + pierW + '" height="' + (groundY - deckY) + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
-      // Pier cap
-      svg += '<rect x="' + (pierX - pierW) + '" y="' + (deckY - 4) + '" width="' + (pierW * 2) + '" height="' + 6 + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7" rx="1"/>';
+      svg += '<rect x="' + (pierX - pierW/2) + '" y="' + deckY + '" width="' + pierW + '" height="' + (groundY - deckY) + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
+      svg += '<rect x="' + (pierX - pierW) + '" y="' + (deckY - 4) + '" width="' + (pierW * 2) + '" height="6" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7" rx="1"/>';
     }
 
   } else if (bType === 'cable-stayed') {
-    // Tower
-    var towerX = leftX + spanPx * 0.5;
-    var towerTop = deckY - spanPx * 0.35;
-    svg += '<line x1="' + towerX + '" y1="' + towerTop + '" x2="' + towerX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
-    // Deck
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
-    // Cables
-    for (var cab = 1; cab <= 6; cab++) {
-      var cableAttachY = towerTop + cab * 8;
-      var deckLeftX = towerX - cab * (spanPx * 0.07);
-      var deckRightX = towerX + cab * (spanPx * 0.07);
-      if (deckLeftX >= leftX) svg += '<line x1="' + towerX + '" y1="' + cableAttachY + '" x2="' + deckLeftX.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
-      if (deckRightX <= rightX) svg += '<line x1="' + towerX + '" y1="' + cableAttachY + '" x2="' + deckRightX.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
+    var towerX = centerX;
+    var towerH = Math.max(60, spanPx * 0.35);
+    var towerTop = deckY - towerH;
+    svg += '<line x1="' + towerX + '" y1="' + towerTop + '" x2="' + towerX + '" y2="' + groundY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
+    var nCables = Math.max(3, Math.min(8, Math.round(span / 8)));
+    for (var cab = 1; cab <= nCables; cab++) {
+      var cableAttachY = towerTop + cab * (towerH * 0.06);
+      var cableSpread = cab * (spanPx / (nCables * 2.2));
+      var deckLeftX = towerX - cableSpread;
+      var deckRightX2 = towerX + cableSpread;
+      if (deckLeftX >= leftX) svg += '<line x1="' + towerX + '" y1="' + cableAttachY.toFixed(1) + '" x2="' + deckLeftX.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
+      if (deckRightX2 <= rightX) svg += '<line x1="' + towerX + '" y1="' + cableAttachY.toFixed(1) + '" x2="' + deckRightX2.toFixed(1) + '" y2="' + deckY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.6"/>';
     }
 
   } else if (bType === 'king-post-truss') {
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
-    var midX = leftX + spanPx / 2;
-    var postTop = deckY - spanPx * 0.18;
-    // King post
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="' + deckThickPx + '"/>';
+    var midX = centerX;
+    var postH = Math.max(30, spanPx * 0.18);
+    var postTop = deckY - postH;
     svg += '<line x1="' + midX + '" y1="' + postTop + '" x2="' + midX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
-    // Diagonals
     svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + midX + '" y2="' + postTop + '" stroke="var(--accent)" stroke-width="2.5"/>';
     svg += '<line x1="' + rightX + '" y1="' + deckY + '" x2="' + midX + '" y2="' + postTop + '" stroke="var(--accent)" stroke-width="2.5"/>';
-    // Top node circle
     svg += '<circle cx="' + midX + '" cy="' + postTop + '" r="5" fill="var(--accent)" stroke="var(--text-primary)" stroke-width="1"/>';
   }
 
-  // Dimension lines
+  // Width indicator (cross-section hint) on right side
+  var widthIndX = rightX + 24;
+  var widthPx = clearW * pxPerM * 0.3; // scaled visual
+  svg += '<line x1="' + widthIndX + '" y1="' + (deckY - widthPx/2) + '" x2="' + widthIndX + '" y2="' + (deckY + widthPx/2) + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.5"/>';
+  svg += '<line x1="' + (widthIndX - 4) + '" y1="' + (deckY - widthPx/2) + '" x2="' + (widthIndX + 4) + '" y2="' + (deckY - widthPx/2) + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.5"/>';
+  svg += '<line x1="' + (widthIndX - 4) + '" y1="' + (deckY + widthPx/2) + '" x2="' + (widthIndX + 4) + '" y2="' + (deckY + widthPx/2) + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.5"/>';
+  svg += '<text x="' + (widthIndX + 10) + '" y="' + (deckY + 4) + '" fill="var(--text-muted)" font-size="11" font-family="JetBrains Mono, monospace">' + clearW.toFixed(1) + 'm w</text>';
+
+  // Span dimension line
   var dimY = groundY + 28;
   svg += '<line x1="' + leftX + '" y1="' + dimY + '" x2="' + rightX + '" y2="' + dimY + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.7"/>';
   svg += '<line x1="' + leftX + '" y1="' + (dimY - 5) + '" x2="' + leftX + '" y2="' + (dimY + 5) + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.7"/>';
   svg += '<line x1="' + rightX + '" y1="' + (dimY - 5) + '" x2="' + rightX + '" y2="' + (dimY + 5) + '" stroke="var(--text-primary)" stroke-width="1" opacity="0.7"/>';
-  svg += '<text x="' + ((leftX + rightX) / 2) + '" y="' + (dimY + 16) + '" text-anchor="middle" fill="var(--text-primary)" font-size="13" font-family="JetBrains Mono, monospace">' + span + 'm span</text>';
+  svg += '<text x="' + centerX + '" y="' + (dimY + 16) + '" text-anchor="middle" fill="var(--text-primary)" font-size="13" font-family="JetBrains Mono, monospace">' + span + 'm span' + (nSpans > 1 ? ' (' + nSpans + ' spans)' : '') + '</text>';
+
+  // Rise dimension for arch types
+  var isArch = (bType === 'parabolic-arch' || bType === 'tied-arch');
+  if (isArch && risePx > 15) {
+    var archPeakY = deckY - risePx;
+    svg += '<line x1="' + (leftX - 20) + '" y1="' + deckY + '" x2="' + (leftX - 20) + '" y2="' + archPeakY + '" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 2" opacity="0.6"/>';
+    svg += '<text x="' + (leftX - 24) + '" y="' + ((deckY + archPeakY) / 2 + 4) + '" text-anchor="end" fill="var(--text-muted)" font-size="10" font-family="JetBrains Mono, monospace">' + (span * rise).toFixed(1) + 'm</text>';
+  }
 
   // Bridge type label
-  svg += '<text x="' + (w / 2) + '" y="24" text-anchor="middle" fill="var(--text-primary)" font-size="14" font-weight="600" opacity="0.7">' + (BRIDGE_TYPES[bType] ? BRIDGE_TYPES[bType].name : bType) + '</text>';
+  svg += '<text x="' + centerX + '" y="24" text-anchor="middle" fill="var(--text-primary)" font-size="14" font-weight="600" opacity="0.7">' + (BRIDGE_TYPES[bType] ? BRIDGE_TYPES[bType].name : bType) + '</text>';
 
   svg += '</svg>';
   return svg;
@@ -3014,27 +3187,35 @@ function generateTemplateEstimate(est, model) {
   saveState();
 }
 
-async function generateAIEstimate(est, model, apiKey) {
+async function generateAIEstimate(est, model, apiKey, queueId) {
   AI_STATE.processing = true;
   AI_STATE.estimateId = est.id;
   AI_STATE.startTime = Date.now();
   AI_STATE.progress = 0;
 
+  function updateQueue(fields) {
+    var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
+    if (qItem) { Object.assign(qItem, fields); saveQueue(); }
+  }
+
   try {
     // Step 1: Extract text from PDFs
+    updateQueue({ step: 'Extracting text from uploaded documents...', progress: 10 });
     updateAIProgress('Extracting text from uploaded documents...', 10);
     var files = getAllUploadedFiles();
     var extractedTexts = '';
 
     if (files.length > 0) {
       for (var i = 0; i < files.length; i++) {
-        updateAIProgress('Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')...', 10 + (i / files.length * 30));
+        var stepMsg = 'Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')...';
+        var stepPct = 10 + (i / files.length * 30);
+        updateQueue({ step: stepMsg, progress: stepPct });
+        updateAIProgress(stepMsg, stepPct);
         var isPDF = files[i].meta.type === 'application/pdf' || files[i].meta.name.toLowerCase().endsWith('.pdf');
         if (isPDF) {
           var text = await extractTextFromPDF(files[i].file);
           extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + text;
         } else {
-          // For non-PDF files, try to read as text
           try {
             var textContent = await files[i].file.text();
             extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + textContent;
@@ -3049,22 +3230,22 @@ async function generateAIEstimate(est, model, apiKey) {
       extractedTexts = 'No document text available. Generate estimate based on project scope description and material selections only.';
     }
 
-    // Truncate if too long (Claude supports much larger context but we still cap for practical reasons)
     if (extractedTexts.length > 180000) {
       extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
     }
 
     // Step 2: Build and send AI prompt
+    updateQueue({ step: 'Claude is analyzing documents and performing quantity takeoff...', progress: 45 });
     updateAIProgress('Claude is analyzing documents and performing quantity takeoff (extended thinking active)...', 45);
     var prompt = buildAIPrompt(est, extractedTexts);
     var aiResult = await callClaude(prompt, apiKey || null);
 
     // Step 3: Parse AI response
+    updateQueue({ step: 'Building estimate from AI analysis...', progress: 80 });
     updateAIProgress('Building estimate from AI analysis...', 80);
 
     if (!est.phases) est.phases = {};
 
-    // Process phases from AI
     if (aiResult.phases) {
       model.phases.forEach(function(pk) {
         if (aiResult.phases[pk] && aiResult.phases[pk].length > 0) {
@@ -3089,44 +3270,62 @@ async function generateAIEstimate(est, model, apiKey) {
     if (aiResult.numStories) est.aiNotes.push('Derived number of stories: ' + aiResult.numStories);
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
+    updateQueue({ step: 'Finalizing...', progress: 95 });
     updateAIProgress('Finalizing estimate...', 95);
 
     est.totalCost = calcEstimateTotal(est);
     est.updatedAt = new Date().toISOString();
+
+    // Save completed estimate to library
+    var existingIdx = STATE.estimates.findIndex(function(e) { return e.id === est.id; });
+    if (existingIdx >= 0) {
+      STATE.estimates[existingIdx] = JSON.parse(JSON.stringify(est));
+    } else {
+      STATE.estimates.push(JSON.parse(JSON.stringify(est)));
+    }
     saveState();
 
-    updateAIProgress('Complete!', 100);
+    // Update queue item to completed
+    updateQueue({ status: 'completed', progress: 100, step: 'Complete', completedTime: Date.now(), totalCost: est.totalCost, estimateData: JSON.parse(JSON.stringify(est)) });
+    logActivity('Estimate completed', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
 
-    setTimeout(function() {
-      hideAIProgress();
-      STATE.currentPage = 'output';
-      STATE.outputActiveTab = 'summary';
-      renderPage();
-      updateNavigation();
-      showToast('AI-powered estimate generated successfully!', 'success');
-    }, 800);
+    hideAIProgress();
+    AI_STATE.processing = false;
+    showToast('Estimate "' + (est.name || 'Untitled') + '" completed! View it in the queue or output.', 'success');
+    if (STATE.currentPage === 'queue') renderPage();
 
   } catch(err) {
     hideAIProgress();
+    AI_STATE.processing = false;
     console.error('AI estimation error:', err);
-    // Detect if it's a connectivity / proxy-not-deployed issue vs an actual API error
+
     var isNetworkError = err.message && (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0 || err.message.indexOf('ERR_NAME_NOT_RESOLVED') >= 0 || err.message.indexOf('Load failed') >= 0);
     var isAuthError = err.message && (err.message.indexOf('401') >= 0 || err.message.indexOf('403') >= 0 || err.message.indexOf('authentication') >= 0);
     if (isNetworkError) {
-      showToast('AI proxy not available — using built-in template estimator. To enable AI, add your API key in Settings.', 'info');
+      showToast('AI proxy not available — using built-in template estimator.', 'info');
     } else if (isAuthError) {
-      showToast('API key is invalid or expired. Using template estimator. Check your key in Settings.', 'warning');
+      showToast('API key invalid or expired. Using template estimator.', 'warning');
     } else {
-      showToast('AI analysis encountered an error. Using template estimator. (' + err.message + ')', 'warning');
+      showToast('AI error — using template estimator. (' + err.message + ')', 'warning');
     }
+
     generateTemplateEstimate(est, model);
     est.aiNotes = est.aiNotes || [];
     est.aiNotes.unshift('Estimate generated using built-in template engine (no AI). Add an API key in Settings to enable Claude AI analysis.');
+    est.totalCost = calcEstimateTotal(est);
+    est.updatedAt = new Date().toISOString();
+
+    var existingIdx2 = STATE.estimates.findIndex(function(e) { return e.id === est.id; });
+    if (existingIdx2 >= 0) {
+      STATE.estimates[existingIdx2] = JSON.parse(JSON.stringify(est));
+    } else {
+      STATE.estimates.push(JSON.parse(JSON.stringify(est)));
+    }
     saveState();
-    STATE.currentPage = 'output';
-    STATE.outputActiveTab = 'summary';
-    renderPage();
-    updateNavigation();
+
+    updateQueue({ status: 'completed', progress: 100, step: 'Completed (template)', completedTime: Date.now(), totalCost: est.totalCost, estimateData: JSON.parse(JSON.stringify(est)), error: null });
+    logActivity('Estimate completed (template)', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
+    if (STATE.currentPage === 'queue') renderPage();
   }
 }
 
@@ -3137,13 +3336,50 @@ function generateEstimate() {
     showToast('Please select a delivery model first.', 'warning');
     return;
   }
+  if (!est.name && !est.scopeDescription) {
+    showToast('Please enter a project name or scope description.', 'warning');
+    return;
+  }
+
+  // Snapshot the estimate into the queue
+  var queueItem = {
+    id: 'q-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+    estimateId: est.id,
+    name: est.name || 'Untitled Estimate',
+    deliveryModel: model.name,
+    status: 'processing',
+    progress: 0,
+    step: 'Queued...',
+    startTime: Date.now(),
+    completedTime: null,
+    totalCost: null,
+    estimateData: null,
+    error: null,
+  };
+  ESTIMATE_QUEUE.unshift(queueItem);
+  saveQueue();
+
+  logActivity('Estimate submitted', (est.name || 'Untitled') + ' — ' + model.name);
+
+  // Keep a deep copy of the estimate for AI processing (with file refs)
+  var estCopy = JSON.parse(JSON.stringify(est));
+
+  // Clear input for next estimate
+  STATE.currentEstimate = createNewEstimate();
+  saveState();
+
+  // Navigate to queue
+  STATE.currentPage = 'queue';
+  updateNavigation();
+  renderPage();
+
+  showToast('Estimate submitted to queue. Claude AI is analyzing your documents.', 'info');
 
   var apiKey = localStorage.getItem('sc-anthropic-key');
   var useProxy = !apiKey || !apiKey.trim();
 
-  // Always use Claude AI -- via proxy (default) or direct with user's key
-  generateAIEstimate(est, model, useProxy ? null : apiKey.trim());
-  showToast('Claude AI analysis started. You can navigate to other pages while it processes.', 'info');
+  // Start AI processing in background
+  generateAIEstimate(estCopy, model, useProxy ? null : apiKey.trim(), queueItem.id);
 }
 
 function saveCurrentEstimate() {
@@ -3158,6 +3394,7 @@ function saveCurrentEstimate() {
     STATE.estimates.push(JSON.parse(JSON.stringify(est)));
   }
   saveState();
+  logActivity('Estimate saved', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
   showToast('Estimate saved to library.', 'success');
 }
 
@@ -3779,10 +4016,189 @@ function quickAddFromConnector(phaseKey, idx) {
 }
 
 
+// ---- SECTION 10C: ESTIMATE QUEUE PAGE ----
+function renderQueuePage() {
+  var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
+  var completed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; });
+  var failed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'failed'; });
+
+  return '<div class="fade-in">' +
+    '<div class="section-header"><div>' +
+      '<div class="section-title">' + ICONS.bolt + ' Estimate Queue</div>' +
+      '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
+    '</div></div>' +
+
+    // In-progress estimates
+    (inProgress.length > 0 ?
+      '<div class="card mb-16">' +
+        '<div class="card-header"><div class="card-title" style="color:var(--accent);">' + ICONS.bolt + ' In Progress (' + inProgress.length + ')</div></div>' +
+        inProgress.map(function(q) {
+          var elapsed = Date.now() - q.startTime;
+          var elapsedSec = Math.round(elapsed / 1000);
+          var pct = q.progress || 0;
+          var estimatedTotal = pct > 5 ? Math.round(elapsed / (pct / 100)) : 120000;
+          var remaining = Math.max(0, Math.round((estimatedTotal - elapsed) / 1000));
+          return '<div style="padding:16px; border-bottom:1px solid var(--border);">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+              '<div>' +
+                '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
+                '<div style="font-size:0.75rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Submitted ' + formatTimeAgo(q.startTime) + '</div>' +
+              '</div>' +
+              '<div style="font-size:0.78rem; color:var(--accent);">' + elapsedSec + 's elapsed</div>' +
+            '</div>' +
+            '<div style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
+            '<div style="background:var(--bg-input); border-radius:6px; height:8px; overflow:hidden; margin-bottom:4px;">' +
+              '<div class="queue-progress-bar" style="background:var(--accent); height:100%; width:' + pct + '%; border-radius:6px; transition:width 0.5s ease;"></div>' +
+            '</div>' +
+            '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted);">' +
+              '<span>' + Math.round(pct) + '% complete</span>' +
+              '<span>~' + remaining + 's remaining</span>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>'
+    : '') +
+
+    // Completed estimates
+    (completed.length > 0 ?
+      '<div class="card mb-16">' +
+        '<div class="card-header"><div class="card-title" style="color:var(--success);">' + ICONS.check + ' Completed (' + completed.length + ')</div></div>' +
+        completed.map(function(q) {
+          return '<div style="padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">' +
+            '<div>' +
+              '<div style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
+              '<div style="font-size:0.72rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Completed ' + formatTimeAgo(q.completedTime || q.startTime) + (q.totalCost ? ' &middot; ' + fmt(q.totalCost) : '') + '</div>' +
+            '</div>' +
+            '<div style="display:flex; gap:8px;">' +
+              '<button class="btn btn-sm btn-accent" onclick="viewQueueEstimate(\'' + q.id + '\')">View Output</button>' +
+              '<button class="btn btn-sm" onclick="removeFromQueue(\'' + q.id + '\')">' + ICONS.trash + '</button>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>'
+    : '') +
+
+    // Failed estimates
+    (failed.length > 0 ?
+      '<div class="card mb-16">' +
+        '<div class="card-header"><div class="card-title" style="color:var(--danger, #ef4444);">' + ICONS.warning + ' Failed (' + failed.length + ')</div></div>' +
+        failed.map(function(q) {
+          return '<div style="padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">' +
+            '<div>' +
+              '<div style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">' + (q.name || 'Untitled') + '</div>' +
+              '<div style="font-size:0.72rem; color:var(--text-muted);">' + (q.error || 'Unknown error') + '</div>' +
+            '</div>' +
+            '<button class="btn btn-sm" onclick="removeFromQueue(\'' + q.id + '\')">' + ICONS.trash + '</button>' +
+          '</div>';
+        }).join('') +
+      '</div>'
+    : '') +
+
+    // Empty state
+    (ESTIMATE_QUEUE.length === 0 ?
+      '<div class="card" style="padding:60px; text-align:center;">' +
+        '<div style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">No estimates in queue</div>' +
+        '<div style="color:var(--text-muted); font-size:0.78rem;">Go to Input, fill in your project details, and click Generate Estimate to start.</div>' +
+        '<button class="btn btn-accent" style="margin-top:20px;" onclick="navigateTo(\'input\')">' + ICONS.plus + ' New Estimate</button>' +
+      '</div>'
+    : '') +
+
+  '</div>';
+}
+
+function formatTimeAgo(ts) {
+  var diff = Date.now() - (typeof ts === 'number' ? ts : new Date(ts).getTime());
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.round(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.round(diff / 3600000) + 'h ago';
+  return Math.round(diff / 86400000) + 'd ago';
+}
+
+function viewQueueEstimate(queueId) {
+  var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
+  if (!qItem || !qItem.estimateData) return;
+  STATE.currentEstimate = JSON.parse(JSON.stringify(qItem.estimateData));
+  STATE.currentPage = 'output';
+  STATE.outputActiveTab = 'summary';
+  renderPage();
+  updateNavigation();
+}
+
+function removeFromQueue(queueId) {
+  ESTIMATE_QUEUE = ESTIMATE_QUEUE.filter(function(q) { return q.id !== queueId; });
+  saveQueue();
+  renderPage();
+}
+
+// Refresh queue progress bars periodically
+setInterval(function() {
+  if (STATE.currentPage === 'queue') {
+    var bars = document.querySelectorAll('.queue-progress-bar');
+    if (bars.length > 0) renderPage();
+  }
+  updateNotificationBadge();
+}, 3000);
+
+// ---- SECTION 10D: NOTIFICATIONS PANEL ----
+function showNotificationsPanel() {
+  var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
+  var recent = ACTIVITY_LOG.slice(0, 20);
+
+  var html = '<div class="notif-panel" id="notif-panel">' +
+    '<div style="padding:16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">' +
+      '<div style="font-weight:700; font-size:0.9rem; color:var(--text-primary);">Notifications & Activity</div>' +
+      '<button class="icon-btn" onclick="document.getElementById(\'notif-panel\').remove();">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+      '</button>' +
+    '</div>' +
+
+    // Queue status
+    (inProgress.length > 0 ?
+      '<div style="padding:12px 16px; background:var(--accent-muted); border-bottom:1px solid var(--border);">' +
+        '<div style="font-weight:600; font-size:0.82rem; color:var(--accent); margin-bottom:4px;">' + ICONS.bolt + ' ' + inProgress.length + ' estimate(s) processing</div>' +
+        inProgress.map(function(q) {
+          return '<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">' + (q.name || 'Untitled') + ' &mdash; ' + Math.round(q.progress || 0) + '% &middot; ' + (q.step || '') + '</div>';
+        }).join('') +
+        '<button class="btn btn-sm btn-accent" style="margin-top:8px;" onclick="navigateTo(\'queue\'); document.getElementById(\'notif-panel\').remove();">View Queue</button>' +
+      '</div>'
+    : '') +
+
+    // Activity log
+    '<div style="padding:12px 16px; border-bottom:1px solid var(--border);">' +
+      '<div style="font-weight:600; font-size:0.82rem; color:var(--text-primary); margin-bottom:8px;">Recent Activity</div>' +
+      (recent.length > 0 ?
+        '<div style="max-height:300px; overflow-y:auto;">' +
+          recent.map(function(a) {
+            return '<div style="padding:6px 0; border-bottom:1px solid var(--border); font-size:0.78rem;">' +
+              '<div style="color:var(--text-primary);">' + a.action + '</div>' +
+              (a.detail ? '<div style="color:var(--text-muted); font-size:0.72rem;">' + a.detail + '</div>' : '') +
+              '<div style="color:var(--text-muted); font-size:0.68rem; margin-top:2px;">' + formatTimeAgo(a.time) + '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>'
+      : '<div style="font-size:0.78rem; color:var(--text-muted);">No activity yet.</div>'
+      ) +
+    '</div>' +
+
+    '<div style="padding:12px 16px; text-align:center;">' +
+      '<button class="btn btn-sm" onclick="ACTIVITY_LOG=[]; localStorage.removeItem(\'sc-activity-log\'); document.getElementById(\'notif-panel\').remove(); showToast(\'Activity log cleared.\', \'info\');">Clear Log</button>' +
+    '</div>' +
+  '</div>';
+
+  // Remove existing panel
+  var existing = document.getElementById('notif-panel');
+  if (existing) { existing.remove(); return; }
+
+  var div = document.createElement('div');
+  div.innerHTML = html;
+  document.body.appendChild(div.firstChild);
+}
+
 // ---- SECTION 11: ROUTING & RENDERING ----
 
 var PAGE_MAP = {
   'input': { title: 'Input', render: renderInputPage, breadcrumb: 'Workspace > Input' },
+  'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Workspace > Estimate Queue' },
   'output': { title: 'Output', render: renderOutputPage, breadcrumb: 'Workspace > Output' },
   'footbridge': { title: 'Footbridges', render: renderFootbridgePage, breadcrumb: 'Workspace > Footbridges' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Reference > Past Estimates' },
@@ -3871,6 +4287,7 @@ function initCommandPalette() {
     { label: 'Go to Connector', action: function() { navigateTo('connector'); }, icon: ICONS.connector },
     { label: 'Go to Pricing Library', action: function() { navigateTo('pricing-library'); }, icon: ICONS.pricing },
     { label: 'Go to Analytics', action: function() { navigateTo('analytics'); }, icon: ICONS.analytics },
+    { label: 'Go to Estimate Queue', action: function() { navigateTo('queue'); }, icon: ICONS.bolt },
     { label: 'Go to Q&A', action: function() { navigateTo('qa'); }, icon: ICONS.qa },
     { label: 'Go to Settings', action: function() { navigateTo('settings'); }, icon: ICONS.settings },
     { label: 'New Estimate', action: function() { clearCurrentEstimate(); navigateTo('input'); }, icon: ICONS.plus },
@@ -3980,13 +4397,13 @@ function initKeyboardShortcuts() {
     // Quick navigation (footbridge = 5, shift existing 5-8 to 6-9)
     var navKeys = {
       '1': 'input',
-      '2': 'output',
-      '3': 'past-estimates',
-      '4': 'connector',
-      '5': 'footbridge',
-      '6': 'pricing-library',
-      '7': 'analytics',
-      '8': 'qa',
+      '2': 'queue',
+      '3': 'output',
+      '4': 'footbridge',
+      '5': 'past-estimates',
+      '6': 'connector',
+      '7': 'pricing-library',
+      '8': 'analytics',
       '9': 'settings',
     };
     if (navKeys[e.key]) {
@@ -4019,6 +4436,8 @@ function initApp() {
 
   // Set nav icons
   document.getElementById('nav-icon-input').innerHTML = ICONS.input;
+  var queueNav = document.getElementById('nav-icon-queue');
+  if (queueNav) queueNav.innerHTML = ICONS.bolt;
   document.getElementById('nav-icon-output').innerHTML = ICONS.output;
   document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
@@ -4032,15 +4451,23 @@ function initApp() {
   var pastBadge = document.getElementById('badge-past');
   if (pastBadge) pastBadge.textContent = STATE.estimates.length;
 
-  // AI processing badge
-  var inputBadge = document.getElementById('badge-input');
-  if (inputBadge) {
-    if (AI_STATE.processing) {
-      inputBadge.textContent = 'AI';
-      inputBadge.style.background = 'var(--accent)';
-      inputBadge.style.color = 'var(--bg-primary)';
+  // Queue badge
+  var queueBadge = document.getElementById('badge-queue');
+  if (queueBadge) {
+    var queueCount = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; }).length;
+    queueBadge.textContent = queueCount > 0 ? queueCount : '';
+    if (queueCount > 0) {
+      queueBadge.style.background = 'var(--accent)';
+      queueBadge.style.color = 'var(--bg-primary)';
     }
   }
+
+  // Notifications button
+  var notifBtn = document.getElementById('btn-notifications');
+  if (notifBtn) {
+    notifBtn.addEventListener('click', showNotificationsPanel);
+  }
+  updateNotificationBadge();
 
   // Navigation clicks
   document.querySelectorAll('.nav-item').forEach(function(item) {
