@@ -1562,6 +1562,19 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--text-muted);
 }
 
+/* --- AI PROGRESS STEP SPINNER --- */
+.ai-step-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+  box-sizing: border-box;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+
 /* --- LINE ITEM RATIONALE --- */
 .line-item-wrapper {}
 .line-item-wrapper .line-item-row {
