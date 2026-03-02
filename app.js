@@ -1819,14 +1819,33 @@ function renderSettingsPage() {
       '</div>' +
     '</div>' +
 
-    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Claude AI is built-in and ready to use. Optionally configure model selection or use your own API key.</div></div></div>' +
-      '<div style="padding: 12px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);">' +
-        '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">' +
-          '<span style="color: var(--success);">' + ICONS.check + '</span>' +
-          '<span style="font-weight: 600; color: var(--text-primary); font-size: 0.88rem;">Claude AI is active</span>' +
-        '</div>' +
-        '<div style="font-size: 0.78rem; color: var(--text-muted);">Claude-powered PDF analysis and quantity takeoff is ready. Upload documents and click Generate Estimate to use it.</div>' +
-      '</div>' +
+    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Connect Claude AI for intelligent PDF analysis and quantity takeoff</div></div></div>' +
+      (localStorage.getItem('sc-anthropic-key') ?
+        '<div style="padding: 12px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);">' +
+          '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">' +
+            '<span style="color: var(--success);">' + ICONS.check + '</span>' +
+            '<span style="font-weight: 600; color: var(--text-primary); font-size: 0.88rem;">Claude AI is active (using your API key)</span>' +
+          '</div>' +
+          '<div style="font-size: 0.78rem; color: var(--text-muted);">Requests go directly to Anthropic from your browser. Upload documents and click Generate Estimate to use it.</div>' +
+        '</div>'
+      :
+        '<div style="padding: 12px 16px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2);">' +
+          '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">' +
+            '<span style="color: var(--warning, #f59e0b);">' + ICONS.info + '</span>' +
+            '<span style="font-weight: 600; color: var(--text-primary); font-size: 0.88rem;">API key needed for AI features</span>' +
+          '</div>' +
+          '<div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px;">' +
+            'To use Claude AI for PDF analysis and intelligent quantity takeoff, you need an Anthropic API key. The app will use the built-in template estimator until a key is added.' +
+          '</div>' +
+          '<div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.6;">' +
+            '<strong>How to get your API key (free, ~2 min):</strong><br>' +
+            '1. Go to <a href="https://console.anthropic.com" target="_blank" style="color: var(--accent);">console.anthropic.com</a> and sign up<br>' +
+            '2. Click <strong>API Keys</strong> in the sidebar<br>' +
+            '3. Click <strong>Create Key</strong> and copy it (starts with <code style="font-size: 0.72rem;">sk-ant-...</code>)<br>' +
+            '4. Paste it in the field below' +
+          '</div>' +
+        '</div>'
+      ) +
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Claude Model</label>' +
@@ -1837,22 +1856,26 @@ function renderSettingsPage() {
           '</select>' +
         '</div>' +
       '</div>' +
-      '<details style="margin-top: 16px;">' +
-        '<summary style="cursor: pointer; font-size: 0.8rem; color: var(--text-muted); user-select: none;">Advanced: Use your own API key</summary>' +
+      (localStorage.getItem('sc-anthropic-key') ?
+        '<details style="margin-top: 16px;">' +
+          '<summary style="cursor: pointer; font-size: 0.8rem; color: var(--text-muted); user-select: none;">API Key Settings</summary>'
+      :
+        '<div style="margin-top: 16px;">'
+      ) +
         '<div style="margin-top: 12px;">' +
           '<div class="form-row">' +
             '<div class="form-group" style="flex: 2;">' +
-              '<label class="form-label">Anthropic API Key (Optional)</label>' +
+              '<label class="form-label">Anthropic API Key</label>' +
               '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
-              '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">If set, requests go directly to Anthropic from your browser. Otherwise the built-in proxy is used.</div>' +
+              '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored locally in your browser and never sent to any server other than Anthropic\'s API.</div>' +
             '</div>' +
           '</div>' +
           '<div style="margin-top: 8px;">' +
             '<button class="btn btn-sm" onclick="testAPIKey()">Test Key</button>' +
-            (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' Custom key active</span>' : '') +
+            (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' Key saved</span>' : '') +
           '</div>' +
         '</div>' +
-      '</details>' +
+      (localStorage.getItem('sc-anthropic-key') ? '</details>' : '</div>') +
     '</div>' +
 
     '<div class="card mb-20"><div class="card-header"><div class="card-title">Data Management</div></div>' +
@@ -3086,8 +3109,20 @@ async function generateAIEstimate(est, model, apiKey) {
   } catch(err) {
     hideAIProgress();
     console.error('AI estimation error:', err);
-    showToast('AI analysis failed: ' + err.message + '. Falling back to template estimate.', 'warning');
+    // Detect if it's a connectivity / proxy-not-deployed issue vs an actual API error
+    var isNetworkError = err.message && (err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0 || err.message.indexOf('ERR_NAME_NOT_RESOLVED') >= 0 || err.message.indexOf('Load failed') >= 0);
+    var isAuthError = err.message && (err.message.indexOf('401') >= 0 || err.message.indexOf('403') >= 0 || err.message.indexOf('authentication') >= 0);
+    if (isNetworkError) {
+      showToast('AI proxy not available — using built-in template estimator. To enable AI, add your API key in Settings.', 'info');
+    } else if (isAuthError) {
+      showToast('API key is invalid or expired. Using template estimator. Check your key in Settings.', 'warning');
+    } else {
+      showToast('AI analysis encountered an error. Using template estimator. (' + err.message + ')', 'warning');
+    }
     generateTemplateEstimate(est, model);
+    est.aiNotes = est.aiNotes || [];
+    est.aiNotes.unshift('Estimate generated using built-in template engine (no AI). Add an API key in Settings to enable Claude AI analysis.');
+    saveState();
     STATE.currentPage = 'output';
     STATE.outputActiveTab = 'summary';
     renderPage();
