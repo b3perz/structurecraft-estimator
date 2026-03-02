@@ -1470,13 +1470,26 @@ function classifyEstimateItems(est, phaseKeys) {
   var softCost = 0;
 
   function makeRow(item) {
-    return '<tr>' +
+    var hasRationale = item.basis || item.source || item.confidence;
+    var confBadge = '';
+    if (item.confidence) {
+      var confClass = item.confidence === 'high' ? 'confidence-high' : item.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
+      confBadge = '<span class="confidence-badge ' + confClass + '">' + item.confidence + '</span>';
+    }
+    return '<tr class="vol-item-row" onclick="toggleVolRationale(this)">' +
       '<td>' + item.name + '</td>' +
       '<td class="mono">' + fmtNum(item.qty) + '</td>' +
       '<td>' + item.unit + '</td>' +
       '<td class="mono">' + fmtDec(item.rate) + '</td>' +
       '<td class="mono">' + fmt(item.total) + '</td>' +
-    '</tr>';
+    '</tr>' +
+    '<tr class="vol-rationale-row" style="display:none;"><td colspan="5"><div class="rationale-content">' +
+      (hasRationale ?
+        confBadge +
+        (item.basis ? '<span class="rationale-label">Basis:</span> ' + item.basis + ' ' : '') +
+        (item.source ? '<span class="rationale-label">Source:</span> ' + item.source : '')
+      : '<span style="color:var(--text-muted); font-style:italic;">No derivation data</span>') +
+    '</div></td></tr>';
   }
 
   phaseKeys.forEach(function(pk) {
@@ -1638,22 +1651,49 @@ function renderPhaseTab(est, phaseKey) {
           ICONS.plus + ' Add a Stick' +
         '</button>' +
       '</div>' +
-      '<div class="line-items-header">' +
-        '<div></div><div>Description</div><div class="cell-right">Qty</div><div class="cell-center">Unit</div><div class="cell-right">Rate</div><div class="cell-right">Total</div><div></div>' +
+      '<div class="line-items-header" style="grid-template-columns: 28px 40px 1fr 80px 80px 100px 120px 40px;">' +
+        '<div></div><div></div><div>Description</div><div class="cell-right">Qty</div><div class="cell-center">Unit</div><div class="cell-right">Rate</div><div class="cell-right">Total</div><div></div>' +
       '</div>' +
       phase.items.map(function(item, idx) {
-        return '<div class="line-item-row" draggable="true">' +
-          '<div class="line-item-grip">' + ICONS.grip + '</div>' +
-          '<div><input class="line-item-input" value="' + item.name + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'name\', this.value)"></div>' +
-          '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'qty\', parseFloat(this.value))"></div>' +
-          '<div><input class="line-item-input" value="' + item.unit + '" style="text-align:center" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'unit\', this.value)"></div>' +
-          '<div><input class="line-item-input numeric" type="number" step="0.01" value="' + item.rate + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'rate\', parseFloat(this.value))"></div>' +
-          '<div class="cell-right cell-mono cell-bold" style="padding: 4px 6px;">' + fmt(item.total) + '</div>' +
-          '<div class="line-item-delete" onclick="removeLineItem(\'' + phaseKey + '\', ' + idx + ')">' + ICONS.trash + '</div>' +
+        var hasRationale = item.basis || item.source || item.confidence;
+        var confClass = item.confidence === 'high' ? 'confidence-high' : item.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
+        return '<div class="line-item-wrapper" id="rationale-' + phaseKey + '-' + idx + '">' +
+          '<div class="line-item-row" draggable="true">' +
+            '<div class="line-item-info" onclick="toggleItemRationale(\'' + phaseKey + '\', ' + idx + ')" title="Show derivation">' + ICONS.chevDown + '</div>' +
+            '<div class="line-item-grip">' + ICONS.grip + '</div>' +
+            '<div><input class="line-item-input" value="' + item.name + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'name\', this.value)"></div>' +
+            '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'qty\', parseFloat(this.value))"></div>' +
+            '<div><input class="line-item-input" value="' + item.unit + '" style="text-align:center" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'unit\', this.value)"></div>' +
+            '<div><input class="line-item-input numeric" type="number" step="0.01" value="' + item.rate + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'rate\', parseFloat(this.value))"></div>' +
+            '<div class="cell-right cell-mono cell-bold" style="padding: 4px 6px;">' + fmt(item.total) + '</div>' +
+            '<div class="line-item-delete" onclick="removeLineItem(\'' + phaseKey + '\', ' + idx + ')">' + ICONS.trash + '</div>' +
+          '</div>' +
+          '<div class="line-item-rationale">' +
+            (hasRationale ?
+              '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="' + (item.basis || '').replace(/"/g, '&quot;') + '" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="' + (item.source || '').replace(/"/g, '&quot;') + '" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Confidence:</span>' +
+                '<select class="confidence-select" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'confidence\', this.value)">' +
+                  '<option value="high"' + (item.confidence === 'high' ? ' selected' : '') + '>High \u2014 measured from documents</option>' +
+                  '<option value="medium"' + (item.confidence === 'medium' || !item.confidence ? ' selected' : '') + '>Medium \u2014 inferred/calculated</option>' +
+                  '<option value="low"' + (item.confidence === 'low' ? ' selected' : '') + '>Low \u2014 assumed/estimated</option>' +
+                '</select>' +
+              '</div>'
+            : '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Confidence:</span>' +
+                '<select class="confidence-select" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'confidence\', this.value)">' +
+                  '<option value="medium" selected>Medium \u2014 inferred/calculated</option>' +
+                  '<option value="high">High \u2014 measured from documents</option>' +
+                  '<option value="low">Low \u2014 assumed/estimated</option>' +
+                '</select>' +
+              '</div>'
+            ) +
+          '</div>' +
         '</div>';
       }).join('') +
       (phase.items.length === 0 ? '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No line items yet. Click "Add Line Item" to start building this phase.</div>' : '') +
-      (phase.items.length > 0 ? '<div class="line-item-row subtotal-row"><div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div><div></div><div></div><div></div><div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">' + fmt(phaseSubtotal) + '</div><div></div></div>' : '') +
+      (phase.items.length > 0 ? '<div class="line-item-row subtotal-row" style="grid-template-columns: 28px 40px 1fr 80px 80px 100px 120px 40px;"><div></div><div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div><div></div><div></div><div></div><div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">' + fmt(phaseSubtotal) + '</div><div></div></div>' : '') +
     '</div>' +
   '</div>';
 }
@@ -2913,7 +2953,7 @@ function addLineItem(phaseKey) {
     STATE.currentEstimate.phases[phaseKey] = { items: [] };
   }
   STATE.currentEstimate.phases[phaseKey].items.push({
-    name: 'New Line Item', qty: 0, unit: 'LS', rate: 0, total: 0,
+    name: 'New Line Item', qty: 0, unit: 'LS', rate: 0, total: 0, basis: '', source: '', confidence: '',
   });
   saveState();
   renderPage();
@@ -3060,7 +3100,8 @@ function buildAIPrompt(est, extractedTexts) {
     '2. Determine the building area (SF), number of stories, grid spacing, floor-to-floor heights from the documents.\n' +
     '3. Perform a detailed quantity takeoff based on the actual drawings/specs - calculate real BF, SF, tons, hours.\n' +
     '4. Use the selected materials and pricing reference above for unit rates.\n' +
-    '5. Generate line items for EACH required phase with realistic quantities.\n\n' +
+    '5. Generate line items for EACH required phase with realistic quantities.\n' +
+    '6. For EVERY line item, include basis (calculation/derivation), source (document reference), and confidence level.\n\n' +
     'RESPOND WITH VALID JSON ONLY (no markdown, no explanation outside JSON):\n' +
     '{\n' +
     '  "buildingArea": <number in SF>,\n' +
@@ -3069,13 +3110,17 @@ function buildAIPrompt(est, extractedTexts) {
     '  "floorToFloor": <number in ft>,\n' +
     '  "phases": {\n' +
     '    "<phase-key>": [\n' +
-    '      { "name": "<description>", "qty": <number>, "unit": "<BF|SF|hr|ton|truck|each|LS|LF|day|month>", "rate": <number> }\n' +
+    '      { "name": "<description>", "qty": <number>, "unit": "<BF|SF|hr|ton|truck|each|LS|LF|day|month>", "rate": <number>, "basis": "<how qty was derived, e.g. 12 bays x 24ft span x 3.2 BF/LF = 921 BF>", "source": "<document/drawing/spec reference, e.g. Sheet S2.1 - Floor Framing Plan>", "confidence": "<high|medium|low>" }\n' +
     '    ]\n' +
     '  },\n' +
     '  "notes": [\n' +
     '    "<string: important caveats, exclusions, assumptions, items that could not be determined from the documents>"\n' +
     '  ]\n' +
     '}\n\n' +
+    'RATIONALE FIELD RULES:\n' +
+    '- basis: Show the calculation or measurement logic. Reference actual dimensions, counts, and factors from the drawings. Be specific.\n' +
+    '- source: Name the specific sheet, spec section, or scope description. Use "Scope description" or "Professional estimate" if not from a document.\n' +
+    '- confidence: "high" = directly measured/counted from documents, "medium" = inferred or calculated from partial info, "low" = assumed or rough estimate.\n\n' +
     'Phase keys to use: ' + phases.map(function(p) { return '"' + p + '"'; }).join(', ') + '\n' +
     'Be thorough. Include ALL structural elements visible in the documents. If you cannot determine exact quantities, provide your best professional estimate and note the uncertainty. The estimate should be complete and realistic.';
 
@@ -3242,71 +3287,73 @@ function generateTemplateEstimate(est, model) {
   var steelTonsCalc = Math.round(totalArea / 4000 * 10) / 10;
   var carpHrsCalc = Math.round(totalArea * 0.06);
 
+  var SRC = 'Template parametric model';
+  var CONF = 'medium';
   var templates = {
     'consulting': [
-      { name: 'SD Structural Engineering', qty: Math.round(60 + stories * 15), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'DD Structural Engineering', qty: Math.round(100 + stories * 25), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CD Structural Engineering', qty: Math.round(150 + stories * 35), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CA Services', qty: Math.round(40 + stories * 10), unit: 'hr', rate: a.engHourlyRate },
+      { name: 'SD Structural Engineering', qty: Math.round(60 + stories * 15), unit: 'hr', rate: a.engHourlyRate, basis: '60 base hr + ' + stories + ' stories \u00d7 15 hr/story = ' + Math.round(60 + stories * 15) + ' hr', source: SRC, confidence: CONF },
+      { name: 'DD Structural Engineering', qty: Math.round(100 + stories * 25), unit: 'hr', rate: a.engHourlyRate, basis: '100 base hr + ' + stories + ' stories \u00d7 25 hr/story = ' + Math.round(100 + stories * 25) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CD Structural Engineering', qty: Math.round(150 + stories * 35), unit: 'hr', rate: a.engHourlyRate, basis: '150 base hr + ' + stories + ' stories \u00d7 35 hr/story = ' + Math.round(150 + stories * 35) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CA Services', qty: Math.round(40 + stories * 10), unit: 'hr', rate: a.engHourlyRate, basis: '40 base hr + ' + stories + ' stories \u00d7 10 hr/story = ' + Math.round(40 + stories * 10) + ' hr', source: SRC, confidence: CONF },
     ],
     'structural-engineering': [
-      { name: 'SD Structural Engineering', qty: Math.round(70 + stories * 18), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'DD Structural Engineering', qty: Math.round(120 + stories * 30), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CD Structural Engineering', qty: Math.round(170 + stories * 40), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'CA Services', qty: Math.round(50 + stories * 12), unit: 'hr', rate: a.engHourlyRate },
+      { name: 'SD Structural Engineering', qty: Math.round(70 + stories * 18), unit: 'hr', rate: a.engHourlyRate, basis: '70 base hr + ' + stories + ' stories \u00d7 18 hr/story = ' + Math.round(70 + stories * 18) + ' hr', source: SRC, confidence: CONF },
+      { name: 'DD Structural Engineering', qty: Math.round(120 + stories * 30), unit: 'hr', rate: a.engHourlyRate, basis: '120 base hr + ' + stories + ' stories \u00d7 30 hr/story = ' + Math.round(120 + stories * 30) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CD Structural Engineering', qty: Math.round(170 + stories * 40), unit: 'hr', rate: a.engHourlyRate, basis: '170 base hr + ' + stories + ' stories \u00d7 40 hr/story = ' + Math.round(170 + stories * 40) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CA Services', qty: Math.round(50 + stories * 12), unit: 'hr', rate: a.engHourlyRate, basis: '50 base hr + ' + stories + ' stories \u00d7 12 hr/story = ' + Math.round(50 + stories * 12) + ' hr', source: SRC, confidence: CONF },
     ],
     'timber-engineering': [
-      { name: 'Shop Drawing Engineering', qty: Math.round(totalArea * 0.008), unit: 'hr', rate: 180 },
-      { name: 'Erection Engineering', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180 },
-      { name: 'Connection Design', qty: Math.round(totalArea * 0.004), unit: 'hr', rate: 180 },
-      { name: 'Drafting / Detailing', qty: Math.round(totalArea * 0.01), unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Shop Drawing Engineering', qty: Math.round(totalArea * 0.008), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.008 hr/SF = ' + Math.round(totalArea * 0.008) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Erection Engineering', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Connection Design', qty: Math.round(totalArea * 0.004), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.004 hr/SF = ' + Math.round(totalArea * 0.004) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Drafting / Detailing', qty: Math.round(totalArea * 0.01), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.01 hr/SF = ' + Math.round(totalArea * 0.01) + ' hr', source: SRC, confidence: CONF },
     ],
     'construction-engineering': [
-      { name: 'Construction Phase Engineering', qty: Math.round(totalArea * 0.003), unit: 'hr', rate: 180 },
-      { name: 'Construction Drafting', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Construction Phase Engineering', qty: Math.round(totalArea * 0.003), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.003 hr/SF = ' + Math.round(totalArea * 0.003) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Construction Drafting', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
     ],
     'fabrication': [
-      { name: beamMat.label + ' Beams', qty: beamQty, unit: beamUnit, rate: beamRate },
-      { name: colMat.label + ' Columns', qty: colQty, unit: colUnit, rate: colRate },
-      { name: floorMat.label + ' Floor Panels', qty: floorQty, unit: floorMat.unit, rate: floorMat.pricePer },
-      { name: roofMat.label + ' Roof', qty: roofQty, unit: roofMat.unit, rate: roofMat.pricePer },
-      { name: 'Steel Connections', qty: steelTonsCalc, unit: 'ton', rate: a.steelConnectionsTon || 4500 },
-      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.0) },
-      { name: 'Shop Fabrication Labor', qty: Math.round(totalArea * 0.04), unit: 'hr', rate: a.shopHourlyRate },
-      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.8) },
+      { name: beamMat.label + ' Beams', qty: beamQty, unit: beamUnit, rate: beamRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (beamMat.category === 'timber' ? '0.56 BF/SF' : beamMat.category === 'steel' ? '1/4000 ton/SF' : '0.02 LF/SF') + ' = ' + fmtNum(beamQty) + ' ' + beamUnit, source: SRC, confidence: CONF },
+      { name: colMat.label + ' Columns', qty: colQty, unit: colUnit, rate: colRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (colMat.category === 'timber' ? '0.24 BF/SF' : colMat.category === 'steel' ? '1/6000 ton/SF' : '0.01 LF/SF') + ' = ' + fmtNum(colQty) + ' ' + colUnit, source: SRC, confidence: CONF },
+      { name: floorMat.label + ' Floor Panels', qty: floorQty, unit: floorMat.unit, rate: floorMat.pricePer, basis: fmtNum(totalArea) + ' SF \u00d7 0.85 coverage factor = ' + fmtNum(floorQty) + ' ' + floorMat.unit, source: SRC, confidence: CONF },
+      { name: roofMat.label + ' Roof', qty: roofQty, unit: roofMat.unit, rate: roofMat.pricePer, basis: fmtNum(totalArea) + ' SF / ' + stories + ' stories \u00d7 0.95 coverage = ' + fmtNum(roofQty) + ' ' + roofMat.unit, source: SRC, confidence: CONF },
+      { name: 'Steel Connections', qty: steelTonsCalc, unit: 'ton', rate: a.steelConnectionsTon || 4500, basis: fmtNum(totalArea) + ' SF / 4,000 SF/ton = ' + steelTonsCalc + ' ton', source: SRC, confidence: CONF },
+      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.0), basis: fmtNum(totalArea) + ' SF \u00d7 $1.00/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Shop Fabrication Labor', qty: Math.round(totalArea * 0.04), unit: 'hr', rate: a.shopHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.04 hr/SF = ' + Math.round(totalArea * 0.04) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.8), basis: fmtNum(totalArea) + ' SF \u00d7 $0.80/SF allowance', source: SRC, confidence: 'low' },
     ],
     'shipping': [
-      { name: 'Flatbed Trucks', qty: Math.max(5, Math.round(totalArea / 3000)), unit: 'truck', rate: a.shippingPerTruck || 4500 },
-      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(totalArea / 15000)), unit: 'each', rate: 2500 },
-      { name: 'Logistics Coordination', qty: Math.round(totalArea * 0.001), unit: 'hr', rate: a.draftHourlyRate },
+      { name: 'Flatbed Trucks', qty: Math.max(5, Math.round(totalArea / 3000)), unit: 'truck', rate: a.shippingPerTruck || 4500, basis: fmtNum(totalArea) + ' SF / 3,000 SF/truck = ' + Math.max(5, Math.round(totalArea / 3000)) + ' trucks (min 5)', source: SRC, confidence: CONF },
+      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(totalArea / 15000)), unit: 'each', rate: 2500, basis: fmtNum(totalArea) + ' SF / 15,000 SF/permit = ' + Math.max(1, Math.round(totalArea / 15000)) + ' permits (min 1)', source: SRC, confidence: 'low' },
+      { name: 'Logistics Coordination', qty: Math.round(totalArea * 0.001), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.001 hr/SF = ' + Math.round(totalArea * 0.001) + ' hr', source: SRC, confidence: CONF },
     ],
     'installation': [
-      { name: 'Site Carpenters', qty: carpHrsCalc, unit: 'hr', rate: a.siteCarpentrHourlyRate },
-      { name: 'Site Laborers', qty: Math.round(carpHrsCalc * 0.35), unit: 'hr', rate: a.siteLaborHourlyRate },
-      { name: 'Site Superintendent', qty: Math.round(carpHrsCalc * 0.2), unit: 'hr', rate: a.siteSuperHourlyRate },
-      { name: 'Mobile Crane', qty: Math.round(totalArea / 1500), unit: 'day', rate: a.craneDailyRate },
-      { name: 'Crane Operator', qty: Math.round(totalArea / 1500 * 8), unit: 'hr', rate: a.craneOperatorHourlyRate },
-      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.4) },
+      { name: 'Site Carpenters', qty: carpHrsCalc, unit: 'hr', rate: a.siteCarpentrHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.06 hr/SF = ' + fmtNum(carpHrsCalc) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Site Laborers', qty: Math.round(carpHrsCalc * 0.35), unit: 'hr', rate: a.siteLaborHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.35 laborer ratio = ' + Math.round(carpHrsCalc * 0.35) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Site Superintendent', qty: Math.round(carpHrsCalc * 0.2), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.20 super ratio = ' + Math.round(carpHrsCalc * 0.2) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Mobile Crane', qty: Math.round(totalArea / 1500), unit: 'day', rate: a.craneDailyRate, basis: fmtNum(totalArea) + ' SF / 1,500 SF/day = ' + Math.round(totalArea / 1500) + ' days', source: SRC, confidence: CONF },
+      { name: 'Crane Operator', qty: Math.round(totalArea / 1500 * 8), unit: 'hr', rate: a.craneOperatorHourlyRate, basis: Math.round(totalArea / 1500) + ' crane days \u00d7 8 hr/day = ' + Math.round(totalArea / 1500 * 8) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.4), basis: fmtNum(totalArea) + ' SF \u00d7 $0.40/SF allowance', source: SRC, confidence: 'low' },
     ],
     'general-conditions': [
-      { name: 'Project Management', qty: Math.round(totalArea * 0.007), unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5) },
-      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5) },
+      { name: 'Project Management', qty: Math.round(totalArea * 0.007), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.007 hr/SF = ' + Math.round(totalArea * 0.007) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5), basis: fmtNum(totalArea) + ' SF \u00d7 $1.50/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5), basis: fmtNum(totalArea) + ' SF \u00d7 $1.50/SF contingency allowance', source: SRC, confidence: 'low' },
     ],
     'dlt-material': [
-      { name: 'DLT Panels - Standard', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: a.dltPriceSF },
-      { name: 'Edge Banding & Finish', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: 2.50 },
-      { name: 'Grading & QC', qty: 1, unit: 'LS', rate: 6500 },
+      { name: 'DLT Panels - Standard', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: a.dltPriceSF, basis: fmtNum(totalArea) + ' SF \u00d7 0.70 coverage factor = ' + fmtNum(Math.round(totalArea * 0.7)) + ' SF', source: SRC, confidence: CONF },
+      { name: 'Edge Banding & Finish', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: 2.50, basis: fmtNum(Math.round(totalArea * 0.7)) + ' SF DLT panel area', source: SRC, confidence: CONF },
+      { name: 'Grading & QC', qty: 1, unit: 'LS', rate: 6500, basis: 'Fixed allowance for quality control', source: SRC, confidence: 'low' },
     ],
     'site-supervision': [
-      { name: 'Site Supervisor (full time)', qty: Math.round(totalArea * 0.014), unit: 'hr', rate: a.siteSuperHourlyRate },
-      { name: 'Site Visits - Engineer', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.engHourlyRate },
-      { name: 'Travel & Expenses', qty: 1, unit: 'LS', rate: 6000 },
+      { name: 'Site Supervisor (full time)', qty: Math.round(totalArea * 0.014), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.014 hr/SF = ' + Math.round(totalArea * 0.014) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Site Visits - Engineer', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.engHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Travel & Expenses', qty: 1, unit: 'LS', rate: 6000, basis: 'Fixed allowance for travel', source: SRC, confidence: 'low' },
     ],
     'coordination': [
-      { name: 'Fabricator Coordination', qty: Math.round(totalArea * 0.003), unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Installer Coordination', qty: Math.round(totalArea * 0.0025), unit: 'hr', rate: a.pmHourlyRate },
-      { name: 'Shop Drawing Review', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180 },
+      { name: 'Fabricator Coordination', qty: Math.round(totalArea * 0.003), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.003 hr/SF = ' + Math.round(totalArea * 0.003) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Installer Coordination', qty: Math.round(totalArea * 0.0025), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.0025 hr/SF = ' + Math.round(totalArea * 0.0025) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Shop Drawing Review', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
     ],
   };
 
@@ -3315,7 +3362,7 @@ function generateTemplateEstimate(est, model) {
       var templateItems = templates[pk] || [];
       est.phases[pk] = {
         items: templateItems.map(function(t) {
-          return { name: t.name, qty: t.qty, unit: t.unit, rate: t.rate, total: Math.round(t.qty * t.rate) };
+          return { name: t.name, qty: t.qty, unit: t.unit, rate: t.rate, total: Math.round(t.qty * t.rate), basis: t.basis || '', source: t.source || '', confidence: t.confidence || '' };
         }),
       };
       est.phases[pk].subtotal = calcPhaseTotal(est.phases[pk]);
@@ -3426,7 +3473,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
             items: aiResult.phases[pk].map(function(item) {
               var qty = Number(item.qty) || 0;
               var rate = Number(item.rate) || 0;
-              return { name: item.name, qty: qty, unit: item.unit || 'LS', rate: rate, total: Math.round(qty * rate) };
+              return { name: item.name, qty: qty, unit: item.unit || 'LS', rate: rate, total: Math.round(qty * rate), basis: item.basis || '', source: item.source || '', confidence: item.confidence || '' };
             }),
           };
           est.phases[pk].subtotal = calcPhaseTotal(est.phases[pk]);
@@ -3639,6 +3686,18 @@ function toggleQA(idx) {
 function togglePricingCategory(header) {
   var body = header.nextElementSibling;
   if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleItemRationale(phaseKey, idx) {
+  var el = document.getElementById('rationale-' + phaseKey + '-' + idx);
+  if (el) el.classList.toggle('expanded');
+}
+
+function toggleVolRationale(row) {
+  var next = row.nextElementSibling;
+  if (next && next.classList.contains('vol-rationale-row')) {
+    next.style.display = next.style.display === 'none' ? 'table-row' : 'none';
+  }
 }
 
 function filterPricing(query) {
