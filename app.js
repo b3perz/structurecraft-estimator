@@ -1,6 +1,6 @@
 // ============================================
-// QUARTERSAW — Structural Estimation Studio v1.0
-// Where raw project data gets milled into plumb-true estimates
+// STRUCTURECRAFT ESTIMATOR v1.0
+// AI-powered structural cost estimation
 // ============================================
 
 // ---- SECTION 1: ICONS ----
@@ -51,16 +51,16 @@ var CLAUDE_PROXY_URL = 'https://sc-estimator-proxy.structurecraft.workers.dev'; 
 
 // ---- SECTION 2: THEME DEFINITIONS ----
 const THEMES = [
-  { id: 'midnight', name: 'Sawdust After Dark', preview: 'linear-gradient(135deg, #0a0e1a, #1a2035, #c8956c)' },
-  { id: 'daylight', name: 'Morning Workshop', preview: 'linear-gradient(135deg, #f5f2ed, #ffffff, #8b5e3c)' },
-  { id: 'wabi-sabi', name: 'Weathered Oak', preview: 'linear-gradient(135deg, #1a1916, #2a2822, #8b7355)' },
+  { id: 'midnight', name: 'Midnight', preview: 'linear-gradient(135deg, #0a0e1a, #1a2035, #c8956c)' },
+  { id: 'daylight', name: 'Daylight', preview: 'linear-gradient(135deg, #f5f2ed, #ffffff, #8b5e3c)' },
+  { id: 'wabi-sabi', name: 'Wabi-Sabi', preview: 'linear-gradient(135deg, #1a1916, #2a2822, #8b7355)' },
   { id: 'blueprint', name: 'Blueprint', preview: 'linear-gradient(135deg, #0a1628, #142640, #4a9eff)' },
-  { id: 'timber', name: 'Raw Cedar', preview: 'linear-gradient(135deg, #1a1210, #2a201a, #b87333)' },
-  { id: 'arctic', name: 'Glacial', preview: 'linear-gradient(135deg, #0f1923, #1a2838, #5ba4cf)' },
-  { id: 'slate', name: 'Graphite', preview: 'linear-gradient(135deg, #18181b, #27272a, #a1a1aa)' },
-  { id: 'forest', name: 'Old Growth', preview: 'linear-gradient(135deg, #0a1a0e, #162a1c, #4a8c5c)' },
-  { id: 'copper', name: 'Patina', preview: 'linear-gradient(135deg, #1a1410, #2a221a, #cd7f32)' },
-  { id: 'high-contrast', name: 'High-Vis', preview: 'linear-gradient(135deg, #000000, #141414, #ffcc00)' },
+  { id: 'timber', name: 'Timber', preview: 'linear-gradient(135deg, #1a1210, #2a201a, #b87333)' },
+  { id: 'arctic', name: 'Arctic', preview: 'linear-gradient(135deg, #0f1923, #1a2838, #5ba4cf)' },
+  { id: 'slate', name: 'Slate', preview: 'linear-gradient(135deg, #18181b, #27272a, #a1a1aa)' },
+  { id: 'forest', name: 'Forest', preview: 'linear-gradient(135deg, #0a1a0e, #162a1c, #4a8c5c)' },
+  { id: 'copper', name: 'Copper', preview: 'linear-gradient(135deg, #1a1410, #2a221a, #cd7f32)' },
+  { id: 'high-contrast', name: 'High Contrast', preview: 'linear-gradient(135deg, #000000, #141414, #ffcc00)' },
 ];
 
 // ---- SECTION 3: STATE MANAGEMENT ----
@@ -164,13 +164,13 @@ const DELIVERY_MODELS = {
   'eor-build': {
     name: 'EOR Build',
     icon: ICONS.eorBuild,
-    description: 'Engineer of Record + Full Build. Quartersaw is the EOR and handles everything: consulting, structural engineering (SD/DD/CD/CA), timber design, fabrication, shipping, and site installation.',
+    description: 'Engineer of Record + Full Build. StructureCraft is the EOR and handles everything: consulting, structural engineering (SD/DD/CD/CA), timber design, fabrication, shipping, and site installation.',
     phases: ['consulting', 'structural-engineering', 'timber-engineering', 'construction-engineering', 'fabrication', 'shipping', 'installation', 'general-conditions'],
   },
   'delegated-design-build': {
     name: 'Delegated Design Build',
     icon: ICONS.delegatedDesign,
-    description: 'Quartersaw handles all timber design, engineering, fabrication, shipping, and installation. Not the EOR -- no consulting engineering phase.',
+    description: 'StructureCraft handles all timber design, engineering, fabrication, shipping, and installation. Not the EOR — no consulting engineering phase.',
     phases: ['timber-engineering', 'construction-engineering', 'fabrication', 'shipping', 'installation', 'general-conditions'],
   },
   'dlt-supply-only': {
@@ -419,7 +419,7 @@ const PRICING_LIBRARY = {
     { id: 'clt-3ply', name: 'CLT 3-Ply (105mm)', unit: 'SF', price: 26, range: [22, 30], supplier: 'Structurlam', updated: '2025-10' },
     { id: 'clt-5ply', name: 'CLT 5-Ply (175mm)', unit: 'SF', price: 34, range: [28, 40], supplier: 'Structurlam', updated: '2025-10' },
     { id: 'clt-7ply', name: 'CLT 7-Ply (245mm)', unit: 'SF', price: 44, range: [36, 52], supplier: 'Kalesnikoff', updated: '2025-09' },
-    { id: 'dlt', name: 'DLT Standard (various)', unit: 'SF', price: 22, range: [18, 28], supplier: 'Quartersaw Shop', updated: '2025-12' },
+    { id: 'dlt', name: 'DLT Standard (various)', unit: 'SF', price: 22, range: [18, 28], supplier: 'StructureCraft', updated: '2025-12' },
     { id: 'mpp', name: 'Mass Plywood Panel (MPP)', unit: 'SF', price: 28, range: [24, 34], supplier: 'Freres Lumber', updated: '2025-08' },
     { id: 'nlt', name: 'NLT (Nail Laminated Timber)', unit: 'SF', price: 15, range: [12, 20], supplier: 'Various', updated: '2025-07' },
   ],
@@ -606,7 +606,7 @@ const SAMPLE_ESTIMATES = [
     status: 'sent',
     createdAt: '2025-10-01',
     updatedAt: '2025-11-15',
-    scopeDescription: '4-storey research building, CLT/glulam hybrid structure. Quartersaw as structural engineer for superstructure with site supervision. Approx 35,000 SF.',
+    scopeDescription: '4-storey research building, CLT/glulam hybrid structure. StructureCraft as structural engineer for superstructure with site supervision. Approx 35,000 SF.',
     assumptions: getDefaultAssumptions(),
     phases: {
       'structural-engineering': { items: [
@@ -639,7 +639,7 @@ const SAMPLE_ESTIMATES = [
     status: 'draft',
     createdAt: '2025-11-20',
     updatedAt: '2025-12-10',
-    scopeDescription: '8-storey office building, CLT and MPP floors, glulam frame, concrete core. Quartersaw full EOR scope. Approx 68,000 SF timber structure.',
+    scopeDescription: '8-storey office building, CLT and MPP floors, glulam frame, concrete core. StructureCraft full EOR scope. Approx 68,000 SF timber structure.',
     assumptions: getDefaultAssumptions(),
     phases: {
       'consulting': { items: [
@@ -936,8 +936,8 @@ function renderInputPage() {
   return '<div class="fade-in">' +
     '<div class="section-header">' +
       '<div>' +
-        '<div class="section-title">' + ICONS.input + ' The Workbench</div>' +
-        '<div class="section-desc">Lay out your project heartwood \u2014 scope it, feed it documents, and pick your delivery grain</div>' +
+        '<div class="section-title">' + ICONS.input + ' Estimate Input</div>' +
+        '<div class="section-desc">Define your project scope, upload documents, and select a delivery model</div>' +
       '</div>' +
       '<div class="section-actions">' +
         '<button class="btn btn-sm" onclick="clearCurrentEstimate()">Clear All</button>' +
@@ -1033,7 +1033,7 @@ function renderInputPage() {
       '<div class="card-header">' +
         '<div>' +
           '<div class="card-title">Delivery Model</div>' +
-          '<div class="card-subtitle">Select the scope of Quartersaw\'s involvement. This determines which cost phases are included.</div>' +
+          '<div class="card-subtitle">Select the scope of StructureCraft\'s involvement. This determines which cost phases are included.</div>' +
         '</div>' +
       '</div>' +
       '<div class="delivery-model-grid">' +
@@ -1139,12 +1139,12 @@ function renderInputPage() {
     '<!-- Generate Estimate Button -->' +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
       '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
-        'Feed Quartersaw your drawing set and hit <strong>Run the Mill</strong>. ' +
-        'Claude will splinter-parse every page, grain-map the structural bones, and tally-forge a kerf-tight estimate. ' +
-        'Takes a minute or two — good things come to those who let the blade do its work.' +
+        'Upload your drawing set and click <strong>Generate Estimate</strong>. ' +
+        'Claude will analyze every page, extract structural data, and generate a detailed estimate. ' +
+        'Processing typically takes 1–2 minutes depending on document complexity.' +
       '</p>' +
       '<button class="btn btn-lg btn-accent" onclick="generateEstimate()" id="btn-generate" style="padding: 14px 40px; font-size: 1rem;">' +
-        ICONS.bolt + ' Run the Mill' +
+        ICONS.bolt + ' Generate Estimate' +
       '</button>' +
       '<div id="ai-progress-container" style="display:none; margin-top: 20px;"></div>' +
     '</div>' +
@@ -1882,14 +1882,14 @@ function renderAnalyticsPage() {
 // --- Q&A PAGE ---
 function renderQAPage() {
   var faqs = [
-    { q: 'How do I start a fresh cut?', a: 'Head to the <strong>Workbench</strong> in the sidebar. Fill in the project heartwood -- name, delivery model, scope -- and upload any relevant documents. Then hit <strong>Run the Mill</strong> to send it through Claude for crunchinating, or manually add line items on the <strong>Cut Sheet</strong>.' },
-    { q: 'What are the four delivery models?', a: '<strong>EOR Build:</strong> Full scope -- Quartersaw is Engineer of Record, handling everything from consulting through installation.<br><strong>Delegated Design Build:</strong> Same as EOR but without consulting engineering. Timber design, fab, and install.<br><strong>DLT Supply Only:</strong> Just supplying DLT material from the shop -- material, fab, and shipping.<br><strong>Engineer + Supervise:</strong> Structural engineer for superstructure with site supervision, but no fabrication or installation.' },
-    { q: 'How do I use the Dovetail tool?', a: 'Go to the <strong>Dovetail</strong> page. Select a past estimate from the dropdown. All its line items appear in the left panel. You can <strong>drag and drop</strong> items into your current estimate on the right, or <strong>double-click</strong> any item to quick-add it. Items are grain-matched to the appropriate phase in your current estimate.' },
+    { q: 'How do I create a new estimate?', a: 'Navigate to <strong>Estimate Input</strong> in the sidebar. Fill in the project details — name, delivery model, scope — and upload any relevant documents. Then click <strong>Generate Estimate</strong> to run it through Claude, or manually add line items on the <strong>Estimate Output</strong> page.' },
+    { q: 'What are the four delivery models?', a: '<strong>EOR Build:</strong> Full scope -- StructureCraft is Engineer of Record, handling everything from consulting through installation.<br><strong>Delegated Design Build:</strong> Same as EOR but without consulting engineering. Timber design, fab, and install.<br><strong>DLT Supply Only:</strong> Supplying DLT material -- material, fab, and shipping.<br><strong>Engineer + Supervise:</strong> Structural engineer for superstructure with site supervision, but no fabrication or installation.' },
+    { q: 'How do I use the Connector tool?', a: 'Go to the <strong>Connector</strong> page. Select a past estimate from the dropdown. All its line items appear in the left panel. You can <strong>drag and drop</strong> items into your current estimate on the right, or <strong>double-click</strong> any item to quick-add it. Items are matched to the appropriate phase in your current estimate.' },
     { q: 'How do I compare past estimates?', a: 'Go to the <strong>Vault</strong> page and click <strong>Compare Mode</strong>. This shows a side-by-side benchmark of all filtered estimates, including phase-by-phase cost breakdowns and totals. Use the filters to narrow down by delivery model or status.' },
-    { q: 'Can I shim the pricing assumptions?', a: 'Absolutely. On the <strong>Cut Sheet</strong>, the Assumptions box shows all current pricing assumptions. <strong>Click any value</strong> to shim it inline. Changes immediately recalculate the estimate. You can also update defaults in <strong>The Workshop</strong>.' },
-    { q: 'How does the AI-powered crunchinating work?', a: 'When you upload PDFs (drawings, specs, RFPs) and have an Anthropic API key configured in <strong>The Workshop</strong>, Quartersaw uses Claude Opus 4.6 with extended thinking to splinter-parse your documents. It extracts text via PDF.js, sends the heartwood to Claude for deep grain-mapping, and the AI performs a meticulous quantity takeoff based on actual drawing information. Claude identifies building dimensions, structural members, material quantities, and tally-forges line items for each phase. Notes about assumptions, exclusions, and unknowns are provided in the <strong>AI Notes</strong> tab.' },
-    { q: 'How does document upload work?', a: 'Each upload zone accepts specific file types (PDF, DOCX, XLSX) up to <strong>40 MB each</strong>. Files are stored in your browser session for AI processing. When you hit <strong>Run the Mill</strong>, Claude splinter-parses all uploaded documents for quantity takeoff. Upload structural drawings, architectural drawings, specs, and RFPs for the most plumb-true estimates.' },
-    { q: 'What do the different themes mean?', a: 'The 10 themes are purely aesthetic -- they change the color scheme and vibe of the shop. Head to <strong>The Workshop</strong> to browse all themes, or click the theme icon in the bottom-left sidebar to cycle through them. Your preference is kiln-dried automatically.' },
+    { q: 'Can I edit the pricing assumptions?', a: 'Yes. On the <strong>Estimate Output</strong> page, the Assumptions box shows all current pricing assumptions. <strong>Click any value</strong> to edit it inline. Changes immediately recalculate the estimate. You can also update defaults in <strong>Settings</strong>.' },
+    { q: 'How does AI-powered estimation work?', a: 'When you upload PDFs (drawings, specs, RFPs) and have an Anthropic API key configured in <strong>Settings</strong>, the estimator uses Claude Opus 4.6 with extended thinking to analyze your documents. It extracts text via PDF.js, sends the content to Claude for deep analysis, and the AI performs a meticulous quantity takeoff based on actual drawing information. Claude identifies building dimensions, structural members, material quantities, and generates line items for each phase. Notes about assumptions, exclusions, and unknowns are provided in the <strong>AI Notes</strong> tab.' },
+    { q: 'How does file upload work?', a: 'Each upload zone accepts specific file types (PDF, DOCX, XLSX) up to <strong>40 MB each</strong>. Files are stored in your browser session for AI processing. When you click <strong>Generate Estimate</strong>, Claude analyzes all uploaded documents for quantity takeoff. Upload structural drawings, architectural drawings, specs, and RFPs for the most accurate estimates.' },
+    { q: 'What do the different themes mean?', a: 'The 10 themes are purely aesthetic — they change the color scheme of the interface. Go to <strong>Settings</strong> to browse all themes, or click the theme icon in the bottom-left sidebar to cycle through them. Your preference is saved automatically.' },
     { q: 'How are costs calculated?', a: 'Each line item has a Qty x Rate = Total. Phase subtotals are the sum of all line items. The grand total adds Overhead, Margin, Contingency, and Bond/Insurance percentages on top of the direct cost subtotal. All percentages are configurable in the Assumptions box.' },
     { q: 'What does "Load to Workspace" do?', a: 'When you click <strong>Load to Workspace</strong> on a past estimate, it copies that estimate\'s full data into the Input/Output workspace so you can modify it as a starting point for a new estimate. The original estimate is not affected.' },
     { q: 'Is my data saved?', a: 'All data is saved in your browser\'s local storage. This means your estimates persist between sessions on the same device and browser. For sharing across devices, use the Export feature to download your data.' },
@@ -1897,7 +1897,7 @@ function renderQAPage() {
   ];
 
   return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.qa + ' Questions & Answers</div><div class="section-desc">Common questions about using the Quartersaw shop</div></div></div>' +
+    '<div class="section-header"><div><div class="section-title">' + ICONS.qa + ' Questions & Answers</div><div class="section-desc">Common questions about using the estimator</div></div></div>' +
     faqs.map(function(faq, i) {
       return '<div class="qa-item" id="qa-' + i + '"><div class="qa-question" onclick="toggleQA(' + i + ')"><span>' + faq.q + '</span>' + ICONS.chevDown + '</div><div class="qa-answer">' + faq.a + '</div></div>';
     }).join('') +
@@ -1982,7 +1982,7 @@ function renderSettingsPage() {
             '<span style="font-weight: 600; color: var(--text-primary); font-size: 0.88rem;">API key needed for AI features</span>' +
           '</div>' +
           '<div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px;">' +
-            'Quartersaw\'s Claude-powered brain needs an API key to do the heavy grain-mapping. Without one, you get roughsawn template estimates — decent, but not the full kerf.' +
+            'Claude-powered estimation requires an Anthropic API key. Without one, you\'ll get template-based estimates — functional, but not AI-analyzed.' +
           '</div>' +
           '<div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.6;">' +
             '<strong>How to get your API key (free, ~2 min):</strong><br>' +
@@ -2380,7 +2380,7 @@ function renderFootbridgePage() {
           '</select>' +
         '</div>' +
         '<div class="form-group">' +
-          '<label class="form-label">Quartersaw Scope</label>' +
+          '<label class="form-label">StructureCraft Scope</label>' +
           '<select class="form-select" id="fb-scope" onchange="STATE.fbScope=this.value">' +
             '<option value="prime-db"' + (STATE.fbScope==='prime-db'?' selected':'') + '>Prime Contractor (Design-Build)</option>' +
             '<option value="eng-supply"' + (STATE.fbScope==='eng-supply'?' selected':'') + '>Engineering + Supply</option>' +
@@ -2723,7 +2723,7 @@ function generateFootbridgeEstimate() {
 
   STATE.footbridgeOutputTab = 'summary';
   renderPage();
-  showToast('Bridge reckoning complete. Every bolt accounted for.', 'success');
+  showToast('Bridge estimate complete.', 'success');
 }
 
 
@@ -3200,7 +3200,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
 
   try {
     // Step 1: Extract text from PDFs
-    updateQueue({ step: 'Splinter-parsing your documents...', progress: 10 });
+    updateQueue({ step: 'Extracting document content...', progress: 10 });
     updateAIProgress('Extracting text from uploaded documents...', 10);
     var files = getAllUploadedFiles();
     var extractedTexts = '';
@@ -3235,13 +3235,13 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     }
 
     // Step 2: Build and send AI prompt
-    updateQueue({ step: 'Claude is grain-mapping your documents...', progress: 45 });
-    updateAIProgress('Claude is grain-mapping the structural bones (deep-think mode)...', 45);
+    updateQueue({ step: 'Claude is analyzing your documents...', progress: 45 });
+    updateAIProgress('Claude is performing structural analysis (extended thinking)...', 45);
     var prompt = buildAIPrompt(est, extractedTexts);
     var aiResult = await callClaude(prompt, apiKey || null);
 
     // Step 3: Parse AI response
-    updateQueue({ step: 'Tally-forging from AI analysis...', progress: 80 });
+    updateQueue({ step: 'Building estimate from AI analysis...', progress: 80 });
     updateAIProgress('Building estimate from AI analysis...', 80);
 
     if (!est.phases) est.phases = {};
@@ -3271,7 +3271,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
     updateQueue({ step: 'Finalizing...', progress: 95 });
-    updateAIProgress('Kiln-drying the numbers...', 95);
+    updateAIProgress('Finalizing calculations...', 95);
 
     est.totalCost = calcEstimateTotal(est);
     est.updatedAt = new Date().toISOString();
@@ -3304,14 +3304,14 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (isNetworkError) {
       showToast('AI proxy not available — using built-in template estimator.', 'info');
     } else if (isAuthError) {
-      showToast('That key\'s gone dull. Roughsawing with templates for now.', 'warning');
+      showToast('Invalid API key. Using template-based estimates.', 'warning');
     } else {
       showToast('AI error — using template estimator. (' + err.message + ')', 'warning');
     }
 
     generateTemplateEstimate(est, model);
     est.aiNotes = est.aiNotes || [];
-    est.aiNotes.unshift('Roughsawn via template engine (no AI). Add an API key in The Workshop to unlock the full grain-mapping engine.');
+    est.aiNotes.unshift('Generated via template engine (no AI). Add an API key in Settings to enable Claude-powered analysis.');
     est.totalCost = calcEstimateTotal(est);
     est.updatedAt = new Date().toISOString();
 
@@ -3324,7 +3324,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     saveState();
 
     updateQueue({ status: 'completed', progress: 100, step: 'Completed (template)', completedTime: Date.now(), totalCost: est.totalCost, estimateData: JSON.parse(JSON.stringify(est)), error: null });
-    logActivity('Reckoning roughsawn (template)', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
+    logActivity('Generated estimate (template)', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
     if (STATE.currentPage === 'queue') renderPage();
   }
 }
@@ -3333,11 +3333,11 @@ function generateEstimate() {
   var est = STATE.currentEstimate;
   var model = DELIVERY_MODELS[est.deliveryModel];
   if (!model) {
-    showToast('Pick a delivery grain first — can\'t mill without knowing the cut.', 'warning');
+    showToast('Please select a delivery model before generating.', 'warning');
     return;
   }
   if (!est.name && !est.scopeDescription) {
-    showToast('Give it a name or a scope — the mill needs something to chew on.', 'warning');
+    showToast('Please provide a project name or scope description.', 'warning');
     return;
   }
 
@@ -3373,7 +3373,7 @@ function generateEstimate() {
   updateNavigation();
   renderPage();
 
-  showToast('Into the mill it goes. Claude is splinter-parsing your documents now.', 'info');
+  showToast('Estimate submitted. Claude is analyzing your documents.', 'info');
 
   var apiKey = localStorage.getItem('sc-anthropic-key');
   var useProxy = !apiKey || !apiKey.trim();
@@ -3395,14 +3395,14 @@ function saveCurrentEstimate() {
   }
   saveState();
   logActivity('Estimate saved', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
-  showToast('Stashed in the vault. Plumb-true and accounted for.', 'success');
+  showToast('Estimate saved.', 'success');
 }
 
 function clearCurrentEstimate() {
   STATE.currentEstimate = createNewEstimate();
   saveState();
   renderPage();
-  showToast('Bench swept clean. Fresh timber awaits.', 'info');
+  showToast('Estimate cleared. Ready for new input.', 'info');
 }
 
 function connectEstimate(id) {
@@ -3426,7 +3426,7 @@ function duplicateEstimate(id) {
   STATE.estimates.push(dupe);
   saveState();
   renderPage();
-  showToast('Twinned it. Roughsawn copy ready for shimming.', 'success');
+  showToast('Estimate duplicated.', 'success');
 }
 
 function loadEstimateToWorkspace(id) {
@@ -3439,7 +3439,7 @@ function loadEstimateToWorkspace(id) {
   saveState();
   updateNavigation();
   renderPage();
-  showToast('Pulled from the vault. Shim it, plane it, make it yours.', 'success');
+  showToast('Estimate loaded into editor.', 'success');
 }
 
 function viewEstimateDetail(id) {
@@ -3495,21 +3495,21 @@ function cycleTheme() {
 function saveAPIKey(value) {
   if (value && value.trim()) {
     localStorage.setItem('sc-anthropic-key', value.trim());
-    showToast('Key stashed. The engine should purr now.', 'success');
+    showToast('API key saved. AI-powered estimation enabled.', 'success');
   } else {
     localStorage.removeItem('sc-anthropic-key');
-    showToast('Key pulled. Back to roughsawn mode.', 'info');
+    showToast('API key removed. Using template-based estimates.', 'info');
   }
 }
 
 async function testAPIKey() {
   var key = localStorage.getItem('sc-anthropic-key');
   if (!key) {
-    showToast('No key in the chuck. Slot one in first.', 'warning');
+    showToast('No API key configured. Add one first.', 'warning');
     return;
   }
   try {
-    showToast('Checking the engine...', 'info');
+    showToast('Testing API connection...', 'info');
     var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -3525,7 +3525,7 @@ async function testAPIKey() {
       }),
     });
     if (response.ok) {
-      showToast('Engine\'s humming. Quartersaw is ready to crunchinate.', 'success');
+      showToast('Connection verified. Ready to generate AI estimates.', 'success');
     } else {
       var err = await response.text();
       showToast('API key invalid or expired. Check your key. (' + response.status + ')', 'error');
@@ -3539,7 +3539,7 @@ function resetAssumptions() {
   STATE.currentEstimate.assumptions = getDefaultAssumptions();
   saveState();
   renderPage();
-  showToast('Assumptions back to factory spec.', 'info');
+  showToast('Assumptions reset to defaults.', 'info');
 }
 
 
@@ -3636,7 +3636,7 @@ function exportAllData() {
     return;
   }
   var csv = rowsToCSV(allRows);
-  downloadFile(csv, 'quartersaw-all-estimates.csv', 'text/csv');
+  downloadFile(csv, 'structurecraft-all-estimates.csv', 'text/csv');
   showToast('All estimates exported as CSV.', 'success');
 }
 
@@ -3672,14 +3672,14 @@ function exportEstimateXLSX() {
 
   // --- Summary Tab ---
   var summaryData = [
-    ['Quartersaw — Structural Estimation Studio'],
+    ['StructureCraft Estimator'],
     [''],
     ['Project Information'],
     ['Project Name', est.name || ''],
     ['Client', est.client || ''],
     ['Location', est.location || ''],
     ['Project Type', est.projectType || ''],
-    ['Delivery Grain', model ? model.name : ''],
+    ['Delivery Model', model ? model.name : ''],
     ['Date', new Date().toLocaleDateString()],
     [''],
     ['Key Assumptions'],
@@ -3716,7 +3716,7 @@ function exportEstimateXLSX() {
 
   // --- Estimate Detail Tab ---
   var detailData = [
-    ['Quartersaw — Cut Sheet Detail'],
+    ['StructureCraft Estimator — Estimate Detail'],
     ['Project: ' + (est.name || 'Untitled')],
     [''],
     ['Phase', 'Description', 'Qty', 'Unit', 'Rate', 'Total'],
@@ -3845,7 +3845,7 @@ function exportAllDataXLSX() {
 
   // Summary sheet
   var summData = [
-    ['Quartersaw — The Vault Export'],
+    ['StructureCraft Estimator — All Estimates'],
     ['Exported: ' + new Date().toLocaleDateString()],
     [''],
     ['Project Name', 'Client', 'Location', 'Type', 'Delivery Model', 'Status', 'Total Cost'],
@@ -3882,7 +3882,7 @@ function exportAllDataXLSX() {
   wsDet['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsDet, 'All Line Items');
 
-  XLSX.writeFile(wb, 'quartersaw-all-estimates.xlsx');
+  XLSX.writeFile(wb, 'structurecraft-all-estimates.xlsx');
   showToast('All estimates exported as XLSX.', 'success');
 }
 
@@ -4197,16 +4197,16 @@ function showNotificationsPanel() {
 // ---- SECTION 11: ROUTING & RENDERING ----
 
 var PAGE_MAP = {
-  'input': { title: 'Workbench', render: renderInputPage, breadcrumb: 'Shop Floor > Workbench' },
-  'queue': { title: 'The Mill', render: renderQueuePage, breadcrumb: 'Shop Floor > The Mill' },
-  'output': { title: 'Cut Sheet', render: renderOutputPage, breadcrumb: 'Shop Floor > Cut Sheet' },
-  'footbridge': { title: 'Bridge Lab', render: renderFootbridgePage, breadcrumb: 'Shop Floor > Bridge Lab' },
-  'past-estimates': { title: 'The Vault', render: renderPastEstimatesPage, breadcrumb: 'Reference > The Vault' },
-  'connector': { title: 'Dovetail', render: renderConnectorPage, breadcrumb: 'Shop Floor > Dovetail' },
-  'pricing-library': { title: 'Rate Book', render: renderPricingLibraryPage, breadcrumb: 'Reference > Rate Book' },
-  'analytics': { title: 'The Ledger', render: renderAnalyticsPage, breadcrumb: 'Reference > The Ledger' },
-  'qa': { title: 'Sawdust Tips', render: renderQAPage, breadcrumb: 'Reference > Sawdust Tips' },
-  'settings': { title: 'The Workshop', render: renderSettingsPage, breadcrumb: 'Tuning > The Workshop' },
+  'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Workspace > Estimate Input' },
+  'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Workspace > Estimate Queue' },
+  'output': { title: 'Estimate Output', render: renderOutputPage, breadcrumb: 'Workspace > Estimate Output' },
+  'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Workspace > Footbridge Estimator' },
+  'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Reference > Past Estimates' },
+  'connector': { title: 'Connector', render: renderConnectorPage, breadcrumb: 'Workspace > Connector' },
+  'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Reference > Pricing Library' },
+  'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Reference > Analytics' },
+  'qa': { title: 'FAQ', render: renderQAPage, breadcrumb: 'Reference > FAQ' },
+  'settings': { title: 'Settings', render: renderSettingsPage, breadcrumb: 'System > Settings' },
 };
 
 function renderPage() {
@@ -4245,15 +4245,15 @@ function updateNavigation() {
 function renderUserGuide() {
   var guideContent = document.getElementById('guide-content');
   if (!guideContent) return;
-  guideContent.innerHTML = '<h4>Welcome to the Quartersaw Shop</h4>' +
-    '<p>This is where raw project data gets milled into plumb-true structural estimates. Feed it logs, get back lumber \u2014 faster, sharper, and with every board-foot accounted for.</p>' +
+  guideContent.innerHTML = '<h4>Getting Started</h4>' +
+    '<p>StructureCraft Estimator helps you generate structural cost estimates quickly and accurately using AI-powered document analysis.</p>' +
 
     '<div class="guide-steps">' +
-      '<div class="guide-step"><div class="guide-step-num">1</div><h5>Lay the Heartwood</h5><p>Hit the Workbench. Fill in project details, pick your delivery grain, and describe the scope.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">2</div><h5>Feed It Docs</h5><p>Drag and drop RFPs, drawings, and narratives into the upload zones. Up to 40 MB each.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">3</div><h5>Run the Mill</h5><p>Hit the button. Claude splinter-parses your documents, grain-maps the structure, and tally-forges a kerf-tight estimate.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">4</div><h5>Shim & Plane</h5><p>Edit line items, tweak assumptions, and fine-tune on the Cut Sheet until it is plumb-true.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">5</div><h5>Dovetail</h5><p>Pull reckonings from the Vault and benchmark against historical data.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">1</div><h5>Project Setup</h5><p>Open Estimate Input. Fill in project details, select your delivery model, and describe the scope.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">2</div><h5>Upload Documents</h5><p>Drag and drop RFPs, drawings, and narratives into the upload zones. Up to 40 MB each.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">3</div><h5>Generate</h5><p>Click Generate Estimate. Claude analyzes your documents, extracts structural data, and produces a detailed cost estimate.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">4</div><h5>Review & Adjust</h5><p>Edit line items, tweak assumptions, and fine-tune on the Estimate Output page.</p></div>' +
+      '<div class="guide-step"><div class="guide-step-num">5</div><h5>Compare</h5><p>Pull past estimates and benchmark against historical data.</p></div>' +
     '</div>' +
 
     '<h4>Delivery Models</h4>' +
@@ -4280,21 +4280,21 @@ function renderUserGuide() {
 // ---- SECTION 13: COMMAND PALETTE ----
 function initCommandPalette() {
   var commands = [
-    { label: 'Open the Workbench', action: function() { navigateTo('input'); }, icon: ICONS.input },
-    { label: 'View the Cut Sheet', action: function() { navigateTo('output'); }, icon: ICONS.output },
-    { label: 'Enter Bridge Lab', action: function() { navigateTo('footbridge'); }, icon: ICONS.footbridge },
-    { label: 'Browse the Vault', action: function() { navigateTo('past-estimates'); }, icon: ICONS.past },
-    { label: 'Open Dovetail', action: function() { navigateTo('connector'); }, icon: ICONS.connector },
-    { label: 'Flip the Rate Book', action: function() { navigateTo('pricing-library'); }, icon: ICONS.pricing },
-    { label: 'Check the Ledger', action: function() { navigateTo('analytics'); }, icon: ICONS.analytics },
-    { label: 'Check the Mill', action: function() { navigateTo('queue'); }, icon: ICONS.bolt },
-    { label: 'Sawdust Tips', action: function() { navigateTo('qa'); }, icon: ICONS.qa },
-    { label: 'The Workshop', action: function() { navigateTo('settings'); }, icon: ICONS.settings },
-    { label: 'Fresh Cut', action: function() { clearCurrentEstimate(); navigateTo('input'); }, icon: ICONS.plus },
-    { label: 'Run the Mill', action: generateEstimate, icon: ICONS.check },
-    { label: 'Stash Estimate', action: saveCurrentEstimate, icon: ICONS.check },
-    { label: 'Ship as XLSX', action: exportEstimateXLSX, icon: ICONS.download },
-    { label: 'Ship as CSV', action: exportEstimate, icon: ICONS.download },
+    { label: 'Open Estimate Input', action: function() { navigateTo('input'); }, icon: ICONS.input },
+    { label: 'View Estimate Output', action: function() { navigateTo('output'); }, icon: ICONS.output },
+    { label: 'Footbridge Estimator', action: function() { navigateTo('footbridge'); }, icon: ICONS.footbridge },
+    { label: 'Browse Past Estimates', action: function() { navigateTo('past-estimates'); }, icon: ICONS.past },
+    { label: 'Open Connector', action: function() { navigateTo('connector'); }, icon: ICONS.connector },
+    { label: 'Open Pricing Library', action: function() { navigateTo('pricing-library'); }, icon: ICONS.pricing },
+    { label: 'Open Analytics', action: function() { navigateTo('analytics'); }, icon: ICONS.analytics },
+    { label: 'View Estimate Queue', action: function() { navigateTo('queue'); }, icon: ICONS.bolt },
+    { label: 'FAQ', action: function() { navigateTo('qa'); }, icon: ICONS.qa },
+    { label: 'Settings', action: function() { navigateTo('settings'); }, icon: ICONS.settings },
+    { label: 'New Estimate', action: function() { clearCurrentEstimate(); navigateTo('input'); }, icon: ICONS.plus },
+    { label: 'Generate Estimate', action: generateEstimate, icon: ICONS.check },
+    { label: 'Save Estimate', action: saveCurrentEstimate, icon: ICONS.check },
+    { label: 'Export as XLSX', action: exportEstimateXLSX, icon: ICONS.download },
+    { label: 'Export as CSV', action: exportEstimate, icon: ICONS.download },
     { label: 'Ship Everything (XLSX)', action: exportAllDataXLSX, icon: ICONS.download },
     { label: 'Ship Everything (CSV)', action: exportAllData, icon: ICONS.download },
     { label: 'First-Timer Guide', action: toggleGuide, icon: ICONS.info },
