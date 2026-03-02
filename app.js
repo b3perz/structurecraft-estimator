@@ -376,6 +376,7 @@ var AI_STATE = {
   step: '',
   startTime: null,
   extractedText: {},
+  activityLog: [], // Live activity log entries: { time, icon, message }
 };
 
 // Estimate queue: tracks in-progress and completed estimates
@@ -878,6 +879,174 @@ function fmtDec(n, d=2) {
 function fmtPct(n) { return Number(n).toFixed(1) + '%'; }
 function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
 
+// ---- INDUSTRY BENCHMARKS ----
+// Used by validateEstimate() to gut-check AI and template outputs
+var INDUSTRY_BENCHMARKS = {
+  // Overall $/SF ranges by project type (direct costs before markup)
+  projectCostPerSF: {
+    commercial:  { low: 25, typical: 42, high: 65, label: 'Commercial Mass Timber' },
+    residential: { low: 22, typical: 38, high: 55, label: 'Residential Mass Timber' },
+    industrial:  { low: 18, typical: 30, high: 48, label: 'Industrial Mass Timber' },
+    institutional: { low: 30, typical: 50, high: 75, label: 'Institutional Mass Timber' },
+    mixed:       { low: 25, typical: 42, high: 65, label: 'Mixed-Use Mass Timber' },
+    footbridge:  { low: 400, typical: 700, high: 1200, label: 'Timber Footbridge (per LF)' },
+  },
+  // Category cost share benchmarks (% of direct costs)
+  costShares: {
+    bom:          { low: 35, typical: 50, high: 65, label: 'Materials & BOM' },
+    construction: { low: 20, typical: 32, high: 45, label: 'Construction' },
+    softCosts:    { low: 8,  typical: 15, high: 25, label: 'Professional Services' },
+  },
+  // Unit rate sanity checks — flagged if outside [low, high]
+  unitRates: [
+    { pattern: /glulam.*beam|beam.*glulam|df.*beam|beam.*df/i, unit: 'BF', low: 3.50, high: 7.00, label: 'Glulam beams' },
+    { pattern: /glulam.*col|col.*glulam|df.*col|col.*df/i, unit: 'BF', low: 3.50, high: 7.00, label: 'Glulam columns' },
+    { pattern: /clt.*3.*ply/i, unit: 'SF', low: 20, high: 34, label: 'CLT 3-ply' },
+    { pattern: /clt.*5.*ply/i, unit: 'SF', low: 28, high: 42, label: 'CLT 5-ply' },
+    { pattern: /clt.*7.*ply/i, unit: 'SF', low: 36, high: 55, label: 'CLT 7-ply' },
+    { pattern: /dlt/i, unit: 'SF', low: 16, high: 30, label: 'DLT' },
+    { pattern: /nlt/i, unit: 'SF', low: 10, high: 22, label: 'NLT' },
+    { pattern: /steel.*w.?shape|w.?shape|wide.*flange/i, unit: 'ton', low: 2200, high: 3800, label: 'Steel W-shapes' },
+    { pattern: /hss|tube.*steel/i, unit: 'ton', low: 2600, high: 4200, label: 'Steel HSS' },
+    { pattern: /carpenter|site.*carp/i, unit: 'hr', low: 75, high: 125, label: 'Site carpenters' },
+    { pattern: /labor(?:er)?/i, unit: 'hr', low: 50, high: 85, label: 'Laborers' },
+    { pattern: /super(?:visor|intendent)/i, unit: 'hr', low: 110, high: 175, label: 'Superintendents' },
+    { pattern: /engineer/i, unit: 'hr', low: 150, high: 250, label: 'Engineering' },
+    { pattern: /draft(?:ing|sman|sperson)/i, unit: 'hr', low: 85, high: 150, label: 'Drafting' },
+    { pattern: /crane.*50|50.*ton.*crane/i, unit: 'day', low: 3200, high: 5500, label: 'Crane 50T' },
+    { pattern: /crane.*100|100.*ton.*crane/i, unit: 'day', low: 5500, high: 10000, label: 'Crane 100T' },
+    { pattern: /pm|project.*manag/i, unit: 'hr', low: 130, high: 210, label: 'Project management' },
+    { pattern: /concrete.*4000|4000.*psi/i, unit: 'CY', low: 160, high: 280, label: 'Concrete 4000PSI' },
+    { pattern: /rebar|reinforc/i, unit: 'ton', low: 1400, high: 2400, label: 'Rebar' },
+  ],
+  // Quantity-per-SF sanity checks (for building projects only)
+  qtyPerSF: [
+    { pattern: /glulam.*beam|beam.*glulam|df.*beam/i, unit: 'BF', low: 0.18, high: 0.45, label: 'Timber beams BF/SF' },
+    { pattern: /glulam.*col|col.*glulam|df.*col/i, unit: 'BF', low: 0.06, high: 0.18, label: 'Timber columns BF/SF' },
+    { pattern: /site.*carp|carpenter/i, unit: 'hr', low: 0.020, high: 0.055, label: 'Site carpenter hr/SF' },
+    { pattern: /shop.*fab|fabricat.*labor/i, unit: 'hr', low: 0.012, high: 0.035, label: 'Shop fab labor hr/SF' },
+    { pattern: /crane/i, unit: 'day', low: 0.0002, high: 0.0008, label: 'Crane days/SF' },
+  ],
+};
+
+function validateEstimate(est, phaseKeys) {
+  var flags = [];
+  var buildingArea = est.buildingArea || 0;
+  var isFootbridge = est.deliveryModel === 'footbridge' || est.projectType === 'footbridge';
+  var projectType = est.projectType || 'commercial';
+
+  // Calculate totals
+  var directCosts = 0;
+  var allItems = [];
+  phaseKeys.forEach(function(pk) {
+    if (est.phases && est.phases[pk] && est.phases[pk].items) {
+      est.phases[pk].items.forEach(function(item) {
+        directCosts += (item.total || 0);
+        allItems.push(item);
+      });
+    }
+  });
+
+  // Classify items for cost share analysis
+  var bomTotal = 0, constructionTotal = 0, softTotal = 0;
+  var bomPhases = ['timber-material', 'steel-material', 'concrete-material', 'clt-material', 'dlt-material', 'mass-timber', 'structural-steel', 'misc-material', 'fb-fabrication'];
+  var constructionPhases = ['shop-fabrication', 'site-install', 'crane-rigging', 'shipping-logistics', 'fb-installation', 'fb-shipping', 'fb-foundations', 'fb-railing-finishes'];
+  var softPhases = ['timber-engineering', 'construction-engineering', 'site-supervision', 'coordination', 'general-conditions', 'fb-engineering', 'fb-general-conditions'];
+  phaseKeys.forEach(function(pk) {
+    if (!est.phases || !est.phases[pk]) return;
+    var phaseTotal = calcPhaseTotal(est.phases[pk]);
+    if (bomPhases.indexOf(pk) >= 0) bomTotal += phaseTotal;
+    else if (constructionPhases.indexOf(pk) >= 0) constructionTotal += phaseTotal;
+    else softTotal += phaseTotal;
+  });
+
+  // 1. Overall $/SF check
+  if (buildingArea > 0 && !isFootbridge) {
+    var costPerSF = directCosts / buildingArea;
+    var bench = INDUSTRY_BENCHMARKS.projectCostPerSF[projectType] || INDUSTRY_BENCHMARKS.projectCostPerSF.commercial;
+    if (costPerSF < bench.low) {
+      flags.push({ severity: 'warning', category: 'overall', message: 'Direct cost ' + fmtDec(costPerSF) + '/SF is below industry range (' + fmtDec(bench.low) + '-' + fmtDec(bench.high) + '/SF for ' + bench.label + '). Estimate may be missing scope.' });
+    } else if (costPerSF > bench.high) {
+      flags.push({ severity: 'danger', category: 'overall', message: 'Direct cost ' + fmtDec(costPerSF) + '/SF exceeds industry range (' + fmtDec(bench.low) + '-' + fmtDec(bench.high) + '/SF for ' + bench.label + '). Review quantities and rates.' });
+    } else {
+      flags.push({ severity: 'ok', category: 'overall', message: 'Direct cost ' + fmtDec(costPerSF) + '/SF is within industry range (' + fmtDec(bench.low) + '-' + fmtDec(bench.high) + '/SF for ' + bench.label + ').' });
+    }
+  }
+
+  // 2. Cost category share checks
+  if (directCosts > 0) {
+    var bomPct = bomTotal / directCosts * 100;
+    var conPct = constructionTotal / directCosts * 100;
+    var softPct = softTotal / directCosts * 100;
+    var bs = INDUSTRY_BENCHMARKS.costShares;
+
+    if (bomPct > bs.bom.high) {
+      flags.push({ severity: 'warning', category: 'share', message: 'Materials at ' + fmtPct(bomPct) + ' of direct costs — above typical range (' + bs.bom.low + '-' + bs.bom.high + '%). Check material quantities.' });
+    }
+    if (conPct > bs.construction.high) {
+      flags.push({ severity: 'warning', category: 'share', message: 'Construction at ' + fmtPct(conPct) + ' of direct costs — above typical range (' + bs.construction.low + '-' + bs.construction.high + '%). Check labor hours.' });
+    }
+    if (softPct > bs.softCosts.high) {
+      flags.push({ severity: 'warning', category: 'share', message: 'Professional services at ' + fmtPct(softPct) + ' of direct costs — above typical range (' + bs.softCosts.low + '-' + bs.softCosts.high + '%). Check engineering hours.' });
+    }
+  }
+
+  // 3. Unit rate checks per line item
+  allItems.forEach(function(item) {
+    if (!item.rate || !item.name) return;
+    INDUSTRY_BENCHMARKS.unitRates.forEach(function(bench) {
+      if (bench.pattern.test(item.name) && (!bench.unit || bench.unit === item.unit)) {
+        if (item.rate < bench.low * 0.7) {
+          flags.push({ severity: 'warning', category: 'rate', message: '"' + item.name + '" rate ' + fmtDec(item.rate) + '/' + item.unit + ' is below typical (' + fmtDec(bench.low) + '-' + fmtDec(bench.high) + '). May be unrealistically cheap.' });
+        } else if (item.rate > bench.high * 1.3) {
+          flags.push({ severity: 'danger', category: 'rate', message: '"' + item.name + '" rate ' + fmtDec(item.rate) + '/' + item.unit + ' exceeds typical (' + fmtDec(bench.low) + '-' + fmtDec(bench.high) + '). Review pricing.' });
+        }
+      }
+    });
+  });
+
+  // 4. Quantity-per-SF checks (building projects only)
+  if (buildingArea > 0 && !isFootbridge) {
+    allItems.forEach(function(item) {
+      if (!item.qty || !item.name) return;
+      INDUSTRY_BENCHMARKS.qtyPerSF.forEach(function(bench) {
+        if (bench.pattern.test(item.name) && (!bench.unit || bench.unit === item.unit)) {
+          var qtyPerSF = item.qty / buildingArea;
+          if (qtyPerSF > bench.high * 1.5) {
+            flags.push({ severity: 'danger', category: 'qty', message: '"' + item.name + '" qty factor ' + qtyPerSF.toFixed(4) + ' ' + item.unit + '/SF exceeds typical (' + bench.low.toFixed(3) + '-' + bench.high.toFixed(3) + '). Quantity may be inflated.' });
+          } else if (qtyPerSF < bench.low * 0.5) {
+            flags.push({ severity: 'warning', category: 'qty', message: '"' + item.name + '" qty factor ' + qtyPerSF.toFixed(4) + ' ' + item.unit + '/SF is below typical (' + bench.low.toFixed(3) + '-' + bench.high.toFixed(3) + '). May be underestimated.' });
+          }
+        }
+      });
+    });
+  }
+
+  // 5. Markup stack check
+  var a = est.assumptions;
+  var totalMarkup = (a.marginPercent || 0) + (a.overheadPercent || 0) + (a.contingencyPercent || 0) + (a.bondInsurancePercent || 0);
+  if (totalMarkup > 35) {
+    flags.push({ severity: 'warning', category: 'markup', message: 'Combined markup stack at ' + fmtPct(totalMarkup) + ' — above typical 25-32% range. This will significantly inflate the bid price.' });
+  }
+
+  // Calculate summary
+  var dangerCount = flags.filter(function(f) { return f.severity === 'danger'; }).length;
+  var warningCount = flags.filter(function(f) { return f.severity === 'warning'; }).length;
+  var okCount = flags.filter(function(f) { return f.severity === 'ok'; }).length;
+  var overallStatus = dangerCount > 0 ? 'danger' : warningCount > 0 ? 'warning' : 'ok';
+
+  return {
+    flags: flags,
+    dangerCount: dangerCount,
+    warningCount: warningCount,
+    okCount: okCount,
+    overallStatus: overallStatus,
+    directCosts: directCosts,
+    buildingArea: buildingArea,
+    costPerSF: buildingArea > 0 ? directCosts / buildingArea : 0,
+  };
+}
+
 function calcPhaseTotal(phase) {
   if (!phase || !phase.items) return 0;
   return phase.items.reduce((sum, item) => sum + (item.total || 0), 0);
@@ -1368,8 +1537,42 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
     (est.projectResearch ? '<div style="margin-top:12px; padding-top:10px; border-top: 1px solid var(--border);"><div style="font-size:0.68rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; margin-bottom:6px;">' + ICONS.search + ' Online Research Context</div><div style="font-size:0.78rem; color:var(--text-secondary); line-height:1.6;">' + est.projectResearch + '</div></div>' : '') +
   '</div>';
 
+  // Benchmark validation card
+  var benchmarkCard = '';
+  var validation = est.benchmarkValidation;
+  if (!validation && est.phases) {
+    // Run validation if not already stored
+    validation = validateEstimate(est, phaseKeys);
+  }
+  if (validation && validation.flags && validation.flags.length > 0) {
+    var statusColor = validation.overallStatus === 'danger' ? 'var(--danger)' : validation.overallStatus === 'warning' ? 'var(--warning)' : 'var(--success)';
+    var statusIcon = validation.overallStatus === 'ok' ? ICONS.check : ICONS.warning;
+    var statusText = validation.overallStatus === 'ok' ? 'All Benchmarks Pass' : (validation.dangerCount + validation.warningCount) + ' Item' + ((validation.dangerCount + validation.warningCount) > 1 ? 's' : '') + ' Flagged';
+    benchmarkCard = '<div class="card mb-16" style="border-left: 4px solid ' + statusColor + ';">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
+        '<div style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="color:' + statusColor + ';">' + statusIcon + '</span>' +
+          '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:' + statusColor + '; font-weight:700;">Industry Benchmark Check</div>' +
+        '</div>' +
+        '<div style="font-size:0.78rem; font-weight:600; color:' + statusColor + ';">' + statusText + '</div>' +
+      '</div>' +
+      (validation.costPerSF > 0 ? '<div style="font-size:0.82rem; color:var(--text-primary); margin-bottom:8px; font-family:JetBrains Mono, monospace;">' + fmtDec(validation.costPerSF) + '/SF direct costs' + (est.buildingArea ? ' (' + fmtNum(est.buildingArea) + ' SF)' : '') + '</div>' : '') +
+      '<div style="display:flex; flex-direction:column; gap:4px;">' +
+      validation.flags.map(function(flag) {
+        var fColor = flag.severity === 'danger' ? 'var(--danger)' : flag.severity === 'warning' ? 'var(--warning)' : 'var(--success)';
+        var fIcon = flag.severity === 'ok' ? ICONS.check : ICONS.warning;
+        return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.75rem; line-height:1.5; padding:3px 0;">' +
+          '<span style="color:' + fColor + '; flex-shrink:0; margin-top:1px;">' + fIcon + '</span>' +
+          '<span style="color:var(--text-secondary);">' + flag.message + '</span>' +
+        '</div>';
+      }).join('') +
+      '</div>' +
+    '</div>';
+  }
+
   return '<div class="slide-up">' +
     atAGlance +
+    benchmarkCard +
     // Grand totals card
     '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
@@ -3000,6 +3203,10 @@ function generateFootbridgeEstimate() {
     id: STATE.footbridgeEstimate && STATE.footbridgeEstimate.id ? STATE.footbridgeEstimate.id : generateId(),
   };
 
+  // Run benchmark validation on footbridge estimate
+  var fbPhaseKeys = DELIVERY_MODELS.footbridge.phases;
+  STATE.footbridgeEstimate.benchmarkValidation = validateEstimate(STATE.footbridgeEstimate, fbPhaseKeys);
+
   // Promote footbridge estimate into main output flow
   STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate));
   STATE.outputActiveTab = 'summary';
@@ -3217,6 +3424,15 @@ function buildAIPrompt(est, extractedTexts) {
     '- basis: Show the calculation or measurement logic. Reference actual dimensions, counts, and factors from the drawings. Be specific.\n' +
     '- source: Name the specific sheet, spec section, or scope description. Use "Scope description" or "Professional estimate" if not from a document.\n' +
     '- confidence: "high" = directly measured/counted from documents, "medium" = inferred or calculated from partial info, "low" = assumed or rough estimate.\n\n' +
+    'COST BENCHMARKS — CRITICAL: Your estimate MUST fall within these industry ranges. Self-check before responding:\n' +
+    '- Overall direct costs: $25-65/SF for commercial mass timber (supply + install + engineering). If your total $/SF is outside this, re-examine quantities.\n' +
+    '- Timber beams: 0.18-0.45 BF/SF of building area. Columns: 0.06-0.18 BF/SF.\n' +
+    '- Site carpenter labor: 0.020-0.055 hr/SF. Shop fabrication: 0.012-0.035 hr/SF.\n' +
+    '- Crane: 1 day per 2000-3500 SF (0.0003-0.0005 days/SF).\n' +
+    '- Engineering total: 0.010-0.020 hr/SF across all engineering disciplines.\n' +
+    '- Materials should be 35-65% of direct costs. Construction 20-45%. Professional services 8-25%.\n' +
+    '- Combined markup (overhead + margin + contingency + B&I): typically 25-32%.\n' +
+    '- If documents are sparse, err toward CONSERVATIVE (lower) estimates rather than inflated ones.\n\n' +
     'Phase keys to use: ' + phases.map(function(p) { return '"' + p + '"'; }).join(', ') + '\n' +
     'Be thorough. Include ALL structural elements visible in the documents. If you cannot determine exact quantities, provide your best professional estimate and note the uncertainty. The estimate should be complete and realistic.';
 
@@ -3292,6 +3508,16 @@ async function callClaude(prompt, apiKey) {
   return JSON.parse(content);
 }
 
+function logAIActivity(icon, message) {
+  var elapsed = AI_STATE.startTime ? Math.round((Date.now() - AI_STATE.startTime) / 1000) : 0;
+  var min = Math.floor(elapsed / 60);
+  var sec = elapsed % 60;
+  var ts = min > 0 ? min + 'm ' + sec + 's' : sec + 's';
+  AI_STATE.activityLog.push({ ts: ts, icon: icon, message: message });
+  // Keep only last 20 entries
+  if (AI_STATE.activityLog.length > 20) AI_STATE.activityLog = AI_STATE.activityLog.slice(-20);
+}
+
 function updateAIProgress(step, progress, currentStep, totalSteps, stepLabels) {
   AI_STATE.step = step;
   AI_STATE.progress = progress;
@@ -3319,6 +3545,24 @@ function updateAIProgress(step, progress, currentStep, totalSteps, stepLabels) {
     '</div>';
   }
 
+  // Build activity log HTML
+  var logHtml = '';
+  if (AI_STATE.activityLog.length > 0) {
+    var logEntries = AI_STATE.activityLog.slice(-8); // Show last 8 entries
+    logHtml = '<div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">' +
+      '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:600; margin-bottom:6px;">Live Activity</div>' +
+      '<div style="max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:3px;">' +
+      logEntries.map(function(entry) {
+        return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.72rem; line-height:1.4;">' +
+          '<span style="color:var(--text-muted); font-family:JetBrains Mono,monospace; flex-shrink:0; min-width:36px;">' + entry.ts + '</span>' +
+          '<span style="flex-shrink:0; width:14px; text-align:center;">' + entry.icon + '</span>' +
+          '<span style="color:var(--text-secondary);">' + entry.message + '</span>' +
+        '</div>';
+      }).join('') +
+      '</div>' +
+    '</div>';
+  }
+
   container.style.display = 'block';
   container.innerHTML = '<div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: left;">' +
     '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
@@ -3332,7 +3576,8 @@ function updateAIProgress(step, progress, currentStep, totalSteps, stepLabels) {
     '<div style="display:flex; flex-direction:column; gap:2px; margin-bottom:12px;">' +
       stepsHtml +
     '</div>' +
-    '<div style="font-size: 0.72rem; color: var(--text-muted);">' +
+    logHtml +
+    '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top:8px;">' +
       'You can navigate to other pages while this runs.' +
     '</div>' +
   '</div>';
@@ -3375,19 +3620,20 @@ function generateTemplateEstimate(est, model) {
   var roofMat = getMatPrice('roofs');
 
   // Calculate quantities based on material type
+  // Industry benchmarks: timber beams ~0.28-0.35 BF/SF, columns ~0.10-0.15 BF/SF
   var beamQty, beamUnit, beamRate, colQty, colUnit, colRate;
   if (beamMat.category === 'timber') {
-    beamQty = Math.round(totalArea * 0.56); beamUnit = 'BF'; beamRate = beamMat.pricePer;
+    beamQty = Math.round(totalArea * 0.32); beamUnit = 'BF'; beamRate = beamMat.pricePer;
   } else if (beamMat.category === 'steel') {
-    beamQty = Math.round(totalArea / 4000 * 10) / 10; beamUnit = 'ton'; beamRate = beamMat.pricePer;
+    beamQty = Math.round(totalArea / 5000 * 10) / 10; beamUnit = 'ton'; beamRate = beamMat.pricePer;
   } else {
     beamQty = Math.round(totalArea * 0.02); beamUnit = 'LF'; beamRate = beamMat.pricePer;
   }
 
   if (colMat.category === 'timber') {
-    colQty = Math.round(totalArea * 0.24); colUnit = 'BF'; colRate = colMat.pricePer;
+    colQty = Math.round(totalArea * 0.12); colUnit = 'BF'; colRate = colMat.pricePer;
   } else if (colMat.category === 'steel') {
-    colQty = Math.round(totalArea / 6000 * 10) / 10; colUnit = 'ton'; colRate = colMat.pricePer;
+    colQty = Math.round(totalArea / 8000 * 10) / 10; colUnit = 'ton'; colRate = colMat.pricePer;
   } else {
     colQty = Math.round(totalArea * 0.01); colUnit = 'LF'; colRate = colMat.pricePer;
   }
@@ -3395,8 +3641,8 @@ function generateTemplateEstimate(est, model) {
   var floorQty = Math.round(totalArea * 0.85);
   var roofQty = Math.round(totalArea / stories * 0.95);
 
-  var steelTonsCalc = Math.round(totalArea / 4000 * 10) / 10;
-  var carpHrsCalc = Math.round(totalArea * 0.06);
+  var steelTonsCalc = Math.round(totalArea / 5500 * 10) / 10;
+  var carpHrsCalc = Math.round(totalArea * 0.035);
 
   var SRC = 'Template parametric model';
   var CONF = 'medium';
@@ -3414,42 +3660,42 @@ function generateTemplateEstimate(est, model) {
       { name: 'CA Services', qty: Math.round(50 + stories * 12), unit: 'hr', rate: a.engHourlyRate, basis: '50 base hr + ' + stories + ' stories \u00d7 12 hr/story = ' + Math.round(50 + stories * 12) + ' hr', source: SRC, confidence: CONF },
     ],
     'timber-engineering': [
-      { name: 'Shop Drawing Engineering', qty: Math.round(totalArea * 0.008), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.008 hr/SF = ' + Math.round(totalArea * 0.008) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Erection Engineering', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Connection Design', qty: Math.round(totalArea * 0.004), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.004 hr/SF = ' + Math.round(totalArea * 0.004) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Drafting / Detailing', qty: Math.round(totalArea * 0.01), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.01 hr/SF = ' + Math.round(totalArea * 0.01) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Shop Drawing Engineering', qty: Math.round(totalArea * 0.005), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.005 hr/SF = ' + Math.round(totalArea * 0.005) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Erection Engineering', qty: Math.round(totalArea * 0.0012), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.0012 hr/SF = ' + Math.round(totalArea * 0.0012) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Connection Design', qty: Math.round(totalArea * 0.0025), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.0025 hr/SF = ' + Math.round(totalArea * 0.0025) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Drafting / Detailing', qty: Math.round(totalArea * 0.006), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.006 hr/SF = ' + Math.round(totalArea * 0.006) + ' hr', source: SRC, confidence: CONF },
     ],
     'construction-engineering': [
-      { name: 'Construction Phase Engineering', qty: Math.round(totalArea * 0.003), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.003 hr/SF = ' + Math.round(totalArea * 0.003) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Construction Drafting', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Construction Phase Engineering', qty: Math.round(totalArea * 0.002), unit: 'hr', rate: 180, basis: fmtNum(totalArea) + ' SF \u00d7 0.002 hr/SF = ' + Math.round(totalArea * 0.002) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Construction Drafting', qty: Math.round(totalArea * 0.0012), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.0012 hr/SF = ' + Math.round(totalArea * 0.0012) + ' hr', source: SRC, confidence: CONF },
     ],
     'fabrication': [
-      { name: beamMat.label + ' Beams', qty: beamQty, unit: beamUnit, rate: beamRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (beamMat.category === 'timber' ? '0.56 BF/SF' : beamMat.category === 'steel' ? '1/4000 ton/SF' : '0.02 LF/SF') + ' = ' + fmtNum(beamQty) + ' ' + beamUnit, source: SRC, confidence: CONF },
-      { name: colMat.label + ' Columns', qty: colQty, unit: colUnit, rate: colRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (colMat.category === 'timber' ? '0.24 BF/SF' : colMat.category === 'steel' ? '1/6000 ton/SF' : '0.01 LF/SF') + ' = ' + fmtNum(colQty) + ' ' + colUnit, source: SRC, confidence: CONF },
+      { name: beamMat.label + ' Beams', qty: beamQty, unit: beamUnit, rate: beamRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (beamMat.category === 'timber' ? '0.32 BF/SF' : beamMat.category === 'steel' ? '1/5000 ton/SF' : '0.02 LF/SF') + ' = ' + fmtNum(beamQty) + ' ' + beamUnit, source: SRC, confidence: CONF },
+      { name: colMat.label + ' Columns', qty: colQty, unit: colUnit, rate: colRate, basis: fmtNum(totalArea) + ' SF \u00d7 ' + (colMat.category === 'timber' ? '0.12 BF/SF' : colMat.category === 'steel' ? '1/8000 ton/SF' : '0.01 LF/SF') + ' = ' + fmtNum(colQty) + ' ' + colUnit, source: SRC, confidence: CONF },
       { name: floorMat.label + ' Floor Panels', qty: floorQty, unit: floorMat.unit, rate: floorMat.pricePer, basis: fmtNum(totalArea) + ' SF \u00d7 0.85 coverage factor = ' + fmtNum(floorQty) + ' ' + floorMat.unit, source: SRC, confidence: CONF },
       { name: roofMat.label + ' Roof', qty: roofQty, unit: roofMat.unit, rate: roofMat.pricePer, basis: fmtNum(totalArea) + ' SF / ' + stories + ' stories \u00d7 0.95 coverage = ' + fmtNum(roofQty) + ' ' + roofMat.unit, source: SRC, confidence: CONF },
-      { name: 'Steel Connections', qty: steelTonsCalc, unit: 'ton', rate: a.steelConnectionsTon || 4500, basis: fmtNum(totalArea) + ' SF / 4,000 SF/ton = ' + steelTonsCalc + ' ton', source: SRC, confidence: CONF },
-      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.0), basis: fmtNum(totalArea) + ' SF \u00d7 $1.00/SF allowance', source: SRC, confidence: 'low' },
-      { name: 'Shop Fabrication Labor', qty: Math.round(totalArea * 0.04), unit: 'hr', rate: a.shopHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.04 hr/SF = ' + Math.round(totalArea * 0.04) + ' hr', source: SRC, confidence: CONF },
-      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.8), basis: fmtNum(totalArea) + ' SF \u00d7 $0.80/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Steel Connections', qty: steelTonsCalc, unit: 'ton', rate: a.steelConnectionsTon || 4500, basis: fmtNum(totalArea) + ' SF / 5,500 SF/ton = ' + steelTonsCalc + ' ton', source: SRC, confidence: CONF },
+      { name: 'Fasteners & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.65), basis: fmtNum(totalArea) + ' SF \u00d7 $0.65/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Shop Fabrication Labor', qty: Math.round(totalArea * 0.022), unit: 'hr', rate: a.shopHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.022 hr/SF = ' + Math.round(totalArea * 0.022) + ' hr', source: SRC, confidence: CONF },
+      { name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.50), basis: fmtNum(totalArea) + ' SF \u00d7 $0.50/SF allowance', source: SRC, confidence: 'low' },
     ],
     'shipping': [
-      { name: 'Flatbed Trucks', qty: Math.max(5, Math.round(totalArea / 3000)), unit: 'truck', rate: a.shippingPerTruck || 4500, basis: fmtNum(totalArea) + ' SF / 3,000 SF/truck = ' + Math.max(5, Math.round(totalArea / 3000)) + ' trucks (min 5)', source: SRC, confidence: CONF },
-      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(totalArea / 15000)), unit: 'each', rate: 2500, basis: fmtNum(totalArea) + ' SF / 15,000 SF/permit = ' + Math.max(1, Math.round(totalArea / 15000)) + ' permits (min 1)', source: SRC, confidence: 'low' },
-      { name: 'Logistics Coordination', qty: Math.round(totalArea * 0.001), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.001 hr/SF = ' + Math.round(totalArea * 0.001) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Flatbed Trucks', qty: Math.max(3, Math.round(totalArea / 4000)), unit: 'truck', rate: a.shippingPerTruck || 4500, basis: fmtNum(totalArea) + ' SF / 4,000 SF/truck = ' + Math.max(3, Math.round(totalArea / 4000)) + ' trucks (min 3)', source: SRC, confidence: CONF },
+      { name: 'Oversized Load Permits', qty: Math.max(1, Math.round(totalArea / 20000)), unit: 'each', rate: 2500, basis: fmtNum(totalArea) + ' SF / 20,000 SF/permit = ' + Math.max(1, Math.round(totalArea / 20000)) + ' permits (min 1)', source: SRC, confidence: 'low' },
+      { name: 'Logistics Coordination', qty: Math.round(totalArea * 0.0008), unit: 'hr', rate: a.draftHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.0008 hr/SF = ' + Math.round(totalArea * 0.0008) + ' hr', source: SRC, confidence: CONF },
     ],
     'installation': [
-      { name: 'Site Carpenters', qty: carpHrsCalc, unit: 'hr', rate: a.siteCarpentrHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.06 hr/SF = ' + fmtNum(carpHrsCalc) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Site Laborers', qty: Math.round(carpHrsCalc * 0.35), unit: 'hr', rate: a.siteLaborHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.35 laborer ratio = ' + Math.round(carpHrsCalc * 0.35) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Site Superintendent', qty: Math.round(carpHrsCalc * 0.2), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.20 super ratio = ' + Math.round(carpHrsCalc * 0.2) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Mobile Crane', qty: Math.round(totalArea / 1500), unit: 'day', rate: a.craneDailyRate, basis: fmtNum(totalArea) + ' SF / 1,500 SF/day = ' + Math.round(totalArea / 1500) + ' days', source: SRC, confidence: CONF },
-      { name: 'Crane Operator', qty: Math.round(totalArea / 1500 * 8), unit: 'hr', rate: a.craneOperatorHourlyRate, basis: Math.round(totalArea / 1500) + ' crane days \u00d7 8 hr/day = ' + Math.round(totalArea / 1500 * 8) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.4), basis: fmtNum(totalArea) + ' SF \u00d7 $0.40/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Site Carpenters', qty: carpHrsCalc, unit: 'hr', rate: a.siteCarpentrHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.035 hr/SF = ' + fmtNum(carpHrsCalc) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Site Laborers', qty: Math.round(carpHrsCalc * 0.30), unit: 'hr', rate: a.siteLaborHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.30 laborer ratio = ' + Math.round(carpHrsCalc * 0.30) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Site Superintendent', qty: Math.round(carpHrsCalc * 0.18), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.18 super ratio = ' + Math.round(carpHrsCalc * 0.18) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Mobile Crane', qty: Math.round(totalArea / 2500), unit: 'day', rate: a.craneDailyRate, basis: fmtNum(totalArea) + ' SF / 2,500 SF/day = ' + Math.round(totalArea / 2500) + ' days', source: SRC, confidence: CONF },
+      { name: 'Crane Operator', qty: Math.round(totalArea / 2500 * 8), unit: 'hr', rate: a.craneOperatorHourlyRate, basis: Math.round(totalArea / 2500) + ' crane days \u00d7 8 hr/day = ' + Math.round(totalArea / 2500 * 8) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.25), basis: fmtNum(totalArea) + ' SF \u00d7 $0.25/SF allowance', source: SRC, confidence: 'low' },
     ],
     'general-conditions': [
-      { name: 'Project Management', qty: Math.round(totalArea * 0.007), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.007 hr/SF = ' + Math.round(totalArea * 0.007) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5), basis: fmtNum(totalArea) + ' SF \u00d7 $1.50/SF allowance', source: SRC, confidence: 'low' },
-      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.5), basis: fmtNum(totalArea) + ' SF \u00d7 $1.50/SF contingency allowance', source: SRC, confidence: 'low' },
+      { name: 'Project Management', qty: Math.round(totalArea * 0.005), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.005 hr/SF = ' + Math.round(totalArea * 0.005) + ' hr', source: SRC, confidence: CONF },
+      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.85), basis: fmtNum(totalArea) + ' SF \u00d7 $0.85/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.75), basis: fmtNum(totalArea) + ' SF \u00d7 $0.75/SF contingency allowance', source: SRC, confidence: 'low' },
     ],
     'dlt-material': [
       { name: 'DLT Panels - Standard', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: a.dltPriceSF, basis: fmtNum(totalArea) + ' SF \u00d7 0.70 coverage factor = ' + fmtNum(Math.round(totalArea * 0.7)) + ' SF', source: SRC, confidence: CONF },
@@ -3489,6 +3735,11 @@ function generateTemplateEstimate(est, model) {
 
   est.totalCost = calcEstimateTotal(est);
   est.updatedAt = new Date().toISOString();
+
+  // Run benchmark validation on template estimate
+  var templatePhaseKeys = model.phases;
+  est.benchmarkValidation = validateEstimate(est, templatePhaseKeys);
+
   saveState();
 }
 
@@ -3497,8 +3748,9 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
   AI_STATE.estimateId = est.id;
   AI_STATE.startTime = Date.now();
   AI_STATE.progress = 0;
+  AI_STATE.activityLog = [];
 
-  var totalSteps = 6;
+  var totalSteps = 7;
   var currentStep = 0;
   var STEP_LABELS = [
     '', // 0 unused
@@ -3507,6 +3759,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     'Structural Takeoff & Analysis',
     'Quantity Validation',
     'Cost Assembly',
+    'Benchmark Validation',
     'Final Calculations',
   ];
 
@@ -3524,10 +3777,12 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
   try {
     // Step 1: Extract text from uploaded documents
     setStage(1, 'Parsing PDF drawings and specifications...', 3);
+    logAIActivity(ICONS.file, 'Starting document extraction...');
     var files = getAllUploadedFiles();
     var extractedTexts = '';
 
     if (files.length > 0) {
+      logAIActivity(ICONS.file, 'Found ' + files.length + ' document' + (files.length > 1 ? 's' : '') + ' to process');
       for (var i = 0; i < files.length; i++) {
         var fileMsg = 'Extracting text: ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')';
         var filePct = 3 + (i / files.length * 10);
@@ -3536,15 +3791,22 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
         if (isPDF) {
           var text = await extractTextFromPDF(files[i].file);
           extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + text;
+          var pageCount = (text.match(/--- Page \d+ ---/g) || []).length;
+          logAIActivity(ICONS.check, 'Extracted ' + (pageCount || '?') + ' pages from ' + files[i].meta.name);
         } else {
           try {
             var textContent = await files[i].file.text();
             extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' ===\n' + textContent;
+            logAIActivity(ICONS.check, 'Read text from ' + files[i].meta.name);
           } catch(e) {
             extractedTexts += '\n\n=== ' + files[i].category.toUpperCase() + ': ' + files[i].meta.name + ' === [Binary file - could not extract text]';
+            logAIActivity(ICONS.warning, 'Could not extract text from ' + files[i].meta.name);
           }
         }
       }
+      logAIActivity(ICONS.info, 'Total extracted text: ' + Math.round(extractedTexts.length / 1000) + ' KB');
+    } else {
+      logAIActivity(ICONS.info, 'No documents uploaded — using scope description only');
     }
 
     if (!extractedTexts.trim()) {
@@ -3553,14 +3815,15 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
 
     if (extractedTexts.length > 180000) {
       extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
+      logAIActivity(ICONS.warning, 'Text truncated to 180KB (was ' + Math.round(extractedTexts.length / 1000) + 'KB)');
     }
 
     // Step 2: Online project research
     setStage(2, 'Gathering public project context...', 15);
+    logAIActivity(ICONS.search, 'Researching project context...');
     var researchContext = '';
     if (est.name || est.location) {
       try {
-        // Build search context from project info for the AI prompt
         var searchTerms = [est.name, est.location, est.client, est.projectType].filter(Boolean).join(' ');
         researchContext = '\nPROJECT RESEARCH CONTEXT: ' +
           'Project "' + (est.name || '') + '" in ' + (est.location || 'unknown location') +
@@ -3571,19 +3834,23 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
           ' | Project: ' + (est.name || 'N/A') +
           ' | Client: ' + (est.client || 'N/A') +
           ' | Local factors: building codes, seismic zone, climate, and regional labor rates considered in estimate.';
-      } catch(e) { /* skip research on error */ }
+        logAIActivity(ICONS.check, 'Project context: ' + (est.projectType || 'commercial') + ' in ' + (est.location || 'unknown'));
+      } catch(e) { logAIActivity(ICONS.warning, 'Research context skipped'); }
     }
     setStage(2, 'Research context assembled', 17);
 
     // Step 3: Claude AI structural takeoff & analysis — this is the long wait
     setStage(3, 'Claude is reading drawings and performing structural takeoff...', 20);
+    logAIActivity(ICONS.bolt, 'Sending ' + model.phases.length + ' phases to Claude for analysis...');
+    logAIActivity(ICONS.info, 'Delivery model: ' + model.name);
     var prompt = buildAIPrompt(est, extractedTexts + researchContext);
+    logAIActivity(ICONS.info, 'Prompt size: ' + Math.round(prompt.length / 1000) + ' KB');
 
     // Start a progress animation interval during the API call
     var apiStartTime = Date.now();
+    var lastLogTime = 0;
     var apiProgressInterval = setInterval(function() {
       var apiElapsed = (Date.now() - apiStartTime) / 1000;
-      // Logarithmic curve: fast initially, slows down. Caps at ~70%
       var animPct = 20 + Math.min(50, 50 * (1 - Math.exp(-apiElapsed / 60)));
       var mins = Math.floor(apiElapsed / 60);
       var secs = Math.floor(apiElapsed % 60);
@@ -3594,8 +3861,16 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
         'Cross-referencing specs with structural calculations',
         'Verifying takeoff quantities against drawing schedules',
         'Building line items with derivation rationale',
+        'Compiling cost structure with benchmark checks',
       ];
-      var msgIdx = Math.min(Math.floor(apiElapsed / 15), stepMsgs.length - 1);
+      var msgIdx = Math.min(Math.floor(apiElapsed / 12), stepMsgs.length - 1);
+
+      // Log periodic updates during the API call
+      if (apiElapsed - lastLogTime >= 15) {
+        lastLogTime = apiElapsed;
+        logAIActivity('<span class="ai-step-spinner"></span>', stepMsgs[msgIdx]);
+      }
+
       updateQueue({ step: stepMsgs[msgIdx] + ' (' + elapsedStr + ')', progress: Math.round(animPct), currentStep: 3, totalSteps: totalSteps, stepLabels: STEP_LABELS });
       updateAIProgress(stepMsgs[msgIdx] + ' (' + elapsedStr + ')', Math.round(animPct), 3, totalSteps, STEP_LABELS);
     }, 2000);
@@ -3607,11 +3882,15 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       clearInterval(apiProgressInterval);
     }
 
+    var apiDuration = Math.round((Date.now() - apiStartTime) / 1000);
+    logAIActivity(ICONS.check, 'Claude response received in ' + apiDuration + 's');
+
     // Step 4: Validate quantities from AI response
-    setStage(4, 'Validating AI quantities and rates...', 75);
+    setStage(4, 'Parsing AI response and building line items...', 72);
 
     if (!est.phases) est.phases = {};
 
+    var totalItemCount = 0;
     if (aiResult.phases) {
       model.phases.forEach(function(pk) {
         if (aiResult.phases[pk] && aiResult.phases[pk].length > 0) {
@@ -3623,16 +3902,20 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
             }),
           };
           est.phases[pk].subtotal = calcPhaseTotal(est.phases[pk]);
+          totalItemCount += est.phases[pk].items.length;
+          var phaseName = PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk;
+          logAIActivity(ICONS.check, phaseName + ': ' + est.phases[pk].items.length + ' items, ' + fmt(est.phases[pk].subtotal));
         } else if (!est.phases[pk] || est.phases[pk].items.length === 0) {
           est.phases[pk] = { items: [], subtotal: 0 };
         }
       });
     }
+    logAIActivity(ICONS.info, 'Total: ' + totalItemCount + ' line items across ' + model.phases.length + ' phases');
 
     // Store AI metadata
-    if (aiResult.buildingArea) est.buildingArea = aiResult.buildingArea;
-    if (aiResult.numStories) est.numStories = aiResult.numStories;
-    if (aiResult.gridSpacing) est.gridSpacing = aiResult.gridSpacing;
+    if (aiResult.buildingArea) { est.buildingArea = aiResult.buildingArea; logAIActivity(ICONS.building, 'Building area: ' + fmtNum(aiResult.buildingArea) + ' SF'); }
+    if (aiResult.numStories) { est.numStories = aiResult.numStories; logAIActivity(ICONS.building, 'Stories: ' + aiResult.numStories); }
+    if (aiResult.gridSpacing) { est.gridSpacing = aiResult.gridSpacing; logAIActivity(ICONS.building, 'Grid spacing: ' + aiResult.gridSpacing); }
     if (aiResult.floorToFloor) est.floorToFloor = aiResult.floorToFloor;
     est.aiModel = 'claude';
 
@@ -3644,12 +3927,38 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
     // Step 5: Assemble cost structure
-    setStage(5, 'Assembling cost structure and phase totals...', 85);
-
-    // Step 6: Finalize calculations
-    setStage(6, 'Computing markups, margins, and grand total...', 92);
-
+    setStage(5, 'Assembling cost structure and phase totals...', 80);
     est.totalCost = calcEstimateTotal(est);
+    logAIActivity(ICONS.pricing, 'Direct costs subtotal: ' + fmt(est.totalCost));
+
+    // Step 6: Benchmark validation
+    setStage(6, 'Running industry benchmark validation...', 87);
+    logAIActivity(ICONS.analytics, 'Checking estimate against industry benchmarks...');
+
+    var phaseKeys = model.phases;
+    var validation = validateEstimate(est, phaseKeys);
+    est.benchmarkValidation = validation;
+
+    // Log validation findings
+    if (validation.costPerSF > 0) {
+      logAIActivity(ICONS.info, 'Cost/SF: ' + fmtDec(validation.costPerSF) + '/SF direct');
+    }
+    validation.flags.forEach(function(flag) {
+      if (flag.severity === 'danger') {
+        logAIActivity(ICONS.warning, flag.message);
+      } else if (flag.severity === 'warning') {
+        logAIActivity(ICONS.info, flag.message);
+      }
+    });
+    if (validation.dangerCount === 0 && validation.warningCount === 0) {
+      logAIActivity(ICONS.check, 'All benchmarks pass — estimate is within industry ranges');
+    } else {
+      logAIActivity(ICONS.warning, validation.dangerCount + ' issue(s) and ' + validation.warningCount + ' warning(s) flagged');
+    }
+
+    // Step 7: Finalize calculations
+    setStage(7, 'Computing markups, margins, and grand total...', 93);
+
     est.updatedAt = new Date().toISOString();
 
     // Save completed estimate to library
@@ -3661,6 +3970,8 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     }
     saveState();
 
+    logAIActivity(ICONS.check, 'Estimate complete: ' + fmt(est.totalCost) + ' direct costs');
+
     // Update queue item to completed
     updateQueue({ status: 'completed', progress: 100, step: 'Complete', completedTime: Date.now(), totalCost: est.totalCost, estimateData: JSON.parse(JSON.stringify(est)) });
     logActivity('Estimate completed', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
@@ -3671,6 +3982,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (STATE.currentPage === 'queue') renderPage();
 
   } catch(err) {
+    logAIActivity(ICONS.warning, 'Error: ' + err.message);
     hideAIProgress();
     AI_STATE.processing = false;
     console.error('AI estimation error:', err);
@@ -3685,7 +3997,14 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       showToast('AI error — using template estimator. (' + err.message + ')', 'warning');
     }
 
+    logAIActivity(ICONS.bolt, 'Falling back to template estimator...');
     generateTemplateEstimate(est, model);
+
+    // Run benchmark validation on template estimate too
+    var phaseKeys2 = model.phases;
+    var validation2 = validateEstimate(est, phaseKeys2);
+    est.benchmarkValidation = validation2;
+
     est.aiNotes = est.aiNotes || [];
     est.aiNotes.unshift('Generated via template engine (no AI). Add an API key in Settings to enable Claude-powered analysis.');
     est.totalCost = calcEstimateTotal(est);
