@@ -1,6 +1,6 @@
 // ============================================
-// STRUCTURECRAFT ESTIMATOR PRO v2.0
-// Complete Mass Timber Estimating Platform
+// STRUCTURECRAFT ESTIMATOR PRO v3.0
+// Complete Structural Estimating Platform
 // ============================================
 
 // ---- SECTION 1: ICONS ----
@@ -41,6 +41,13 @@ const ICONS = {
   footbridge: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18h20"/><path d="M4 18v-4"/><path d="M20 18v-4"/><path d="M4 14c0-4 3.6-8 8-8s8 4 8 8"/><path d="M4 14h16"/><path d="M8 14v-2M12 14v-4M16 14v-2"/></svg>',
   locationPin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
 };
+
+// ---- SECTION 1B: PROXY CONFIGURATION ----
+// Claude API proxy - routes requests through a secure server-side proxy
+// so users don't need their own API key. Deploy the included worker.js
+// to Cloudflare Workers (or any edge provider) with your ANTHROPIC_API_KEY
+// set as an environment secret.
+var CLAUDE_PROXY_URL = 'https://sc-estimator-proxy.structurecraft.workers.dev';
 
 // ---- SECTION 2: THEME DEFINITIONS ----
 const THEMES = [
@@ -95,6 +102,7 @@ function createNewEstimate() {
     rfiNotes: '',
     clientComms: '',
     contractorNotes: '',
+    primaryMaterial: 'timber',
     structuralSystem: 'post-beam',
     materials: {
       beams: 'glulam-df',
@@ -213,7 +221,53 @@ const BRIDGE_TYPES = {
   'king-post-truss': { name: 'King Post Truss', description: 'Simple truss with single vertical post and two diagonals' },
 };
 
-// ---- SECTION 5C: MATERIAL OPTIONS ----
+// ---- SECTION 5C: PRIMARY MATERIAL CATEGORIES ----
+const PRIMARY_MATERIALS = {
+  'timber': { name: 'Timber', description: 'Mass timber and engineered wood structural systems' },
+  'steel': { name: 'Steel', description: 'Structural steel framing systems' },
+  'concrete': { name: 'Concrete', description: 'Reinforced and precast concrete systems' },
+  'hybrid': { name: 'Hybrid', description: 'Combined material systems (e.g., timber + concrete core)' },
+};
+
+// ---- SECTION 5D: STRUCTURAL SYSTEM SUBTYPES ----
+const STRUCTURAL_SUBTYPES = {
+  'timber': [
+    { value: 'post-beam', name: 'Post & Beam', description: 'Glulam columns and beams with panel floor/roof diaphragms' },
+    { value: 'post-girder-beam', name: 'Post, Girder & Beam', description: 'Primary girder grid with secondary beams and panel decking' },
+    { value: 'point-supported', name: 'Post & Plate (Point-Supported)', description: 'CLT flat-plate system on columns, no beams' },
+    { value: 'panel-bearing-wall', name: 'Panel / Bearing Wall', description: 'CLT load-bearing wall panels with floor diaphragms (platform construction)' },
+    { value: 'heavy-timber-frame', name: 'Heavy Timber Frame', description: 'Large-section glulam or sawn timber frame with traditional or modern connections' },
+  ],
+  'steel': [
+    { value: 'moment-frame', name: 'Moment Frame', description: 'Rigid beam-column connections resist lateral loads (SMF/IMF/OMF)' },
+    { value: 'braced-frame', name: 'Concentrically Braced Frame', description: 'Diagonal bracing elements resist lateral loads (CBF)' },
+    { value: 'ebf', name: 'Eccentrically Braced Frame', description: 'Offset braces with link beam as seismic fuse (EBF)' },
+    { value: 'composite-steel', name: 'Composite (Steel + Concrete Deck)', description: 'Steel beams with composite concrete deck via shear studs' },
+    { value: 'steel-joist', name: 'Open-Web Steel Joist', description: 'SJI joists with metal deck for long spans and light loads' },
+    { value: 'steel-truss', name: 'Truss System', description: 'Custom steel trusses for long-span roof or floor structures' },
+    { value: 'pemb', name: 'Pre-Engineered Metal Building', description: 'Manufacturer-designed tapered frame for industrial/warehouse' },
+  ],
+  'concrete': [
+    { value: 'cip-frame', name: 'Cast-in-Place Frame', description: 'Reinforced concrete beams, columns, and slabs' },
+    { value: 'cip-flat-plate', name: 'CIP Flat Plate / Flat Slab', description: 'Uniform slab on columns with no beams, common for residential towers' },
+    { value: 'pt-slab', name: 'Post-Tensioned Flat Slab', description: 'PT slab on columns, efficient for parking and multi-storey commercial' },
+    { value: 'pt-band-beam', name: 'PT Band Beam + Slab', description: 'Wide shallow PT beams in one direction with PT slab spanning the other' },
+    { value: 'precast-frame', name: 'Precast Frame', description: 'Factory-produced columns, beams, and hollow-core plank floors' },
+    { value: 'tilt-up', name: 'Tilt-Up', description: 'Site-cast concrete wall panels tilted into place, common for industrial/retail' },
+    { value: 'cip-shearwall', name: 'Shear Wall System', description: 'RC shear walls with flat slab or beam-slab gravity floors' },
+  ],
+  'hybrid': [
+    { value: 'timber-concrete-core', name: 'Mass Timber + Concrete Core', description: 'Timber superstructure with RC elevator/stair core for lateral' },
+    { value: 'timber-steel-core', name: 'Mass Timber + Steel Core', description: 'Timber superstructure with steel braced frame core' },
+    { value: 'concrete-podium-timber', name: 'Concrete Podium + Mass Timber', description: 'RC podium (1-4 storeys) with mass timber above' },
+    { value: 'steel-timber-hybrid', name: 'Steel Frame + Timber Deck', description: 'Steel beams/columns with CLT or DLT floor and roof panels' },
+    { value: 'timber-clt-shearwall', name: 'Timber Frame + CLT Shear Walls', description: 'Glulam post-and-beam gravity with CLT lateral walls (all-timber)' },
+    { value: 'tcc-floor', name: 'Timber-Concrete Composite Floor', description: 'CLT or NLT panel with structural concrete topping via shear connectors' },
+    { value: 'steel-concrete-core', name: 'Steel Frame + Concrete Core', description: 'Steel gravity frame with RC shear wall/core for lateral' },
+  ],
+};
+
+// ---- SECTION 5E: MATERIAL OPTIONS ----
 const MATERIAL_OPTIONS = {
   beams: {
     label: 'Beams',
@@ -888,22 +942,32 @@ function renderInputPage() {
       '</div>' +
     '</div>' +
 
-    '<!-- Structural System -->' +
+    '<!-- Primary Material & Structural System -->' +
     '<div class="card mb-16">' +
       '<div class="card-header">' +
-        '<div class="card-title">' + ICONS.building + ' Structural System</div>' +
+        '<div>' +
+          '<div class="card-title">' + ICONS.building + ' Structural System</div>' +
+          '<div class="card-subtitle">Select primary material, then structural system type. Material selections below will update accordingly.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-row" style="margin-bottom:12px;">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Primary Material</label>' +
+          '<div class="material-toggle-group">' +
+            Object.entries(PRIMARY_MATERIALS).map(function(entry) {
+              var key = entry[0], mat = entry[1];
+              return '<button class="material-toggle-btn ' + ((est.primaryMaterial || 'timber') === key ? 'active' : '') + '" onclick="setPrimaryMaterial(\'' + key + '\')" title="' + mat.description + '">' + mat.name + '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
       '</div>' +
       '<div class="form-row">' +
         '<div class="form-group">' +
-          '<label class="form-label">Structural System</label>' +
+          '<label class="form-label">Structural System Type</label>' +
           '<select class="form-select" onchange="updateEstimate(\'structuralSystem\', this.value)">' +
-            '<option value="post-beam"' + (est.structuralSystem==='post-beam'?' selected':'') + '>Post-and-Beam</option>' +
-            '<option value="panel-system"' + (est.structuralSystem==='panel-system'?' selected':'') + '>Panel System</option>' +
-            '<option value="hybrid"' + (est.structuralSystem==='hybrid'?' selected':'') + '>Hybrid (Timber + Steel/Concrete)</option>' +
-            '<option value="heavy-timber"' + (est.structuralSystem==='heavy-timber'?' selected':'') + '>Heavy Timber</option>' +
-            '<option value="mass-timber"' + (est.structuralSystem==='mass-timber'?' selected':'') + '>Mass Timber (CLT/DLT)</option>' +
-            '<option value="steel-frame"' + (est.structuralSystem==='steel-frame'?' selected':'') + '>Steel Frame</option>' +
-            '<option value="concrete-frame"' + (est.structuralSystem==='concrete-frame'?' selected':'') + '>Concrete Frame</option>' +
+            (STRUCTURAL_SUBTYPES[est.primaryMaterial || 'timber'] || []).map(function(st) {
+              return '<option value="' + st.value + '"' + (est.structuralSystem === st.value ? ' selected' : '') + '>' + st.name + ' -- ' + st.description + '</option>';
+            }).join('') +
           '</select>' +
         '</div>' +
       '</div>' +
@@ -913,8 +977,8 @@ function renderInputPage() {
     '<div class="card mb-16">' +
       '<div class="card-header">' +
         '<div>' +
-          '<div class="card-title">' + ICONS.building + ' Material Selections</div>' +
-          '<div class="card-subtitle">Select the primary material for each structural element. These selections drive pricing in the estimate.</div>' +
+          '<div class="card-title">' + ICONS.building + ' Element Materials</div>' +
+          '<div class="card-subtitle">Select the specific material for each structural element. Options are filtered by your primary material choice. These drive estimate pricing.</div>' +
         '</div>' +
       '</div>' +
       renderMaterialSelect('beams', est) +
@@ -1035,19 +1099,11 @@ function renderInputPage() {
 
     '<!-- Generate Estimate Button -->' +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
-      (localStorage.getItem('sc-anthropic-key') ?
-        '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
-          'Claude AI-powered estimation is active. Upload drawings and click <strong>Generate Estimate</strong> to analyze your documents. ' +
-          'Claude Opus 4.6 with extended thinking will read through your drawing set, perform a detailed quantity takeoff, and generate a comprehensive estimate. ' +
-          'This may take 1-2 minutes depending on document size.' +
-        '</p>'
-      :
-        '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
-          'Upload your drawing set and click <strong>Generate Estimate</strong>. ' +
-          'For AI-powered PDF analysis, add your Anthropic API key in <strong>Settings</strong>. ' +
-          'Without an API key, a template-based estimate will be generated based on your scope description and material selections.' +
-        '</p>'
-      ) +
+      '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">' +
+        'Upload your drawing set and click <strong>Generate Estimate</strong>. ' +
+        'Claude Opus 4.6 with extended thinking will read through your documents, perform a detailed quantity takeoff, and generate a comprehensive estimate. ' +
+        'This may take 1-2 minutes depending on document size.' +
+      '</p>' +
       '<button class="btn btn-lg btn-accent" onclick="generateEstimate()" id="btn-generate" style="padding: 14px 40px; font-size: 1rem;">' +
         ICONS.bolt + ' Generate Estimate' +
       '</button>' +
@@ -1073,6 +1129,7 @@ function renderFileList(files, category) {
 function renderMaterialSelect(elementType, est) {
   var mat = MATERIAL_OPTIONS[elementType];
   if (!mat) return '';
+  var primaryCat = est.primaryMaterial || 'timber';
   var current = (est.materials && est.materials[elementType]) || mat.options[0].value;
   var currentOpt = mat.options.find(function(o) { return o.value === current; });
   var categoryLabel = currentOpt ? currentOpt.category : '';
@@ -1081,28 +1138,50 @@ function renderMaterialSelect(elementType, est) {
   else if (categoryLabel === 'steel') categoryBadge = '<span class="badge badge-sent" style="font-size:0.65rem; padding:2px 6px; margin-left:8px;">Steel</span>';
   else if (categoryLabel === 'concrete') categoryBadge = '<span class="badge badge-draft" style="font-size:0.65rem; padding:2px 6px; margin-left:8px;">Concrete</span>';
 
+  // Show primary category options first, then others under "Other Materials"
+  var primaryOpts = mat.options.filter(function(o) { return o.category === primaryCat || (primaryCat === 'hybrid' && o.category === 'timber'); });
+  var otherOpts = mat.options.filter(function(o) { return o.category !== primaryCat && !(primaryCat === 'hybrid' && o.category === 'timber'); });
+
   return '<div class="form-row" style="margin-bottom:8px;">' +
     '<div class="form-group" style="flex:1;">' +
       '<label class="form-label">' + mat.label + categoryBadge + '</label>' +
       '<select class="form-select" onchange="updateMaterial(\'' + elementType + '\', this.value)">' +
-        '<optgroup label="Timber">' +
-          mat.options.filter(function(o) { return o.category === 'timber'; }).map(function(o) {
-            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
+        (primaryOpts.length > 0 ? '<optgroup label="' + (PRIMARY_MATERIALS[primaryCat] ? PRIMARY_MATERIALS[primaryCat].name : primaryCat) + '">' +
+          primaryOpts.map(function(o) {
+            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + ' (' + o.pricePer + '/' + o.unit + ')</option>';
           }).join('') +
-        '</optgroup>' +
-        '<optgroup label="Steel">' +
-          mat.options.filter(function(o) { return o.category === 'steel'; }).map(function(o) {
-            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
+        '</optgroup>' : '') +
+        (otherOpts.length > 0 ? '<optgroup label="Other Materials">' +
+          otherOpts.map(function(o) {
+            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + ' (' + o.pricePer + '/' + o.unit + ')</option>';
           }).join('') +
-        '</optgroup>' +
-        '<optgroup label="Concrete">' +
-          mat.options.filter(function(o) { return o.category === 'concrete'; }).map(function(o) {
-            return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + '</option>';
-          }).join('') +
-        '</optgroup>' +
+        '</optgroup>' : '') +
       '</select>' +
     '</div>' +
   '</div>';
+}
+
+function setPrimaryMaterial(category) {
+  var est = STATE.currentEstimate;
+  est.primaryMaterial = category;
+  // Set default structural system for the new category
+  var subtypes = STRUCTURAL_SUBTYPES[category];
+  if (subtypes && subtypes.length > 0) {
+    est.structuralSystem = subtypes[0].value;
+  }
+  // Auto-set default materials matching the primary category
+  var matDefaults = {
+    'timber': { beams: 'glulam-df', columns: 'glulam-df', girders: 'glulam-df', posts: 'glulam-df', floors: 'clt-5ply', roofs: 'clt-3ply' },
+    'steel': { beams: 'steel-w', columns: 'steel-w', girders: 'steel-w', posts: 'steel-hss-sq', floors: 'composite-deck', roofs: 'steel-deck' },
+    'concrete': { beams: 'concrete-cip', columns: 'concrete-cip', girders: 'concrete-cip', posts: 'concrete-cip', floors: 'concrete-metal-deck', roofs: 'concrete-slab' },
+    'hybrid': { beams: 'glulam-df', columns: 'glulam-df', girders: 'glulam-df', posts: 'glulam-df', floors: 'clt-5ply', roofs: 'clt-3ply' },
+  };
+  if (matDefaults[category]) {
+    est.materials = Object.assign({}, matDefaults[category]);
+  }
+  est.updatedAt = new Date().toISOString();
+  saveState();
+  renderPage();
 }
 
 function updateMaterial(elementType, value) {
@@ -1740,13 +1819,15 @@ function renderSettingsPage() {
       '</div>' +
     '</div>' +
 
-    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Connect your Anthropic API key to enable Claude-powered PDF analysis and quantity takeoff</div></div></div>' +
-      '<div class="form-row">' +
-        '<div class="form-group" style="flex: 2;">' +
-          '<label class="form-label">Anthropic API Key</label>' +
-          '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
-          '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored only in your browser\'s localStorage and sent directly to Anthropic. It is never stored on any server.</div>' +
+    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">' + ICONS.bolt + ' AI Configuration</div><div class="card-subtitle">Claude AI is built-in and ready to use. Optionally configure model selection or use your own API key.</div></div></div>' +
+      '<div style="padding: 12px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);">' +
+        '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">' +
+          '<span style="color: var(--success);">' + ICONS.check + '</span>' +
+          '<span style="font-weight: 600; color: var(--text-primary); font-size: 0.88rem;">Claude AI is active</span>' +
         '</div>' +
+        '<div style="font-size: 0.78rem; color: var(--text-muted);">Claude-powered PDF analysis and quantity takeoff is ready. Upload documents and click Generate Estimate to use it.</div>' +
+      '</div>' +
+      '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Claude Model</label>' +
           '<select class="form-select" onchange="localStorage.setItem(\'sc-anthropic-model\', this.value)">' +
@@ -1756,10 +1837,22 @@ function renderSettingsPage() {
           '</select>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-top: 12px;">' +
-        '<button class="btn btn-sm" onclick="testAPIKey()">Test Connection</button>' +
-        (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' API key configured</span>' : '') +
-      '</div>' +
+      '<details style="margin-top: 16px;">' +
+        '<summary style="cursor: pointer; font-size: 0.8rem; color: var(--text-muted); user-select: none;">Advanced: Use your own API key</summary>' +
+        '<div style="margin-top: 12px;">' +
+          '<div class="form-row">' +
+            '<div class="form-group" style="flex: 2;">' +
+              '<label class="form-label">Anthropic API Key (Optional)</label>' +
+              '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
+              '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">If set, requests go directly to Anthropic from your browser. Otherwise the built-in proxy is used.</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top: 8px;">' +
+            '<button class="btn btn-sm" onclick="testAPIKey()">Test Key</button>' +
+            (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' Custom key active</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</details>' +
     '</div>' +
 
     '<div class="card mb-20"><div class="card-header"><div class="card-title">Data Management</div></div>' +
@@ -1803,10 +1896,10 @@ function generateBridgeSVG(config) {
     svg += '<line x1="' + gi + '" y1="' + groundY + '" x2="' + (gi - 8) + '" y2="' + (groundY + 10) + '" stroke="var(--text-primary)" stroke-width="0.8" opacity="0.5"/>';
   }
 
-  // Draw abutments
+  // Draw abutments (wireframe - no fill)
   var abutW = 16, abutH = 80;
-  svg += '<rect x="' + (leftX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="var(--text-primary)" opacity="0.25" stroke="var(--text-primary)" stroke-width="1.5"/>';
-  svg += '<rect x="' + (rightX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="var(--text-primary)" opacity="0.25" stroke="var(--text-primary)" stroke-width="1.5"/>';
+  svg += '<rect x="' + (leftX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
+  svg += '<rect x="' + (rightX - abutW/2) + '" y="' + (groundY - abutH) + '" width="' + abutW + '" height="' + abutH + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
 
   if (bType === 'parabolic-arch') {
     var archTopY = deckY - spanPx * rise;
@@ -1895,8 +1988,8 @@ function generateBridgeSVG(config) {
 
   } else if (bType === 'clear-span-beam') {
     var beamH = 8;
-    svg += '<rect x="' + leftX + '" y="' + (deckY - beamH) + '" width="' + spanPx + '" height="' + beamH + '" fill="var(--accent)" opacity="0.8" rx="2"/>';
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<rect x="' + leftX + '" y="' + (deckY - beamH) + '" width="' + spanPx + '" height="' + beamH + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="2"/>';
     // Camber indication
     var camberPath = 'M ' + leftX + ' ' + (deckY - beamH);
     for (var ci = 0; ci <= 20; ci++) {
@@ -1908,23 +2001,23 @@ function generateBridgeSVG(config) {
     svg += '<path d="' + camberPath + '" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>';
 
   } else if (bType === 'multi-span-beam') {
-    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
+    svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="2"/>';
     var beamHM = 8;
-    svg += '<rect x="' + leftX + '" y="' + (deckY - beamHM) + '" width="' + spanPx + '" height="' + beamHM + '" fill="var(--accent)" opacity="0.6" rx="2"/>';
-    // Intermediate piers
+    svg += '<rect x="' + leftX + '" y="' + (deckY - beamHM) + '" width="' + spanPx + '" height="' + beamHM + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
+    // Intermediate piers (wireframe)
     var pierW = 12;
     for (var si = 1; si < nSpans; si++) {
       var pierX = leftX + (si / nSpans) * spanPx;
-      svg += '<rect x="' + (pierX - pierW/2) + '" y="' + (deckY) + '" width="' + pierW + '" height="' + (groundY - deckY) + '" fill="var(--text-primary)" opacity="0.3" stroke="var(--text-primary)" stroke-width="1.5"/>';
+      svg += '<rect x="' + (pierX - pierW/2) + '" y="' + (deckY) + '" width="' + pierW + '" height="' + (groundY - deckY) + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7"/>';
       // Pier cap
-      svg += '<rect x="' + (pierX - pierW) + '" y="' + (deckY - 4) + '" width="' + (pierW * 2) + '" height="' + 6 + '" fill="var(--text-primary)" opacity="0.4" rx="1"/>';
+      svg += '<rect x="' + (pierX - pierW) + '" y="' + (deckY - 4) + '" width="' + (pierW * 2) + '" height="' + 6 + '" fill="none" stroke="var(--text-primary)" stroke-width="1.5" opacity="0.7" rx="1"/>';
     }
 
   } else if (bType === 'cable-stayed') {
     // Tower
     var towerX = leftX + spanPx * 0.5;
     var towerTop = deckY - spanPx * 0.35;
-    svg += '<line x1="' + towerX + '" y1="' + towerTop + '" x2="' + towerX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="5"/>';
+    svg += '<line x1="' + towerX + '" y1="' + towerTop + '" x2="' + towerX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
     // Deck
     svg += '<line x1="' + leftX + '" y1="' + deckY + '" x2="' + rightX + '" y2="' + deckY + '" stroke="var(--accent)" stroke-width="3"/>';
     // Cables
@@ -1997,19 +2090,19 @@ function renderFootbridgePage() {
           '</select>' +
         '</div>' +
       '</div>' +
-      '<div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">' +
+      '<div id="fb-svg-container" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">' +
         bridgeSvg +
       '</div>' +
       '<div class="form-row">' +
         '<div class="form-group">' +
-          '<label class="form-label">Span Length: ' + cfg.spanLength + 'm</label>' +
-          '<input type="range" min="10" max="100" step="1" value="' + cfg.spanLength + '" style="width:100%;" oninput="updateFootbridgeConfig(\'spanLength\', parseInt(this.value))">' +
+          '<label class="form-label">Span Length: <span id="fb-label-span">' + cfg.spanLength + '</span>m</label>' +
+          '<input type="range" min="10" max="100" step="1" value="' + cfg.spanLength + '" class="fb-slider" oninput="updateFootbridgeConfig(\'spanLength\', parseInt(this.value))">' +
         '</div>' +
-        (isArch ? '<div class="form-group"><label class="form-label">Arch Rise Ratio: ' + cfg.archRise.toFixed(2) + '</label><input type="range" min="0.10" max="0.50" step="0.01" value="' + cfg.archRise + '" style="width:100%;" oninput="updateFootbridgeConfig(\'archRise\', parseFloat(this.value))"></div>' : '') +
-        (isMulti ? '<div class="form-group"><label class="form-label">Number of Spans: ' + cfg.numSpans + '</label><input type="range" min="2" max="5" step="1" value="' + cfg.numSpans + '" style="width:100%;" oninput="updateFootbridgeConfig(\'numSpans\', parseInt(this.value))"></div>' : '') +
+        (isArch ? '<div class="form-group"><label class="form-label">Arch Rise Ratio: <span id="fb-label-rise">' + cfg.archRise.toFixed(2) + '</span></label><input type="range" min="0.10" max="0.50" step="0.01" value="' + cfg.archRise + '" class="fb-slider" oninput="updateFootbridgeConfig(\'archRise\', parseFloat(this.value))"></div>' : '') +
+        (isMulti ? '<div class="form-group"><label class="form-label">Number of Spans: <span id="fb-label-spans">' + cfg.numSpans + '</span></label><input type="range" min="2" max="5" step="1" value="' + cfg.numSpans + '" class="fb-slider" oninput="updateFootbridgeConfig(\'numSpans\', parseInt(this.value))"></div>' : '') +
         '<div class="form-group">' +
-          '<label class="form-label">Clear Width: ' + cfg.clearWidth.toFixed(1) + 'm</label>' +
-          '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" style="width:100%;" oninput="updateFootbridgeConfig(\'clearWidth\', parseFloat(this.value))">' +
+          '<label class="form-label">Clear Width: <span id="fb-label-width">' + cfg.clearWidth.toFixed(1) + '</span>m</label>' +
+          '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" class="fb-slider" oninput="updateFootbridgeConfig(\'clearWidth\', parseFloat(this.value))">' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -2114,8 +2207,38 @@ function renderFootbridgePage() {
   '</div>';
 }
 
+var _fbRafId = null;
 function updateFootbridgeConfig(key, value) {
   STATE.footbridgeConfig[key] = value;
+
+  // Fast path: for slider changes, only update the SVG and label instead of full page re-render
+  if (key === 'spanLength' || key === 'archRise' || key === 'clearWidth' || key === 'numSpans') {
+    if (_fbRafId) cancelAnimationFrame(_fbRafId);
+    _fbRafId = requestAnimationFrame(function() {
+      _fbRafId = null;
+      // Update SVG
+      var svgContainer = document.getElementById('fb-svg-container');
+      if (svgContainer) {
+        svgContainer.innerHTML = generateBridgeSVG(STATE.footbridgeConfig);
+      }
+      // Update slider labels
+      var labelMap = {
+        spanLength: 'fb-label-span',
+        archRise: 'fb-label-rise',
+        clearWidth: 'fb-label-width',
+        numSpans: 'fb-label-spans',
+      };
+      var labelEl = document.getElementById(labelMap[key]);
+      if (labelEl) {
+        if (key === 'archRise') labelEl.textContent = value.toFixed(2);
+        else if (key === 'clearWidth') labelEl.textContent = value.toFixed(1);
+        else labelEl.textContent = value;
+      }
+    });
+    return;
+  }
+
+  // Full re-render for bridge type changes
   renderPage();
 }
 
@@ -2578,6 +2701,7 @@ function buildAIPrompt(est, extractedTexts) {
     '  Location: ' + (est.location || 'N/A') + '\n' +
     '  Project Type: ' + (est.projectType || 'commercial') + '\n' +
     '  Delivery Model: ' + (model ? model.name : 'N/A') + '\n' +
+    '  Primary Material: ' + (PRIMARY_MATERIALS[est.primaryMaterial] ? PRIMARY_MATERIALS[est.primaryMaterial].name : 'Timber') + '\n' +
     '  Structural System: ' + (est.structuralSystem || 'post-beam') + '\n\n' +
     'SELECTED MATERIALS:\n' + materialDesc + '\n' +
     'SCOPE DESCRIPTION:\n' + (est.scopeDescription || 'No description provided') + '\n\n' +
@@ -2640,16 +2764,30 @@ async function callClaude(prompt, apiKey) {
   // Add system prompt
   requestBody.system = 'You are an expert structural engineer and cost estimator with decades of experience in mass timber, steel, and concrete construction. You perform meticulous quantity takeoffs from construction documents. Respond only with valid JSON. Do not include any markdown formatting, code fences, or explanation outside the JSON object.';
 
-  var response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  var response;
+
+  if (apiKey) {
+    // Direct API call with user's own key
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } else {
+    // Use proxy (API key held server-side)
+    response = await fetch(CLAUDE_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  }
 
   if (!response.ok) {
     var errText = await response.text();
@@ -2845,7 +2983,7 @@ function generateTemplateEstimate(est, model) {
     'This estimate was generated using template-based calculations (no AI analysis).',
     'Building area estimated at ' + fmtNum(area) + ' SF (' + stories + ' stories) based on scope description.',
     'Material selections were used to determine unit pricing. Quantities are approximate.',
-    'For more accurate estimates, upload drawings and add your Anthropic API key in Settings for Claude-powered analysis.',
+    'For more accurate estimates, upload your drawing set and generate an AI-powered estimate.',
   ];
 
   est.totalCost = calcEstimateTotal(est);
@@ -2896,7 +3034,7 @@ async function generateAIEstimate(est, model, apiKey) {
     // Step 2: Build and send AI prompt
     updateAIProgress('Claude is analyzing documents and performing quantity takeoff (extended thinking active)...', 45);
     var prompt = buildAIPrompt(est, extractedTexts);
-    var aiResult = await callClaude(prompt, apiKey);
+    var aiResult = await callClaude(prompt, apiKey || null);
 
     // Step 3: Parse AI response
     updateAIProgress('Building estimate from AI analysis...', 80);
@@ -2966,21 +3104,11 @@ function generateEstimate() {
   }
 
   var apiKey = localStorage.getItem('sc-anthropic-key');
-  var hasFiles = getAllUploadedFiles().length > 0;
+  var useProxy = !apiKey || !apiKey.trim();
 
-  if (apiKey && apiKey.trim()) {
-    // AI-powered estimation using Claude
-    generateAIEstimate(est, model, apiKey.trim());
-    showToast('Claude AI analysis started. You can navigate to other pages while it processes.', 'info');
-  } else {
-    // Template-based estimation (fallback)
-    generateTemplateEstimate(est, model);
-    STATE.currentPage = 'output';
-    STATE.outputActiveTab = 'summary';
-    renderPage();
-    updateNavigation();
-    showToast('Estimate generated using templates. Add your Anthropic API key in Settings for Claude-powered analysis.', 'success');
-  }
+  // Always use Claude AI -- via proxy (default) or direct with user's key
+  generateAIEstimate(est, model, useProxy ? null : apiKey.trim());
+  showToast('Claude AI analysis started. You can navigate to other pages while it processes.', 'info');
 }
 
 function saveCurrentEstimate() {
@@ -3667,7 +3795,7 @@ function renderUserGuide() {
   var guideContent = document.getElementById('guide-content');
   if (!guideContent) return;
   guideContent.innerHTML = '<h4>Welcome to StructureCraft Estimator Pro</h4>' +
-    '<p>Your all-in-one Mass Timber estimating platform. Build estimates faster, compare with historical data, and produce accurate fee proposals -- all from one unified workspace.</p>' +
+    '<p>Your all-in-one structural estimating platform. Build estimates faster, compare with historical data, and produce accurate fee proposals -- all from one unified workspace.</p>' +
 
     '<div class="guide-steps">' +
       '<div class="guide-step"><div class="guide-step-num">1</div><h5>Define Scope</h5><p>Fill in project details, select delivery model, and describe the scope in the Input tab.</p></div>' +

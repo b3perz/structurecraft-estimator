@@ -814,6 +814,65 @@ a { color: var(--accent); text-decoration: none; }
 .radio-info p { font-size: 0.75rem; color: var(--text-muted); margin: 0; line-height: 1.4; }
 
 /* --- DELIVERY MODEL SELECTOR --- */
+/* --- FOOTBRIDGE SLIDERS --- */
+.fb-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.fb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: grab;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.fb-slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+.fb-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: grab;
+  border: 2px solid var(--bg-primary);
+}
+#fb-svg-container svg { transition: none; }
+
+/* --- MATERIAL TOGGLE BUTTONS --- */
+.material-toggle-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.material-toggle-btn {
+  padding: 8px 20px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.material-toggle-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+.material-toggle-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
 .delivery-model-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
