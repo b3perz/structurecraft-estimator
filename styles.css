@@ -1777,6 +1777,34 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .delivery-model-card.active .dm-icon-svg { color: var(--accent); }
 
+/* Notifications Panel */
+.notif-panel {
+  position: fixed;
+  top: 52px;
+  right: 16px;
+  width: 380px;
+  max-height: 80vh;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 1000;
+  overflow-y: auto;
+}
+@media (max-width: 480px) {
+  .notif-panel { width: calc(100vw - 32px); right: 16px; }
+}
+
+/* Material volume table */
+.vol-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.vol-table th { text-align: left; padding: 8px 10px; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.vol-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+.vol-table td.mono { font-family: 'JetBrains Mono', monospace; text-align: right; }
+.vol-table tr:last-child td { border-bottom: none; }
+.vol-table .vol-cat-header td { font-weight: 700; color: var(--text-primary); background: var(--bg-tertiary); font-size: 0.8rem; padding: 6px 10px; }
+.vol-table .vol-total td { font-weight: 700; color: var(--accent); border-top: 2px solid var(--accent); font-size: 0.88rem; }
+.vol-table .vol-grand-total td { font-weight: 700; color: var(--text-primary); font-size: 1rem; background: var(--surface-2, var(--bg-tertiary)); border-top: 3px double var(--text-primary); }
+
 /* --- PRINT --- */
 @media print {
   #sidebar, #topbar, .user-guide, .connector-panel, #toast-container, #command-palette, #modal-overlay { display: none !important; }
