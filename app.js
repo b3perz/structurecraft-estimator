@@ -1320,8 +1320,9 @@ function renderOutputPage() {
 }
 
 function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) {
-  // Extract material volumes from line items across all phases
-  var materialVolumes = extractMaterialVolumes(est, phaseKeys);
+  var classified = classifyEstimateItems(est, phaseKeys);
+
+  var tableHead = '<thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th></tr></thead>';
 
   return '<div class="slide-up">' +
     // Grand totals card
@@ -1339,11 +1340,65 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
       '</div>' +
     '</div>' +
 
+    // Direct cost breakdown: 3 categories side by side
+    (subtotal > 0 ?
+      '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px;">' +
+        '<div class="card" style="padding:14px; text-align:center;">' +
+          '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Materials & BOM</div>' +
+          '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.bomTotal) + '</div>' +
+          '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.bomTotal / subtotal * 100) : '0%') + ' of direct</div>' +
+        '</div>' +
+        '<div class="card" style="padding:14px; text-align:center;">' +
+          '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Construction</div>' +
+          '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.constructionTotal) + '</div>' +
+          '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.constructionTotal / subtotal * 100) : '0%') + ' of direct</div>' +
+        '</div>' +
+        '<div class="card" style="padding:14px; text-align:center;">' +
+          '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Professional Services</div>' +
+          '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.softCost) + '</div>' +
+          '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.softCost / subtotal * 100) : '0%') + ' of direct</div>' +
+        '</div>' +
+      '</div>'
+    : '') +
+
     '<div class="output-summary">' +
-      // Left column: Phase breakdown + Material volumes
+      // Left column: BOM + Construction tables
+      '<div>' +
+        // Bill of Materials table
+        (classified.bomRows.length > 0 ?
+          '<div class="card mb-16">' +
+            '<div class="card-title mb-12">Bill of Materials</div>' +
+            '<table class="vol-table">' + tableHead +
+              '<tbody>' + classified.bomRows.join('') + '</tbody>' +
+            '</table>' +
+          '</div>'
+        : '') +
+
+        // Construction costs table
+        (classified.constructionRows.length > 0 ?
+          '<div class="card mb-16">' +
+            '<div class="card-title mb-12">Construction Costs</div>' +
+            '<table class="vol-table">' + tableHead +
+              '<tbody>' + classified.constructionRows.join('') + '</tbody>' +
+            '</table>' +
+          '</div>'
+        : '') +
+
+        // Professional services table
+        (classified.softRows.length > 0 ?
+          '<div class="card mb-16">' +
+            '<div class="card-title mb-12">Professional Services</div>' +
+            '<table class="vol-table">' + tableHead +
+              '<tbody>' + classified.softRows.join('') + '</tbody>' +
+            '</table>' +
+          '</div>'
+        : '') +
+      '</div>' +
+
+      // Right column: Phase breakdown + Markup
       '<div>' +
         '<div class="card mb-16">' +
-          '<div class="card-title mb-12">Cost Breakdown by Phase</div>' +
+          '<div class="card-title mb-12">Cost by Phase</div>' +
           '<div class="mini-chart">' +
             phaseKeys.map(function(pk) {
               var phaseTotal = est.phases && est.phases[pk] ? calcPhaseTotal(est.phases[pk]) : 0;
@@ -1361,24 +1416,8 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
           '</div>' +
         '</div>' +
 
-        // Material volume breakout
-        (materialVolumes.rows.length > 0 ?
-          '<div class="card mb-16">' +
-            '<div class="card-title mb-12">Material Volume Breakout</div>' +
-            '<table class="vol-table">' +
-              '<thead><tr><th>Material / Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th></tr></thead>' +
-              '<tbody>' +
-                materialVolumes.rows.join('') +
-              '</tbody>' +
-            '</table>' +
-          '</div>'
-        : '') +
-      '</div>' +
-
-      // Right column: Cost summary + Markup breakdown
-      '<div>' +
         '<div class="card mb-16">' +
-          '<div class="card-title mb-12">Cost Summary</div>' +
+          '<div class="card-title mb-12">Markup & Overhead</div>' +
           '<div class="summary-row"><span class="summary-row-label">Direct Costs (Subtotal)</span><span class="summary-row-value">' + fmt(subtotal) + '</span></div>' +
           '<div class="summary-divider"></div>' +
           '<div class="summary-row"><span class="summary-row-label">Overhead (' + fmtPct(est.assumptions.overheadPercent) + ')</span><span class="summary-row-value">' + fmt(overhead) + '</span></div>' +
@@ -1392,11 +1431,11 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
           '</div>' +
         '</div>' +
 
-        // Category totals summary
-        (materialVolumes.catTotals.length > 0 ?
+        // Material cost breakdown card
+        (classified.bomCatTotals.length > 0 ?
           '<div class="card">' +
-            '<div class="card-title mb-12">Material Cost by Category</div>' +
-            materialVolumes.catTotals.map(function(cat) {
+            '<div class="card-title mb-12">Material Cost Breakdown</div>' +
+            classified.bomCatTotals.map(function(cat) {
               var pct2 = subtotal > 0 ? (cat.cost / subtotal * 100) : 0;
               return '<div class="summary-row" style="margin-bottom:6px;">' +
                 '<span class="summary-row-label">' + cat.name + '</span>' +
@@ -1410,67 +1449,177 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
   '</div>';
 }
 
-function extractMaterialVolumes(est, phaseKeys) {
-  var timber = [], steel = [], concrete = [], other = [];
-  var timberCost = 0, steelCost = 0, concreteCost = 0, otherCost = 0;
+function classifyEstimateItems(est, phaseKeys) {
+  // Hard cost phases (materials, fabrication, shipping)
+  var hardPhases = ['fabrication', 'dlt-material', 'shipping', 'fb-fabrication', 'fb-shipping', 'fb-foundations', 'fb-railing-finishes'];
+  // Construction labor phases (installation, site work)
+  var constructionPhases = ['installation', 'fb-installation'];
+  // Professional services phases (engineering, PM, supervision)
+  var softPhases = ['consulting', 'structural-engineering', 'timber-engineering', 'construction-engineering', 'general-conditions', 'site-supervision', 'coordination', 'fb-engineering', 'fb-general-conditions'];
 
-  // Classify each line item by material category based on keywords
+  // BOM sub-categories
+  var timber = [], steel = [], concrete = [], otherMaterial = [];
+  var timberCost = 0, steelCost = 0, concreteCost = 0, otherMaterialCost = 0;
+
+  // Construction sub-categories
+  var laborItems = [], equipmentItems = [];
+  var laborCost = 0, equipmentCost = 0;
+
+  // Soft cost items
+  var softItems = [];
+  var softCost = 0;
+
+  function makeRow(item) {
+    return '<tr>' +
+      '<td>' + item.name + '</td>' +
+      '<td class="mono">' + fmtNum(item.qty) + '</td>' +
+      '<td>' + item.unit + '</td>' +
+      '<td class="mono">' + fmtDec(item.rate) + '</td>' +
+      '<td class="mono">' + fmt(item.total) + '</td>' +
+    '</tr>';
+  }
+
   phaseKeys.forEach(function(pk) {
     if (!est.phases || !est.phases[pk] || !est.phases[pk].items) return;
+    var isHardPhase = hardPhases.indexOf(pk) >= 0;
+    var isConstructionPhase = constructionPhases.indexOf(pk) >= 0;
+    var isSoftPhase = softPhases.indexOf(pk) >= 0;
+
     est.phases[pk].items.forEach(function(item) {
       var name = (item.name || '').toLowerCase();
       var unit = (item.unit || '').toLowerCase();
+      var row = makeRow(item);
+      var cost = item.total || 0;
+
+      // Keyword-based material detection
       var isTimber = /glulam|clt|dlt|mpp|nlt|timber|lumber|wood|plywood|lvl/i.test(name) || unit === 'bf' || unit === 'mbf';
-      var isSteel = /steel|connection|bolt|plate|hss|wf|w-shape|rebar|reinforc/i.test(name) || unit === 'ton' || unit === 'tons';
+      var isSteel = /steel|connection|bolt|plate|hss|wf|w-shape|rebar|reinforc|fastener|hardware/i.test(name) || unit === 'ton' || unit === 'tons';
       var isConcrete = /concrete|pour|slab|footing|foundation|formwork|grout|topping/i.test(name) || unit === 'cy' || unit === 'cu yd';
+      var isMaterial = isTimber || isSteel || isConcrete || /material|panel|cnc|edge band|finish|grading|qc|permit/i.test(name);
 
-      var row = '<tr>' +
-        '<td>' + item.name + '</td>' +
-        '<td class="mono">' + fmtNum(item.qty) + '</td>' +
-        '<td>' + item.unit + '</td>' +
-        '<td class="mono">' + fmtDec(item.rate) + '</td>' +
-        '<td class="mono">' + fmt(item.total) + '</td>' +
-      '</tr>';
+      // Labor/equipment detection
+      var isLabor = /labor|carpenter|superintendent|super\b|worker|crew|foreman|pm\b|project manag|coordination|drafting|detailing/i.test(name) || unit === 'hr';
+      var isEquipment = /crane|rigging|scaffold|equipment|formwork/i.test(name) || unit === 'day';
 
-      if (isTimber) { timber.push(row); timberCost += (item.total || 0); }
-      else if (isSteel) { steel.push(row); steelCost += (item.total || 0); }
-      else if (isConcrete) { concrete.push(row); concreteCost += (item.total || 0); }
-      else { other.push(row); otherCost += (item.total || 0); }
+      // Engineering/services detection
+      var isEngineering = /engineer|sd\b|dd\b|cd\b|ca\b|design|analysis|review|consulting|supervision|supervisor|site visit|travel|insurance|bond|contingency/i.test(name);
+
+      if (isSoftPhase) {
+        // Everything in a soft phase is a soft cost
+        softItems.push(row);
+        softCost += cost;
+      } else if (isConstructionPhase) {
+        // Within installation phase, split equipment from labor
+        if (isEquipment) {
+          equipmentItems.push(row);
+          equipmentCost += cost;
+        } else {
+          laborItems.push(row);
+          laborCost += cost;
+        }
+      } else if (isHardPhase) {
+        // Within hard cost phases, classify by material type vs labor
+        if (isLabor && !isMaterial) {
+          laborItems.push(row);
+          laborCost += cost;
+        } else if (isTimber) {
+          timber.push(row);
+          timberCost += cost;
+        } else if (isSteel) {
+          steel.push(row);
+          steelCost += cost;
+        } else if (isConcrete) {
+          concrete.push(row);
+          concreteCost += cost;
+        } else {
+          otherMaterial.push(row);
+          otherMaterialCost += cost;
+        }
+      } else {
+        // Unknown phase — classify by keywords
+        if (isEngineering || isLabor) {
+          softItems.push(row);
+          softCost += cost;
+        } else {
+          otherMaterial.push(row);
+          otherMaterialCost += cost;
+        }
+      }
     });
   });
 
-  var rows = [];
-  var catTotals = [];
+  // Build BOM table rows
+  var bomRows = [];
+  var bomCatTotals = [];
+  var bomTotal = 0;
 
   if (timber.length > 0) {
-    rows.push('<tr class="vol-cat-header"><td colspan="5">Timber</td></tr>');
-    rows = rows.concat(timber);
-    rows.push('<tr class="vol-total"><td>Timber Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost) + '</td></tr>');
-    catTotals.push({ name: 'Timber', cost: timberCost });
+    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Timber</td></tr>');
+    bomRows = bomRows.concat(timber);
+    bomRows.push('<tr class="vol-total"><td>Timber Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost) + '</td></tr>');
+    bomCatTotals.push({ name: 'Timber', cost: timberCost });
+    bomTotal += timberCost;
   }
   if (steel.length > 0) {
-    rows.push('<tr class="vol-cat-header"><td colspan="5">Steel</td></tr>');
-    rows = rows.concat(steel);
-    rows.push('<tr class="vol-total"><td>Steel Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(steelCost) + '</td></tr>');
-    catTotals.push({ name: 'Steel', cost: steelCost });
+    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Steel & Connections</td></tr>');
+    bomRows = bomRows.concat(steel);
+    bomRows.push('<tr class="vol-total"><td>Steel Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(steelCost) + '</td></tr>');
+    bomCatTotals.push({ name: 'Steel & Connections', cost: steelCost });
+    bomTotal += steelCost;
   }
   if (concrete.length > 0) {
-    rows.push('<tr class="vol-cat-header"><td colspan="5">Concrete</td></tr>');
-    rows = rows.concat(concrete);
-    rows.push('<tr class="vol-total"><td>Concrete Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(concreteCost) + '</td></tr>');
-    catTotals.push({ name: 'Concrete', cost: concreteCost });
+    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Concrete</td></tr>');
+    bomRows = bomRows.concat(concrete);
+    bomRows.push('<tr class="vol-total"><td>Concrete Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(concreteCost) + '</td></tr>');
+    bomCatTotals.push({ name: 'Concrete', cost: concreteCost });
+    bomTotal += concreteCost;
   }
-  if (other.length > 0) {
-    rows.push('<tr class="vol-cat-header"><td colspan="5">Other / Labor / Services</td></tr>');
-    rows = rows.concat(other);
-    rows.push('<tr class="vol-total"><td>Other Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(otherCost) + '</td></tr>');
-    catTotals.push({ name: 'Other / Labor', cost: otherCost });
+  if (otherMaterial.length > 0) {
+    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Other Materials & Processing</td></tr>');
+    bomRows = bomRows.concat(otherMaterial);
+    bomRows.push('<tr class="vol-total"><td>Other Materials Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(otherMaterialCost) + '</td></tr>');
+    bomCatTotals.push({ name: 'Other Materials', cost: otherMaterialCost });
+    bomTotal += otherMaterialCost;
   }
-  if (rows.length > 0) {
-    rows.push('<tr class="vol-grand-total"><td>All Materials Total</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost + steelCost + concreteCost + otherCost) + '</td></tr>');
+  if (bomRows.length > 0) {
+    bomRows.push('<tr class="vol-grand-total"><td>Total Materials & BOM</td><td></td><td></td><td></td><td class="mono">' + fmt(bomTotal) + '</td></tr>');
   }
 
-  return { rows: rows, catTotals: catTotals };
+  // Build construction rows
+  var constructionRows = [];
+  var constructionTotal = 0;
+  if (laborItems.length > 0) {
+    constructionRows.push('<tr class="vol-cat-header"><td colspan="5">Labor</td></tr>');
+    constructionRows = constructionRows.concat(laborItems);
+    constructionRows.push('<tr class="vol-total"><td>Labor Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(laborCost) + '</td></tr>');
+    constructionTotal += laborCost;
+  }
+  if (equipmentItems.length > 0) {
+    constructionRows.push('<tr class="vol-cat-header"><td colspan="5">Equipment & Logistics</td></tr>');
+    constructionRows = constructionRows.concat(equipmentItems);
+    constructionRows.push('<tr class="vol-total"><td>Equipment Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(equipmentCost) + '</td></tr>');
+    constructionTotal += equipmentCost;
+  }
+  if (constructionRows.length > 0) {
+    constructionRows.push('<tr class="vol-grand-total"><td>Total Construction</td><td></td><td></td><td></td><td class="mono">' + fmt(constructionTotal) + '</td></tr>');
+  }
+
+  // Build soft cost rows
+  var softRows = [];
+  if (softItems.length > 0) {
+    softRows = softRows.concat(softItems);
+    softRows.push('<tr class="vol-grand-total"><td>Total Professional Services</td><td></td><td></td><td></td><td class="mono">' + fmt(softCost) + '</td></tr>');
+  }
+
+  return {
+    bomRows: bomRows,
+    bomCatTotals: bomCatTotals,
+    bomTotal: bomTotal,
+    constructionRows: constructionRows,
+    constructionTotal: constructionTotal,
+    softRows: softRows,
+    softCost: softCost
+  };
 }
 
 function renderPhaseTab(est, phaseKey) {
@@ -3002,7 +3151,7 @@ async function callClaude(prompt, apiKey) {
   return JSON.parse(content);
 }
 
-function updateAIProgress(step, progress) {
+function updateAIProgress(step, progress, currentStep, totalSteps) {
   AI_STATE.step = step;
   AI_STATE.progress = progress;
   var container = document.getElementById('ai-progress-container');
@@ -3010,27 +3159,25 @@ function updateAIProgress(step, progress) {
 
   var elapsed = Date.now() - AI_STATE.startTime;
   var elapsedSec = Math.round(elapsed / 1000);
-  var estimatedTotal = progress > 5 ? Math.round(elapsed / (progress / 100)) : 120000;
-  var remaining = Math.max(0, Math.round((estimatedTotal - elapsed) / 1000));
-  var remainMin = Math.floor(remaining / 60);
-  var remainSec = remaining % 60;
+  var elapsedMin = Math.floor(elapsedSec / 60);
+  var elapsedSecRem = elapsedSec % 60;
+  var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
 
   container.style.display = 'block';
   container.innerHTML = '<div style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: left;">' +
     '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
-      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' Claude AI Analysis in Progress</div>' +
-      '<div style="font-size: 0.78rem; color: var(--text-muted);">' + elapsedSec + 's elapsed</div>' +
+      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">' + ICONS.bolt + ' Generating Estimate</div>' +
+      '<div style="font-size: 0.78rem; color: var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
     '</div>' +
     '<div style="font-size: 0.82rem; color: var(--accent); margin-bottom: 8px;">' + step + '</div>' +
     '<div style="background: var(--bg-input); border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 8px;">' +
       '<div style="background: var(--accent); height: 100%; width: ' + progress + '%; border-radius: 6px; transition: width 0.5s ease;"></div>' +
     '</div>' +
     '<div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">' +
-      '<span>' + Math.round(progress) + '% complete</span>' +
-      '<span>~' + (remainMin > 0 ? remainMin + 'm ' : '') + remainSec + 's remaining</span>' +
+      '<span>' + Math.round(progress) + '%</span>' +
     '</div>' +
     '<div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">' +
-      'You can navigate to other pages while the AI works. Check back here or the Output tab for results.' +
+      'You can navigate to other pages while this runs. Check back here or the Estimate Queue for results.' +
     '</div>' +
   '</div>';
 }
@@ -3193,24 +3340,31 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
   AI_STATE.startTime = Date.now();
   AI_STATE.progress = 0;
 
+  var totalSteps = 4;
+  var currentStep = 0;
+
   function updateQueue(fields) {
     var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
     if (qItem) { Object.assign(qItem, fields); saveQueue(); }
   }
 
+  function setStage(stepNum, stepLabel, pct) {
+    currentStep = stepNum;
+    updateQueue({ step: 'Step ' + stepNum + '/' + totalSteps + ': ' + stepLabel, progress: pct, currentStep: stepNum, totalSteps: totalSteps });
+    updateAIProgress('Step ' + stepNum + '/' + totalSteps + ': ' + stepLabel, pct, stepNum, totalSteps);
+  }
+
   try {
-    // Step 1: Extract text from PDFs
-    updateQueue({ step: 'Extracting document content...', progress: 10 });
-    updateAIProgress('Extracting text from uploaded documents...', 10);
+    // Step 1: Extract text from uploaded documents
+    setStage(1, 'Extracting document text', 5);
     var files = getAllUploadedFiles();
     var extractedTexts = '';
 
     if (files.length > 0) {
       for (var i = 0; i < files.length; i++) {
-        var stepMsg = 'Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')...';
-        var stepPct = 10 + (i / files.length * 30);
-        updateQueue({ step: stepMsg, progress: stepPct });
-        updateAIProgress(stepMsg, stepPct);
+        var fileMsg = 'Reading ' + files[i].meta.name + ' (' + (i + 1) + '/' + files.length + ')';
+        var filePct = 5 + (i / files.length * 10);
+        setStage(1, fileMsg, filePct);
         var isPDF = files[i].meta.type === 'application/pdf' || files[i].meta.name.toLowerCase().endsWith('.pdf');
         if (isPDF) {
           var text = await extractTextFromPDF(files[i].file);
@@ -3234,15 +3388,34 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
     }
 
-    // Step 2: Build and send AI prompt
-    updateQueue({ step: 'Claude is analyzing your documents...', progress: 45 });
-    updateAIProgress('Claude is performing structural analysis (extended thinking)...', 45);
+    // Step 2: Claude AI analysis — this is the long wait
+    setStage(2, 'Waiting for Claude AI response', 18);
     var prompt = buildAIPrompt(est, extractedTexts);
-    var aiResult = await callClaude(prompt, apiKey || null);
 
-    // Step 3: Parse AI response
-    updateQueue({ step: 'Building estimate from AI analysis...', progress: 80 });
-    updateAIProgress('Building estimate from AI analysis...', 80);
+    // Start a progress animation interval during the API call
+    // Slowly advance from 18% to 75% with a decelerating curve
+    var apiStartTime = Date.now();
+    var apiProgressInterval = setInterval(function() {
+      var apiElapsed = (Date.now() - apiStartTime) / 1000;
+      // Logarithmic curve: fast initially, slows down. Caps at ~75%
+      var animPct = 18 + Math.min(57, 57 * (1 - Math.exp(-apiElapsed / 60)));
+      var mins = Math.floor(apiElapsed / 60);
+      var secs = Math.floor(apiElapsed % 60);
+      var elapsedStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+      var stepMsg = 'Claude is analyzing (' + elapsedStr + ' elapsed)';
+      updateQueue({ step: 'Step 2/' + totalSteps + ': ' + stepMsg, progress: Math.round(animPct), currentStep: 2, totalSteps: totalSteps });
+      updateAIProgress('Step 2/' + totalSteps + ': ' + stepMsg, Math.round(animPct), 2, totalSteps);
+    }, 2000);
+
+    var aiResult;
+    try {
+      aiResult = await callClaude(prompt, apiKey || null);
+    } finally {
+      clearInterval(apiProgressInterval);
+    }
+
+    // Step 3: Parse and build estimate from AI response
+    setStage(3, 'Building estimate from AI response', 80);
 
     if (!est.phases) est.phases = {};
 
@@ -3270,8 +3443,8 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (aiResult.numStories) est.aiNotes.push('Derived number of stories: ' + aiResult.numStories);
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
-    updateQueue({ step: 'Finalizing...', progress: 95 });
-    updateAIProgress('Finalizing calculations...', 95);
+    // Step 4: Finalize calculations
+    setStage(4, 'Finalizing calculations', 92);
 
     est.totalCost = calcEstimateTotal(est);
     est.updatedAt = new Date().toISOString();
@@ -4035,24 +4208,24 @@ function renderQueuePage() {
         inProgress.map(function(q) {
           var elapsed = Date.now() - q.startTime;
           var elapsedSec = Math.round(elapsed / 1000);
+          var elapsedMin = Math.floor(elapsedSec / 60);
+          var elapsedSecRem = elapsedSec % 60;
+          var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
           var pct = q.progress || 0;
-          var estimatedTotal = pct > 5 ? Math.round(elapsed / (pct / 100)) : 120000;
-          var remaining = Math.max(0, Math.round((estimatedTotal - elapsed) / 1000));
           return '<div style="padding:16px; border-bottom:1px solid var(--border);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
               '<div>' +
                 '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
                 '<div style="font-size:0.75rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Submitted ' + formatTimeAgo(q.startTime) + '</div>' +
               '</div>' +
-              '<div style="font-size:0.78rem; color:var(--accent);">' + elapsedSec + 's elapsed</div>' +
+              '<div style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
             '</div>' +
             '<div style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
             '<div style="background:var(--bg-input); border-radius:6px; height:8px; overflow:hidden; margin-bottom:4px;">' +
               '<div class="queue-progress-bar" style="background:var(--accent); height:100%; width:' + pct + '%; border-radius:6px; transition:width 0.5s ease;"></div>' +
             '</div>' +
-            '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted);">' +
-              '<span>' + Math.round(pct) + '% complete</span>' +
-              '<span>~' + remaining + 's remaining</span>' +
+            '<div style="font-size:0.72rem; color:var(--text-muted);">' +
+              Math.round(pct) + '%' +
             '</div>' +
           '</div>';
         }).join('') +
