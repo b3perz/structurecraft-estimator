@@ -5686,8 +5686,18 @@ function initApp() {
   // Listen for hash changes (back/forward navigation, shared links)
   window.addEventListener('hashchange', handleHashChange);
 
-  // Clean up any stuck queue items from previous sessions
-  checkForStuckItems();
+  // Clean up any stuck queue items from previous sessions.
+  // On fresh page load, AI_STATE.processing is always false, so ANY "processing"
+  // item is guaranteed stale — fail it immediately regardless of elapsed time.
+  ESTIMATE_QUEUE.forEach(function(q) {
+    if (q.status === 'processing') {
+      var elapsed = Math.round((Date.now() - q.startTime) / 60000);
+      q.status = 'failed';
+      q.error = 'Cleared on reload — was stuck in processing' + (elapsed > 0 ? ' for ' + elapsed + ' min' : '');
+      q.completedTime = Date.now();
+    }
+  });
+  saveQueue();
 
   // Render initial page
   renderPage();
