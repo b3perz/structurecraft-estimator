@@ -3671,30 +3671,44 @@ async function callClaude(prompt, apiKey) {
   // Add system prompt
   requestBody.system = 'You are an expert structural engineer and cost estimator with decades of experience in mass timber, steel, and concrete construction. You perform meticulous quantity takeoffs from construction documents. Respond only with valid JSON. Do not include any markdown formatting, code fences, or explanation outside the JSON object.';
 
-  var response;
+  // AbortController with 5-minute timeout to prevent infinite hangs
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function() { controller.abort(); }, 300000); // 5 min
 
-  if (apiKey) {
-    // Direct API call with user's own key
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify(requestBody),
-    });
-  } else {
-    // Use proxy (API key held server-side)
-    response = await fetch(CLAUDE_PROXY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+  var response;
+  try {
+    if (apiKey) {
+      // Direct API call with user's own key
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } else {
+      // Use proxy (API key held server-side)
+      response = await fetch(CLAUDE_PROXY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    }
+  } catch(fetchErr) {
+    clearTimeout(timeoutId);
+    if (fetchErr.name === 'AbortError') {
+      throw new Error('API call timed out after 5 minutes. The request may have been too large or the server is unresponsive.');
+    }
+    throw fetchErr;
   }
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     var errText = await response.text();
@@ -3960,10 +3974,10 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
   var STEP_LABELS = [
     '', // 0 unused
     'Document Extraction',
-    'Online Project Research',
+    'Project Context',
     'Structural Takeoff & Analysis',
-    'Quantity Validation',
-    'Cost Assembly',
+    'Line Item Assembly',
+    'Cost Structure',
     'Benchmark Validation',
     'Final Calculations',
   ];
@@ -4944,11 +4958,19 @@ function renderQueuePage() {
   var completed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; });
   var failed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'failed'; });
 
+  var hasAny = ESTIMATE_QUEUE.length > 0;
+  var hasFinished = completed.length > 0 || failed.length > 0;
+
   return '<div data-completed-count="' + completed.length + '">' +
     '<div class="section-header"><div>' +
       '<div class="section-title">' + ICONS.bolt + ' Estimate Queue</div>' +
       '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
-    '</div></div>' +
+    '</div>' +
+    (hasAny ? '<div class="section-actions">' +
+      (hasFinished ? '<button class="btn btn-sm" onclick="clearCompletedQueue()" title="Clear completed & failed">' + ICONS.trash + ' Clear Finished</button>' : '') +
+      '<button class="btn btn-sm" onclick="if(confirm(\'Clear entire queue?\')) clearAllQueue();" title="Clear all items">' + ICONS.trash + ' Clear All</button>' +
+    '</div>' : '') +
+    '</div>' +
 
     // In-progress estimates
     (inProgress.length > 0 ?
@@ -4994,7 +5016,10 @@ function renderQueuePage() {
                 '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
                 '<div style="font-size:0.75rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Submitted ' + formatTimeAgo(q.startTime) + '</div>' +
               '</div>' +
-              '<div class="queue-elapsed" style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
+              '<div style="display:flex; align-items:center; gap:8px;">' +
+                '<span class="queue-elapsed" style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</span>' +
+                '<button class="btn btn-sm" style="padding:3px 8px; font-size:0.7rem; color:var(--danger, #ef4444); border-color:var(--danger, #ef4444);" onclick="stopQueueItem(\'' + q.id + '\')" title="Stop this estimate">' + ICONS.trash + ' Stop</button>' +
+              '</div>' +
             '</div>' +
             '<div class="queue-step-text" style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
             '<div style="background:var(--bg-input); border-radius:6px; height:6px; overflow:hidden; margin-bottom:10px;">' +
@@ -5075,12 +5100,61 @@ function viewQueueEstimate(queueId) {
 function removeFromQueue(queueId) {
   ESTIMATE_QUEUE = ESTIMATE_QUEUE.filter(function(q) { return q.id !== queueId; });
   saveQueue();
-  renderPage();
+  renderPage(true);
+}
+
+function stopQueueItem(queueId) {
+  var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
+  if (!qItem) return;
+  qItem.status = 'failed';
+  qItem.error = 'Stopped by user';
+  qItem.completedTime = Date.now();
+  saveQueue();
+  showToast('Estimate "' + (qItem.name || 'Untitled') + '" stopped.', 'info');
+  renderPage(true);
+}
+
+function clearAllQueue() {
+  ESTIMATE_QUEUE = [];
+  saveQueue();
+  showToast('Queue cleared.', 'info');
+  renderPage(true);
+}
+
+function clearCompletedQueue() {
+  ESTIMATE_QUEUE = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
+  saveQueue();
+  showToast('Completed and failed items cleared.', 'info');
+  renderPage(true);
+}
+
+// Auto-detect stuck queue items (>10 min with no real progress = mark as stale)
+var STUCK_THRESHOLD_MS = 600000; // 10 minutes
+
+function checkForStuckItems() {
+  var now = Date.now();
+  var changed = false;
+  ESTIMATE_QUEUE.forEach(function(q) {
+    if (q.status === 'processing' && (now - q.startTime) > STUCK_THRESHOLD_MS) {
+      // Check if AI_STATE is actually still processing
+      if (!AI_STATE.processing) {
+        q.status = 'failed';
+        q.error = 'Timed out — process ended or lost connection (ran for ' + Math.round((now - q.startTime) / 60000) + ' min)';
+        q.completedTime = now;
+        changed = true;
+      }
+    }
+  });
+  if (changed) {
+    saveQueue();
+    if (STATE.currentPage === 'queue') renderPage(true);
+  }
 }
 
 // Refresh queue progress — renderPage() now handles incremental updates intelligently
 setInterval(function() {
   updateNotificationBadge();
+  checkForStuckItems();
   if (STATE.currentPage !== 'queue') return;
   var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
   if (inProgress.length === 0) return;
@@ -5611,6 +5685,9 @@ function initApp() {
 
   // Listen for hash changes (back/forward navigation, shared links)
   window.addEventListener('hashchange', handleHashChange);
+
+  // Clean up any stuck queue items from previous sessions
+  checkForStuckItems();
 
   // Render initial page
   renderPage();
