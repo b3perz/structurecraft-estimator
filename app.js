@@ -1418,6 +1418,8 @@ function formatFileSize(bytes) {
 // --- OUTPUT PAGE ---
 function renderOutputPage() {
   var est = STATE.currentEstimate;
+  if (!est) est = createNewEstimate();
+  if (!est.assumptions) est.assumptions = getDefaultAssumptions();
   var modelKey = est.deliveryModel || 'eor-build';
   var model = DELIVERY_MODELS[modelKey];
   var phaseKeys = model ? model.phases : [];
@@ -1436,6 +1438,7 @@ function renderOutputPage() {
   var contingency = subtotal * (est.assumptions.contingencyPercent / 100);
   var bondIns = subtotal * (est.assumptions.bondInsurancePercent / 100);
   var grandTotal = subtotal + margin + overhead + contingency + bondIns;
+  var bldgArea = est.buildingArea || 0;
 
   return '<div class="fade-in">' +
     '<div class="section-header">' +
@@ -1572,9 +1575,8 @@ function renderOutputPage() {
 }
 
 function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) {
-  var classified = classifyEstimateItems(est, phaseKeys, bldgArea);
-
   var bldgArea = est.buildingArea || 0;
+  var classified = classifyEstimateItems(est, phaseKeys, bldgArea);
   var tableHead = '<thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th>' + (bldgArea > 0 ? '<th style="text-align:right;">$/SF</th>' : '') + '</tr></thead>';
   var colSpan = bldgArea > 0 ? 6 : 5;
 
@@ -5322,11 +5324,12 @@ function updateBreadcrumb(text) {
   }).join('');
 }
 
+var _navigating = false;
 function navigateTo(page, skipHash) {
+  _navigating = true;
   STATE.currentPage = page;
   if (!skipHash) {
     var hash = '#' + page;
-    // If on output page with a current estimate, include its ID for shareability
     if (page === 'output' && STATE.currentEstimate && STATE.currentEstimate.id) {
       hash += '/' + STATE.currentEstimate.id;
     }
@@ -5335,11 +5338,13 @@ function navigateTo(page, skipHash) {
     }
   }
   updateNavigation();
-  renderPage();
+  renderPage(true);
   saveState();
+  _navigating = false;
 }
 
 function handleHashChange() {
+  if (_navigating) return; // navigateTo already handling this
   var hash = window.location.hash.replace('#', '');
   if (!hash) return;
   var parts = hash.split('/');
