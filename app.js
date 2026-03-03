@@ -4954,7 +4954,7 @@ function renderQueuePage() {
   var hasAny = ESTIMATE_QUEUE.length > 0;
   var hasFinished = completed.length > 0 || failed.length > 0;
 
-  return '<div data-completed-count="' + completed.length + '">' +
+  return '<div>' +
     '<div class="section-header"><div>' +
       '<div class="section-title">' + ICONS.bolt + ' Estimate Queue</div>' +
       '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
@@ -5234,23 +5234,29 @@ function renderPage(forceFullRender) {
   if (STATE.currentPage === 'queue' && !forceFullRender && content.getAttribute('data-page') === 'queue') {
     var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
     if (inProgress.length > 0) {
-      // Check if completed count changed — need structural update
-      var completedNow = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; }).length;
-      var renderedCompleted = parseInt(content.getAttribute('data-completed-count') || '0');
+      // Check if completed/failed count changed — need structural update
+      var completedNow = ESTIMATE_QUEUE.filter(function(q) { return q.status !== 'processing'; }).length;
+      var renderedCompleted = parseInt(content.getAttribute('data-queue-finished') || '0');
       if (completedNow !== renderedCompleted) {
-        // Structural change — do full render but without fade animation
+        // Structural change — do full render without fade animation
         content.innerHTML = page.render();
         content.setAttribute('data-page', 'queue');
+        content.setAttribute('data-queue-finished', String(completedNow));
         updateBreadcrumb(page.breadcrumb);
         return;
       }
-      // Otherwise do incremental updates only
+      // Otherwise do incremental updates only — no DOM destruction
       doQueueIncrementalUpdate(inProgress);
       return;
     }
   }
   content.innerHTML = page.render();
   content.setAttribute('data-page', STATE.currentPage);
+  // Store queue finished count on the container so incremental updates can detect structural changes
+  if (STATE.currentPage === 'queue') {
+    var finishedCount = ESTIMATE_QUEUE.filter(function(q) { return q.status !== 'processing'; }).length;
+    content.setAttribute('data-queue-finished', String(finishedCount));
+  }
   updateBreadcrumb(page.breadcrumb);
 }
 
