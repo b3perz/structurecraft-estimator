@@ -25,6 +25,8 @@ const ICONS = {
   download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
   link: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+  share: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>',
+  share: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>',
   warning: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
   info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
   edit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
@@ -1433,7 +1435,7 @@ function renderOutputPage() {
   var overhead = subtotal * (est.assumptions.overheadPercent / 100);
   var contingency = subtotal * (est.assumptions.contingencyPercent / 100);
   var bondIns = subtotal * (est.assumptions.bondInsurancePercent / 100);
-  var grandTotal = subtotal + margin + overhead + bondIns;
+  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
 
   return '<div class="fade-in">' +
     '<div class="section-header">' +
@@ -1442,6 +1444,12 @@ function renderOutputPage() {
         '<div class="section-desc">' + (est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
       '</div>' +
       '<div class="section-actions">' +
+        '<button class="btn btn-sm" onclick="shareEstimateLink()" title="Copy shareable link">' +
+          ICONS.share + ' Share' +
+        '</button>' +
+        '<button class="btn btn-sm' + (STATE.showUnitRateComparison ? ' btn-accent' : '') + '" onclick="toggleUnitRatePanel()" title="Compare $/SF with past estimates">' +
+          ICONS.analytics + ' $/SF Compare' +
+        '</button>' +
         '<button class="btn btn-sm" onclick="exportEstimateXLSX()">' +
           ICONS.download + ' Ship as XLSX' +
         '</button>' +
@@ -1476,6 +1484,75 @@ function renderOutputPage() {
       '</div>' +
     '</div>' +
 
+    '<!-- Live Building Metrics -->' +
+    '<div class="card mb-20" style="border-left: 3px solid var(--accent);">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
+        '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700;">' + ICONS.building + ' Building Metrics Dashboard</div>' +
+        '<div style="font-size:0.68rem; color:var(--text-muted);">Edit values to see live cost impact</div>' +
+      '</div>' +
+      '<div class="assumptions-grid">' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">Building Area (SF)</div>' +
+          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" onchange="updateBuildingMetric(\'buildingArea\', parseFloat(this.value) || 0)"></div>' +
+        '</div>' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">Stories</div>' +
+          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" onchange="updateBuildingMetric(\'numStories\', parseFloat(this.value) || 0)"></div>' +
+        '</div>' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">Total Cost</div>' +
+          '<div class="assumption-value" style="font-family:JetBrains Mono, monospace; font-weight:700; color:var(--accent);">' + fmt(grandTotal) + '</div>' +
+        '</div>' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">$/SF All-In</div>' +
+          '<div class="assumption-value" style="font-family:JetBrains Mono, monospace; font-weight:700; color:var(--accent);">' + (est.buildingArea > 0 ? '$' + (grandTotal / est.buildingArea).toFixed(2) : '—') + '</div>' +
+        '</div>' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">$/SF Direct</div>' +
+          '<div class="assumption-value" style="font-family:JetBrains Mono, monospace; font-weight:600; color:var(--text-primary);">' + (est.buildingArea > 0 ? '$' + (subtotal / est.buildingArea).toFixed(2) : '—') + '</div>' +
+        '</div>' +
+        '<div class="assumption-item">' +
+          '<div class="assumption-label">Cost/Story</div>' +
+          '<div class="assumption-value" style="font-family:JetBrains Mono, monospace; font-weight:600; color:var(--text-primary);">' + (est.numStories > 0 ? fmt(Math.round(grandTotal / est.numStories)) : '—') + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<!-- Building Metrics Dashboard -->' +
+    '<div class="card mb-20 metrics-dashboard" style="border-left: 3px solid var(--accent);">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
+        '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); font-weight:700;">' + ICONS.building + ' Building Metrics Dashboard</div>' +
+        '<div style="font-size:0.68rem; color:var(--text-muted);">Edit values to see cost impact</div>' +
+      '</div>' +
+      '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">' +
+        '<div class="metric-edit-cell">' +
+          '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Building Area (SF)</label>' +
+          '<input type="number" class="metric-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" onchange="updateBuildingMetric(\'buildingArea\', parseFloat(this.value) || 0)">' +
+          (bldgArea > 0 ? '<div class="metric-derived">$' + (grandTotal / bldgArea).toFixed(2) + '/SF all-in</div>' : '') +
+        '</div>' +
+        '<div class="metric-edit-cell">' +
+          '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Stories</label>' +
+          '<input type="number" class="metric-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" onchange="updateBuildingMetric(\'numStories\', parseFloat(this.value) || 0)">' +
+          (est.numStories > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.numStories)) + ' SF/floor</div>' : '') +
+        '</div>' +
+        '<div class="metric-edit-cell">' +
+          '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Timber Volume (BF)</label>' +
+          '<input type="number" class="metric-input" value="' + (est.timberVolume || '') + '" placeholder="e.g. 45000" onchange="updateBuildingMetric(\'timberVolume\', parseFloat(this.value) || 0)">' +
+          (est.timberVolume > 0 && bldgArea > 0 ? '<div class="metric-derived">' + (est.timberVolume / bldgArea).toFixed(2) + ' BF/SF</div>' : '') +
+        '</div>' +
+        '<div class="metric-edit-cell">' +
+          '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Total Pieces</label>' +
+          '<input type="number" class="metric-input" value="' + (est.totalPieces || '') + '" placeholder="e.g. 120" onchange="updateBuildingMetric(\'totalPieces\', parseFloat(this.value) || 0)">' +
+          (est.totalPieces > 0 && bldgArea > 0 ? '<div class="metric-derived">' + (bldgArea / est.totalPieces).toFixed(0) + ' SF/piece</div>' : '') +
+        '</div>' +
+        '<div class="metric-edit-cell">' +
+          '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Install Duration (days)</label>' +
+          '<input type="number" class="metric-input" value="' + (est.installDays || '') + '" placeholder="e.g. 20" onchange="updateBuildingMetric(\'installDays\', parseFloat(this.value) || 0)">' +
+          (est.installDays > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.installDays)) + ' SF/day</div>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
     '<!-- Phase Tabs -->' +
     '<div class="tabs">' +
       '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" onclick="switchOutputTab(\'summary\')">Summary</div>' +
@@ -1495,9 +1572,11 @@ function renderOutputPage() {
 }
 
 function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) {
-  var classified = classifyEstimateItems(est, phaseKeys);
+  var classified = classifyEstimateItems(est, phaseKeys, bldgArea);
 
-  var tableHead = '<thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th></tr></thead>';
+  var bldgArea = est.buildingArea || 0;
+  var tableHead = '<thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th>Unit</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Cost</th>' + (bldgArea > 0 ? '<th style="text-align:right;">$/SF</th>' : '') + '</tr></thead>';
+  var colSpan = bldgArea > 0 ? 6 : 5;
 
   // Count line items and phases with data
   var totalItems = 0;
@@ -1573,38 +1652,48 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
   return '<div class="slide-up">' +
     atAGlance +
     benchmarkCard +
-    // Grand totals card
+    // Cost Summary: At-Cost → Adjustments → Grand Total
     '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
+      '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:end;">' +
         '<div>' +
-          '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Grand Total</div>' +
+          '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:2px;">At-Cost Direct Total</div>' +
+          '<div style="font-size:1.5rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(subtotal) + '</div>' +
+          (bldgArea > 0 ? '<div style="font-size:0.78rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:2px;">$' + (subtotal / bldgArea).toFixed(2) + '/SF at-cost</div>' : '') +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:2px;">Grand Total (incl. markup)</div>' +
           '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(grandTotal) + '</div>' +
+          (bldgArea > 0 ? '<div style="font-size:0.78rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:2px;">$' + (grandTotal / bldgArea).toFixed(2) + '/SF all-in</div>' : '') +
         '</div>' +
-        '<div style="display:flex; gap:24px; flex-wrap:wrap;">' +
-          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Direct Costs</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(subtotal) + '</div></div>' +
-          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Markup Total</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-secondary);">' + fmt(grandTotal - subtotal) + '</div></div>' +
-          '<div style="text-align:right;"><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Eff. Margin</div><div style="font-size:1rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--accent);">' + (subtotal > 0 ? fmtPct((grandTotal - subtotal) / grandTotal * 100) : '0.0%') + '</div></div>' +
-        '</div>' +
+      '</div>' +
+      '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:14px; padding-top:12px; border-top: 1px solid var(--border);">' +
+        '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Contingency</div><div style="font-size:0.92rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--warning);">' + fmt(contingency) + '</div><div style="font-size:0.65rem; color:var(--text-muted);">' + fmtPct(est.assumptions.contingencyPercent) + '</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Margin</div><div style="font-size:0.92rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(margin) + '</div><div style="font-size:0.65rem; color:var(--text-muted);">' + fmtPct(est.assumptions.marginPercent) + '</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Overhead</div><div style="font-size:0.92rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(overhead) + '</div><div style="font-size:0.65rem; color:var(--text-muted);">' + fmtPct(est.assumptions.overheadPercent) + '</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Bond & Ins.</div><div style="font-size:0.92rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(bondIns) + '</div><div style="font-size:0.65rem; color:var(--text-muted);">' + fmtPct(est.assumptions.bondInsurancePercent) + '</div></div>' +
       '</div>' +
     '</div>' +
 
-    // Direct cost breakdown: 3 categories side by side
+    // Direct cost breakdown: 3 categories side by side with $/SF
     (subtotal > 0 ?
       '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px;">' +
         '<div class="card" style="padding:14px; text-align:center;">' +
           '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Materials & BOM</div>' +
           '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.bomTotal) + '</div>' +
           '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.bomTotal / subtotal * 100) : '0%') + ' of direct</div>' +
+          (bldgArea > 0 ? '<div style="font-size:0.72rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:4px;">$' + (classified.bomTotal / bldgArea).toFixed(2) + '/SF</div>' : '') +
         '</div>' +
         '<div class="card" style="padding:14px; text-align:center;">' +
           '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Construction</div>' +
           '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.constructionTotal) + '</div>' +
           '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.constructionTotal / subtotal * 100) : '0%') + ' of direct</div>' +
+          (bldgArea > 0 ? '<div style="font-size:0.72rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:4px;">$' + (classified.constructionTotal / bldgArea).toFixed(2) + '/SF</div>' : '') +
         '</div>' +
         '<div class="card" style="padding:14px; text-align:center;">' +
           '<div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Professional Services</div>' +
           '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--text-primary);">' + fmt(classified.softCost) + '</div>' +
           '<div style="font-size:0.7rem; color:var(--text-muted);">' + (subtotal > 0 ? fmtPct(classified.softCost / subtotal * 100) : '0%') + ' of direct</div>' +
+          (bldgArea > 0 ? '<div style="font-size:0.72rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:4px;">$' + (classified.softCost / bldgArea).toFixed(2) + '/SF</div>' : '') +
         '</div>' +
       '</div>'
     : '') +
@@ -1665,18 +1754,23 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
         '</div>' +
 
         '<div class="card mb-16">' +
-          '<div class="card-title mb-12">Markup & Overhead</div>' +
-          '<div class="summary-row"><span class="summary-row-label">Direct Costs (Subtotal)</span><span class="summary-row-value">' + fmt(subtotal) + '</span></div>' +
+          '<div class="card-title mb-12">Cost Build-Up</div>' +
+          '<div class="summary-row"><span class="summary-row-label" style="font-weight:600;">At-Cost Direct Total</span><span class="summary-row-value" style="font-weight:700;">' + fmt(subtotal) + '</span></div>' +
+          (bldgArea > 0 ? '<div style="text-align:right; font-size:0.72rem; color:var(--accent); font-family:JetBrains Mono, monospace; margin-bottom:4px;">$' + (subtotal / bldgArea).toFixed(2) + '/SF</div>' : '') +
           '<div class="summary-divider"></div>' +
-          '<div class="summary-row"><span class="summary-row-label">Overhead (' + fmtPct(est.assumptions.overheadPercent) + ')</span><span class="summary-row-value">' + fmt(overhead) + '</span></div>' +
+          '<div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--warning); font-weight:700; margin: 6px 0 4px;">Contingency (on materials)</div>' +
+          '<div class="summary-row"><span class="summary-row-label">Contingency (' + fmtPct(est.assumptions.contingencyPercent) + ')</span><span class="summary-row-value" style="color:var(--warning);">' + fmt(contingency) + '</span></div>' +
+          '<div class="summary-divider"></div>' +
+          '<div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:700; margin: 6px 0 4px;">Markup (margin & overhead)</div>' +
           '<div class="summary-row"><span class="summary-row-label">Margin (' + fmtPct(est.assumptions.marginPercent) + ')</span><span class="summary-row-value">' + fmt(margin) + '</span></div>' +
-          '<div class="summary-row"><span class="summary-row-label">Contingency (' + fmtPct(est.assumptions.contingencyPercent) + ')</span><span class="summary-row-value">' + fmt(contingency) + '</span></div>' +
+          '<div class="summary-row"><span class="summary-row-label">Overhead (' + fmtPct(est.assumptions.overheadPercent) + ')</span><span class="summary-row-value">' + fmt(overhead) + '</span></div>' +
           '<div class="summary-row"><span class="summary-row-label">Bond & Insurance (' + fmtPct(est.assumptions.bondInsurancePercent) + ')</span><span class="summary-row-value">' + fmt(bondIns) + '</span></div>' +
           '<div class="summary-divider"></div>' +
           '<div class="summary-total mt-8">' +
             '<div class="summary-total-label">Grand Total</div>' +
             '<div class="summary-total-value">' + fmt(grandTotal) + '</div>' +
           '</div>' +
+          (bldgArea > 0 ? '<div style="text-align:right; font-size:0.78rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace; margin-top:2px;">$' + (grandTotal / bldgArea).toFixed(2) + '/SF all-in</div>' : '') +
         '</div>' +
 
         // Material cost breakdown card
@@ -1692,12 +1786,85 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
             }).join('') +
           '</div>'
         : '') +
+
+        // Unit rate comparison with past estimates (toggle)
+        (STATE.showUnitRateComparison ? renderUnitRateComparison(est, subtotal, grandTotal) : '') +
       '</div>' +
     '</div>' +
   '</div>';
 }
 
-function classifyEstimateItems(est, phaseKeys) {
+function getComparableEstimates(currentEst) {
+  var currentType = currentEst.projectType || currentEst.deliveryModel || 'commercial';
+  var currentArea = currentEst.buildingArea || 0;
+  var comparables = STATE.estimates.filter(function(e) {
+    if (e.id === currentEst.id) return false;
+    if (!e.totalCost && !e.phases) return false;
+    var eType = e.projectType || e.deliveryModel || 'commercial';
+    // Match same project type or same delivery model
+    return eType === currentType || e.deliveryModel === currentEst.deliveryModel;
+  });
+  // Sort by how similar the area is
+  if (currentArea > 0) {
+    comparables.sort(function(a, b) {
+      var diffA = Math.abs((a.buildingArea || 0) - currentArea);
+      var diffB = Math.abs((b.buildingArea || 0) - currentArea);
+      return diffA - diffB;
+    });
+  }
+  return comparables.slice(0, 5);
+}
+
+function renderUnitRateComparison(est, subtotal, grandTotal) {
+  var bldgArea = est.buildingArea || 0;
+  if (bldgArea <= 0) return '<div class="card mb-16"><div class="card-title mb-12">Unit Rate Comparison</div><div style="font-size:0.78rem; color:var(--text-muted); padding:12px 0;">Set a building area to enable $/SF comparisons.</div></div>';
+
+  var comparables = getComparableEstimates(est);
+  var currentPerSF = grandTotal / bldgArea;
+  var currentDirectPerSF = subtotal / bldgArea;
+
+  var rows = comparables.map(function(comp) {
+    var compArea = comp.buildingArea || 0;
+    var compTotal = comp.totalCost || 0;
+    if (compArea <= 0 || compTotal <= 0) return '';
+    var compPerSF = compTotal / compArea;
+    var diff = currentPerSF - compPerSF;
+    var diffPct = compPerSF > 0 ? (diff / compPerSF * 100) : 0;
+    var diffColor = diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--text-muted)';
+    var diffSign = diff > 0 ? '+' : '';
+    return '<div style="display:grid; grid-template-columns: 1fr auto; gap:6px; padding:6px 0; border-bottom:1px solid var(--border); align-items:center;">' +
+      '<div>' +
+        '<div style="font-size:0.78rem; font-weight:500; color:var(--text-primary);">' + (comp.name || 'Untitled') + '</div>' +
+        '<div style="font-size:0.65rem; color:var(--text-muted);">' + fmtNum(compArea) + ' SF &middot; ' + (comp.projectType || comp.deliveryModel || '') + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-size:0.82rem; font-weight:600; font-family:JetBrains Mono, monospace; color:var(--text-primary);">$' + compPerSF.toFixed(2) + '/SF</div>' +
+        '<div style="font-size:0.65rem; font-weight:600; color:' + diffColor + ';">' + diffSign + '$' + Math.abs(diff).toFixed(2) + ' (' + diffSign + Math.abs(diffPct).toFixed(1) + '%)</div>' +
+      '</div>' +
+    '</div>';
+  }).filter(function(r) { return r !== ''; }).join('');
+
+  if (!rows) rows = '<div style="font-size:0.78rem; color:var(--text-muted); padding:8px 0; font-style:italic;">No comparable past estimates found. Save estimates to build comparison data.</div>';
+
+  return '<div class="card mb-16">' +
+    '<div class="card-title mb-12">' + ICONS.analytics + ' Unit Rate vs Past Estimates</div>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--border);">' +
+      '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">This Estimate</div><div style="font-size:1rem; font-weight:700; color:var(--accent); font-family:JetBrains Mono, monospace;">$' + currentPerSF.toFixed(2) + '/SF</div><div style="font-size:0.65rem; color:var(--text-muted);">all-in</div></div>' +
+      '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Direct Only</div><div style="font-size:1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">$' + currentDirectPerSF.toFixed(2) + '/SF</div><div style="font-size:0.65rem; color:var(--text-muted);">at-cost</div></div>' +
+    '</div>' +
+    rows +
+  '</div>';
+}
+
+function toggleUnitRatePanel() {
+  STATE.showUnitRateComparison = !STATE.showUnitRateComparison;
+  renderPage();
+}
+
+function classifyEstimateItems(est, phaseKeys, bldgArea) {
+  bldgArea = bldgArea || 0;
+  var extraCol = bldgArea > 0;
+  var colSpanFull = extraCol ? 6 : 5;
   // Hard cost phases (materials, fabrication, shipping)
   var hardPhases = ['fabrication', 'dlt-material', 'shipping', 'fb-fabrication', 'fb-shipping', 'fb-foundations', 'fb-railing-finishes'];
   // Construction labor phases (installation, site work)
@@ -1724,14 +1891,16 @@ function classifyEstimateItems(est, phaseKeys) {
       var confClass = item.confidence === 'high' ? 'confidence-high' : item.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
       confBadge = '<span class="confidence-badge ' + confClass + '">' + item.confidence + '</span>';
     }
+    var perSF = extraCol && item.total ? '$' + (item.total / bldgArea).toFixed(2) + '/SF' : '';
     return '<tr class="vol-item-row" onclick="toggleVolRationale(this)">' +
       '<td>' + item.name + '</td>' +
       '<td class="mono">' + fmtNum(item.qty) + '</td>' +
       '<td>' + item.unit + '</td>' +
       '<td class="mono">' + fmtDec(item.rate) + '</td>' +
       '<td class="mono">' + fmt(item.total) + '</td>' +
+      (extraCol ? '<td class="mono unit-rate-cell">' + perSF + '</td>' : '') +
     '</tr>' +
-    '<tr class="vol-rationale-row" style="display:none;"><td colspan="5"><div class="rationale-content">' +
+    '<tr class="vol-rationale-row" style="display:none;"><td colspan="' + colSpanFull + '"><div class="rationale-content">' +
       (hasRationale ?
         confBadge +
         (item.basis ? '<span class="rationale-label">Basis:</span> ' + item.basis + ' ' : '') +
@@ -1815,61 +1984,61 @@ function classifyEstimateItems(est, phaseKeys) {
   var bomTotal = 0;
 
   if (timber.length > 0) {
-    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Timber</td></tr>');
+    bomRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Timber</td></tr>');
     bomRows = bomRows.concat(timber);
-    bomRows.push('<tr class="vol-total"><td>Timber Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost) + '</td></tr>');
+    bomRows.push('<tr class="vol-total"><td>Timber Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(timberCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (timberCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     bomCatTotals.push({ name: 'Timber', cost: timberCost });
     bomTotal += timberCost;
   }
   if (steel.length > 0) {
-    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Steel & Connections</td></tr>');
+    bomRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Steel & Connections</td></tr>');
     bomRows = bomRows.concat(steel);
-    bomRows.push('<tr class="vol-total"><td>Steel Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(steelCost) + '</td></tr>');
+    bomRows.push('<tr class="vol-total"><td>Steel Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(steelCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (steelCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     bomCatTotals.push({ name: 'Steel & Connections', cost: steelCost });
     bomTotal += steelCost;
   }
   if (concrete.length > 0) {
-    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Concrete</td></tr>');
+    bomRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Concrete</td></tr>');
     bomRows = bomRows.concat(concrete);
-    bomRows.push('<tr class="vol-total"><td>Concrete Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(concreteCost) + '</td></tr>');
+    bomRows.push('<tr class="vol-total"><td>Concrete Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(concreteCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (concreteCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     bomCatTotals.push({ name: 'Concrete', cost: concreteCost });
     bomTotal += concreteCost;
   }
   if (otherMaterial.length > 0) {
-    bomRows.push('<tr class="vol-cat-header"><td colspan="5">Other Materials & Processing</td></tr>');
+    bomRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Other Materials & Processing</td></tr>');
     bomRows = bomRows.concat(otherMaterial);
-    bomRows.push('<tr class="vol-total"><td>Other Materials Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(otherMaterialCost) + '</td></tr>');
+    bomRows.push('<tr class="vol-total"><td>Other Materials Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(otherMaterialCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (otherMaterialCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     bomCatTotals.push({ name: 'Other Materials', cost: otherMaterialCost });
     bomTotal += otherMaterialCost;
   }
   if (bomRows.length > 0) {
-    bomRows.push('<tr class="vol-grand-total"><td>Total Materials & BOM</td><td></td><td></td><td></td><td class="mono">' + fmt(bomTotal) + '</td></tr>');
+    bomRows.push('<tr class="vol-grand-total"><td>Total Materials & BOM</td><td></td><td></td><td></td><td class="mono">' + fmt(bomTotal) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (bomTotal / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
   }
 
   // Build construction rows
   var constructionRows = [];
   var constructionTotal = 0;
   if (laborItems.length > 0) {
-    constructionRows.push('<tr class="vol-cat-header"><td colspan="5">Labor</td></tr>');
+    constructionRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Labor</td></tr>');
     constructionRows = constructionRows.concat(laborItems);
-    constructionRows.push('<tr class="vol-total"><td>Labor Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(laborCost) + '</td></tr>');
+    constructionRows.push('<tr class="vol-total"><td>Labor Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(laborCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (laborCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     constructionTotal += laborCost;
   }
   if (equipmentItems.length > 0) {
-    constructionRows.push('<tr class="vol-cat-header"><td colspan="5">Equipment & Logistics</td></tr>');
+    constructionRows.push('<tr class="vol-cat-header"><td colspan="' + colSpanFull + '">Equipment & Logistics</td></tr>');
     constructionRows = constructionRows.concat(equipmentItems);
-    constructionRows.push('<tr class="vol-total"><td>Equipment Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(equipmentCost) + '</td></tr>');
+    constructionRows.push('<tr class="vol-total"><td>Equipment Subtotal</td><td></td><td></td><td></td><td class="mono">' + fmt(equipmentCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (equipmentCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
     constructionTotal += equipmentCost;
   }
   if (constructionRows.length > 0) {
-    constructionRows.push('<tr class="vol-grand-total"><td>Total Construction</td><td></td><td></td><td></td><td class="mono">' + fmt(constructionTotal) + '</td></tr>');
+    constructionRows.push('<tr class="vol-grand-total"><td>Total Construction</td><td></td><td></td><td></td><td class="mono">' + fmt(constructionTotal) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (constructionTotal / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
   }
 
   // Build soft cost rows
   var softRows = [];
   if (softItems.length > 0) {
     softRows = softRows.concat(softItems);
-    softRows.push('<tr class="vol-grand-total"><td>Total Professional Services</td><td></td><td></td><td></td><td class="mono">' + fmt(softCost) + '</td></tr>');
+    softRows.push('<tr class="vol-grand-total"><td>Total Professional Services</td><td></td><td></td><td></td><td class="mono">' + fmt(softCost) + '</td>' + (extraCol ? '<td class="mono unit-rate-cell">$' + (bldgArea > 0 ? (softCost / bldgArea).toFixed(2) : '0.00') + '/SF</td>' : '') + '</tr>');
   }
 
   return {
@@ -2930,7 +3099,7 @@ function renderFootbridgeOutput(fbEst) {
   var overhead = subtotal * (a.overheadPercent / 100);
   var contingency = subtotal * (a.contingencyPercent / 100);
   var bondIns = subtotal * (a.bondInsurancePercent / 100);
-  var grandTotal = subtotal + margin + overhead + bondIns;
+  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
 
   return '<div class="section-divider mt-24">Footbridge Estimate Output</div>' +
 
@@ -3230,6 +3399,42 @@ function updateEstimate(field, value) {
 function updateAssumption(key, value) {
   STATE.currentEstimate.assumptions[key] = value;
   saveState();
+}
+
+function shareEstimateLink() {
+  var est = STATE.currentEstimate;
+  if (!est || !est.id) {
+    showToast('Save the estimate first to generate a shareable link.', 'warning');
+    return;
+  }
+  // Make sure it's saved to the estimates array
+  var isSaved = STATE.estimates.some(function(e) { return e.id === est.id; });
+  if (!isSaved) {
+    showToast('Save the estimate first (click Stash) to generate a shareable link.', 'warning');
+    return;
+  }
+  var url = window.location.origin + window.location.pathname + '#output/' + est.id;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      showToast('Shareable link copied to clipboard!', 'success');
+    });
+  } else {
+    // Fallback
+    var input = document.createElement('input');
+    input.value = url;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    showToast('Shareable link copied to clipboard!', 'success');
+  }
+}
+
+function updateBuildingMetric(key, value) {
+  STATE.currentEstimate[key] = value;
+  STATE.currentEstimate.updatedAt = new Date().toISOString();
+  saveState();
+  renderPage();
 }
 
 function setDeliveryModel(model) {
@@ -3818,9 +4023,9 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       logAIActivity(ICONS.warning, 'Text truncated to 180KB (was ' + Math.round(extractedTexts.length / 1000) + 'KB)');
     }
 
-    // Step 2: Online project research
-    setStage(2, 'Gathering public project context...', 15);
-    logAIActivity(ICONS.search, 'Researching project context...');
+    // Step 2: Build project context (honest — this is data assembly, not web scraping)
+    setStage(2, 'Assembling project context and location factors...', 14);
+    logAIActivity(ICONS.search, 'Building project research context...');
     var researchContext = '';
     if (est.name || est.location) {
       try {
@@ -3834,19 +4039,22 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
           ' | Project: ' + (est.name || 'N/A') +
           ' | Client: ' + (est.client || 'N/A') +
           ' | Local factors: building codes, seismic zone, climate, and regional labor rates considered in estimate.';
-        logAIActivity(ICONS.check, 'Project context: ' + (est.projectType || 'commercial') + ' in ' + (est.location || 'unknown'));
+        if (est.location) logAIActivity(ICONS.locationPin, 'Location: ' + est.location);
+        if (est.client) logAIActivity(ICONS.info, 'Client: ' + est.client);
+        logAIActivity(ICONS.check, 'Project type: ' + (est.projectType || 'commercial'));
       } catch(e) { logAIActivity(ICONS.warning, 'Research context skipped'); }
     }
-    setStage(2, 'Research context assembled', 17);
+    logAIActivity(ICONS.check, 'Context assembled for AI prompt');
+    setStage(2, 'Project context ready', 17);
 
     // Step 3: Claude AI structural takeoff & analysis — this is the long wait
-    setStage(3, 'Claude is reading drawings and performing structural takeoff...', 20);
+    setStage(3, 'Sending to Claude for structural takeoff...', 20);
     logAIActivity(ICONS.bolt, 'Sending ' + model.phases.length + ' phases to Claude for analysis...');
     logAIActivity(ICONS.info, 'Delivery model: ' + model.name);
     var prompt = buildAIPrompt(est, extractedTexts + researchContext);
     logAIActivity(ICONS.info, 'Prompt size: ' + Math.round(prompt.length / 1000) + ' KB');
 
-    // Start a progress animation interval during the API call
+    // Start a progress animation interval during the API call — updates every 4s
     var apiStartTime = Date.now();
     var lastLogTime = 0;
     var apiProgressInterval = setInterval(function() {
@@ -3863,17 +4071,17 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
         'Building line items with derivation rationale',
         'Compiling cost structure with benchmark checks',
       ];
-      var msgIdx = Math.min(Math.floor(apiElapsed / 12), stepMsgs.length - 1);
+      var msgIdx = Math.min(Math.floor(apiElapsed / 15), stepMsgs.length - 1);
 
-      // Log periodic updates during the API call
-      if (apiElapsed - lastLogTime >= 15) {
+      // Log periodic updates during the API call — max every 10s
+      if (apiElapsed - lastLogTime >= 10) {
         lastLogTime = apiElapsed;
         logAIActivity('<span class="ai-step-spinner"></span>', stepMsgs[msgIdx]);
       }
 
       updateQueue({ step: stepMsgs[msgIdx] + ' (' + elapsedStr + ')', progress: Math.round(animPct), currentStep: 3, totalSteps: totalSteps, stepLabels: STEP_LABELS });
       updateAIProgress(stepMsgs[msgIdx] + ' (' + elapsedStr + ')', Math.round(animPct), 3, totalSteps, STEP_LABELS);
-    }, 2000);
+    }, 4000);
 
     var aiResult;
     try {
@@ -3885,8 +4093,9 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     var apiDuration = Math.round((Date.now() - apiStartTime) / 1000);
     logAIActivity(ICONS.check, 'Claude response received in ' + apiDuration + 's');
 
-    // Step 4: Validate quantities from AI response
+    // Step 4: Parse and validate — give each post-API step real visible time
     setStage(4, 'Parsing AI response and building line items...', 72);
+    await new Promise(function(r) { setTimeout(r, 1500); });
 
     if (!est.phases) est.phases = {};
 
@@ -3926,13 +4135,15 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     if (aiResult.numStories) est.aiNotes.push('Derived number of stories: ' + aiResult.numStories);
     if (aiResult.gridSpacing) est.aiNotes.push('Derived grid spacing: ' + aiResult.gridSpacing);
 
-    // Step 5: Assemble cost structure
+    // Step 5: Assemble cost structure — visible pause
     setStage(5, 'Assembling cost structure and phase totals...', 80);
+    await new Promise(function(r) { setTimeout(r, 1200); });
     est.totalCost = calcEstimateTotal(est);
     logAIActivity(ICONS.pricing, 'Direct costs subtotal: ' + fmt(est.totalCost));
 
-    // Step 6: Benchmark validation
+    // Step 6: Benchmark validation — visible pause
     setStage(6, 'Running industry benchmark validation...', 87);
+    await new Promise(function(r) { setTimeout(r, 1500); });
     logAIActivity(ICONS.analytics, 'Checking estimate against industry benchmarks...');
 
     var phaseKeys = model.phases;
@@ -3956,8 +4167,9 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
       logAIActivity(ICONS.warning, validation.dangerCount + ' issue(s) and ' + validation.warningCount + ' warning(s) flagged');
     }
 
-    // Step 7: Finalize calculations
+    // Step 7: Finalize calculations — visible pause
     setStage(7, 'Computing markups, margins, and grand total...', 93);
+    await new Promise(function(r) { setTimeout(r, 1000); });
 
     est.updatedAt = new Date().toISOString();
 
@@ -4378,7 +4590,7 @@ function exportEstimateXLSX() {
   var overhead = subtotal * (a.overheadPercent / 100);
   var contingency = subtotal * (a.contingencyPercent / 100);
   var bondIns = subtotal * (a.bondInsurancePercent / 100);
-  var grandTotal = subtotal + margin + overhead + bondIns;
+  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
 
   // --- Summary Tab ---
   var summaryData = [
@@ -4732,7 +4944,7 @@ function renderQueuePage() {
   var completed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; });
   var failed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'failed'; });
 
-  return '<div class="fade-in">' +
+  return '<div class="fade-in" data-completed-count="' + completed.length + '">' +
     '<div class="section-header"><div>' +
       '<div class="section-title">' + ICONS.bolt + ' Estimate Queue</div>' +
       '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
@@ -4750,8 +4962,8 @@ function renderQueuePage() {
           var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
           var pct = q.progress || 0;
           var cs = q.currentStep || 1;
-          var ts = q.totalSteps || 6;
-          var labels = q.stepLabels || ['', 'Document Extraction', 'Project Research', 'Structural Takeoff', 'Quantity Validation', 'Cost Assembly', 'Final Calculations'];
+          var ts = q.totalSteps || 7;
+          var labels = q.stepLabels || STEP_LABELS_DEFAULT;
           var stepsHtml = '';
           for (var si = 1; si <= ts; si++) {
             var isDone = si < cs;
@@ -4760,19 +4972,36 @@ function renderQueuePage() {
             var lc = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
             stepsHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;"><span style="color:' + lc + ';flex-shrink:0;width:14px;text-align:center;">' + icon + '</span><span style="font-size:0.75rem;color:' + lc + ';font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || '') + '</span></div>';
           }
-          return '<div style="padding:16px; border-bottom:1px solid var(--border);">' +
+          // Activity log entries
+          var logHtml = '';
+          if (AI_STATE.activityLog && AI_STATE.activityLog.length > 0) {
+            var logEntries = AI_STATE.activityLog.slice(-6);
+            logHtml = '<div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border);">' +
+              '<div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:600; margin-bottom:4px;">Live Activity</div>' +
+              '<div class="queue-activity-log" style="display:flex; flex-direction:column; gap:2px;">' +
+              logEntries.map(function(entry) {
+                return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.72rem; line-height:1.4;">' +
+                  '<span style="color:var(--text-muted); font-family:JetBrains Mono,monospace; flex-shrink:0; min-width:36px;">' + entry.ts + '</span>' +
+                  '<span style="flex-shrink:0; width:14px; text-align:center;">' + entry.icon + '</span>' +
+                  '<span style="color:var(--text-secondary);">' + entry.message + '</span>' +
+                '</div>';
+              }).join('') +
+              '</div></div>';
+          }
+          return '<div id="queue-item-' + q.id + '" style="padding:16px; border-bottom:1px solid var(--border);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
               '<div>' +
                 '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
                 '<div style="font-size:0.75rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Submitted ' + formatTimeAgo(q.startTime) + '</div>' +
               '</div>' +
-              '<div style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
+              '<div class="queue-elapsed" style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</div>' +
             '</div>' +
-            '<div style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
+            '<div class="queue-step-text" style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
             '<div style="background:var(--bg-input); border-radius:6px; height:6px; overflow:hidden; margin-bottom:10px;">' +
-              '<div class="queue-progress-bar" style="background:var(--accent); height:100%; width:' + pct + '%; border-radius:6px; transition:width 0.5s ease;"></div>' +
+              '<div class="queue-progress-bar" style="background:var(--accent); height:100%; width:' + pct + '%; border-radius:6px; transition:width 0.8s ease;"></div>' +
             '</div>' +
-            '<div style="display:flex; flex-direction:column; gap:1px;">' + stepsHtml + '</div>' +
+            '<div class="queue-steps" style="display:flex; flex-direction:column; gap:1px;">' + stepsHtml + '</div>' +
+            logHtml +
           '</div>';
         }).join('') +
       '</div>'
@@ -4849,14 +5078,67 @@ function removeFromQueue(queueId) {
   renderPage();
 }
 
-// Refresh queue progress bars periodically
+// Refresh queue progress incrementally — no full re-render to avoid blinking
 setInterval(function() {
-  if (STATE.currentPage === 'queue') {
-    var bars = document.querySelectorAll('.queue-progress-bar');
-    if (bars.length > 0) renderPage();
-  }
   updateNotificationBadge();
-}, 3000);
+  if (STATE.currentPage !== 'queue') return;
+  var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
+  if (inProgress.length === 0) return;
+  // Check if any items completed since last render
+  var completedNow = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; }).length;
+  var renderedCompleted = parseInt(document.getElementById('page-content')?.getAttribute('data-completed-count') || '0');
+  if (completedNow !== renderedCompleted) { renderPage(); return; }
+  // Targeted update: just update progress text, bar width, and step indicators for each in-progress item
+  inProgress.forEach(function(q, idx) {
+    var container = document.getElementById('queue-item-' + q.id);
+    if (!container) { renderPage(); return; }
+    var elapsed = Date.now() - q.startTime;
+    var elapsedSec = Math.round(elapsed / 1000);
+    var elapsedMin = Math.floor(elapsedSec / 60);
+    var elapsedSecRem = elapsedSec % 60;
+    var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
+    var pct = q.progress || 0;
+    // Update elapsed time
+    var elapsedEl = container.querySelector('.queue-elapsed');
+    if (elapsedEl) elapsedEl.textContent = elapsedStr + ' elapsed';
+    // Update step text
+    var stepEl = container.querySelector('.queue-step-text');
+    if (stepEl) stepEl.textContent = q.step || 'Processing...';
+    // Update progress bar width
+    var bar = container.querySelector('.queue-progress-bar');
+    if (bar) bar.style.width = pct + '%';
+    // Update step indicators
+    var cs = q.currentStep || 1;
+    var ts = q.totalSteps || 7;
+    var labels = q.stepLabels || STEP_LABELS_DEFAULT;
+    var stepsContainer = container.querySelector('.queue-steps');
+    if (stepsContainer) {
+      var stepsHtml = '';
+      for (var si = 1; si <= ts; si++) {
+        var isDone = si < cs;
+        var isActive = si === cs;
+        var icon = isDone ? ICONS.check : (isActive ? '<span class="ai-step-spinner"></span>' : '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--border);box-sizing:border-box;"></span>');
+        var lc = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
+        stepsHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;"><span style="color:' + lc + ';flex-shrink:0;width:14px;text-align:center;">' + icon + '</span><span style="font-size:0.75rem;color:' + lc + ';font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || '') + '</span></div>';
+      }
+      stepsContainer.innerHTML = stepsHtml;
+    }
+    // Update activity log
+    var logContainer = container.querySelector('.queue-activity-log');
+    if (logContainer && AI_STATE.activityLog.length > 0) {
+      var logEntries = AI_STATE.activityLog.slice(-6);
+      logContainer.innerHTML = logEntries.map(function(entry) {
+        return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.72rem; line-height:1.4;">' +
+          '<span style="color:var(--text-muted); font-family:JetBrains Mono,monospace; flex-shrink:0; min-width:36px;">' + entry.ts + '</span>' +
+          '<span style="flex-shrink:0; width:14px; text-align:center;">' + entry.icon + '</span>' +
+          '<span style="color:var(--text-secondary);">' + entry.message + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  });
+}, 4000);
+
+var STEP_LABELS_DEFAULT = ['', 'Document Extraction', 'Project Context', 'Structural Takeoff & Analysis', 'Line Item Assembly', 'Cost Structure', 'Benchmark Validation', 'Final Calculations'];
 
 // ---- SECTION 10D: NOTIFICATIONS PANEL ----
 function showNotificationsPanel() {
@@ -4947,11 +5229,47 @@ function updateBreadcrumb(text) {
   }).join('');
 }
 
-function navigateTo(page) {
+function navigateTo(page, skipHash) {
   STATE.currentPage = page;
+  if (!skipHash) {
+    var hash = '#' + page;
+    // If on output page with a current estimate, include its ID for shareability
+    if (page === 'output' && STATE.currentEstimate && STATE.currentEstimate.id) {
+      hash += '/' + STATE.currentEstimate.id;
+    }
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+  }
   updateNavigation();
   renderPage();
   saveState();
+}
+
+function handleHashChange() {
+  var hash = window.location.hash.replace('#', '');
+  if (!hash) return;
+  var parts = hash.split('/');
+  var page = parts[0];
+  var estId = parts[1] || null;
+
+  // Validate page exists
+  if (!PAGE_MAP[page]) return;
+
+  // If navigating to output with a specific estimate ID, load it
+  if (page === 'output' && estId) {
+    var found = STATE.estimates.find(function(e) { return e.id === estId; });
+    if (found) {
+      STATE.currentEstimate = JSON.parse(JSON.stringify(found));
+    }
+  }
+
+  if (STATE.currentPage !== page) {
+    STATE.currentPage = page;
+    updateNavigation();
+    renderPage();
+    saveState();
+  }
 }
 
 function updateNavigation() {
@@ -5256,6 +5574,24 @@ function initApp() {
 
   // Render user guide
   renderUserGuide();
+
+  // Hash-based routing: parse initial hash before first render
+  var initHash = window.location.hash.replace('#', '');
+  if (initHash) {
+    var hashParts = initHash.split('/');
+    var hashPage = hashParts[0];
+    var hashEstId = hashParts[1] || null;
+    if (PAGE_MAP[hashPage]) {
+      STATE.currentPage = hashPage;
+      if (hashPage === 'output' && hashEstId) {
+        var hashEst = STATE.estimates.find(function(e) { return e.id === hashEstId; });
+        if (hashEst) STATE.currentEstimate = JSON.parse(JSON.stringify(hashEst));
+      }
+    }
+  }
+
+  // Listen for hash changes (back/forward navigation, shared links)
+  window.addEventListener('hashchange', handleHashChange);
 
   // Render initial page
   renderPage();
