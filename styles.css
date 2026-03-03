@@ -1101,10 +1101,11 @@ tbody tr:last-child td { border-bottom: none; }
 /* --- ESTIMATE OUTPUT SECTION --- */
 .output-summary {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr 340px;
   gap: 20px;
   margin-top: 20px;
 }
+.output-summary .card { overflow: hidden; }
 .output-summary-full { grid-template-columns: 1fr; }
 .summary-total {
   background: var(--accent-muted);
@@ -1882,7 +1883,8 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* Material volume table */
-.vol-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.vol-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+.vol-table-wrap { overflow-x: auto; }
 .vol-table th { text-align: left; padding: 8px 10px; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .vol-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
 .vol-table td.mono { font-family: 'JetBrains Mono', monospace; text-align: right; }
@@ -1890,6 +1892,32 @@ tbody tr:last-child td { border-bottom: none; }
 .vol-table .vol-cat-header td { font-weight: 700; color: var(--text-primary); background: var(--bg-tertiary); font-size: 0.8rem; padding: 6px 10px; }
 .vol-table .vol-total td { font-weight: 700; color: var(--accent); border-top: 2px solid var(--accent); font-size: 0.88rem; }
 .vol-table .vol-grand-total td { font-weight: 700; color: var(--text-primary); font-size: 1rem; background: var(--surface-2, var(--bg-tertiary)); border-top: 3px double var(--text-primary); }
+
+/* Building metrics dashboard */
+.metric-input {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.metric-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px rgba(200, 149, 108, 0.15); }
+.metric-derived {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 3px;
+}
+
+/* Unit rate emphasis */
+.unit-rate-cell { color: var(--accent) !important; font-weight: 600; font-size: 0.76rem; white-space: nowrap; }
+.vol-table .vol-total .unit-rate-cell { color: var(--accent) !important; }
+.vol-table .vol-grand-total .unit-rate-cell { color: var(--accent) !important; font-size: 0.88rem; }
 
 /* --- PRINT --- */
 @media print {
