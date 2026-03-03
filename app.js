@@ -4944,7 +4944,7 @@ function renderQueuePage() {
   var completed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; });
   var failed = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'failed'; });
 
-  return '<div class="fade-in" data-completed-count="' + completed.length + '">' +
+  return '<div data-completed-count="' + completed.length + '">' +
     '<div class="section-header"><div>' +
       '<div class="section-title">' + ICONS.bolt + ' Estimate Queue</div>' +
       '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
@@ -5078,64 +5078,13 @@ function removeFromQueue(queueId) {
   renderPage();
 }
 
-// Refresh queue progress incrementally — no full re-render to avoid blinking
+// Refresh queue progress — renderPage() now handles incremental updates intelligently
 setInterval(function() {
   updateNotificationBadge();
   if (STATE.currentPage !== 'queue') return;
   var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
   if (inProgress.length === 0) return;
-  // Check if any items completed since last render
-  var completedNow = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; }).length;
-  var renderedCompleted = parseInt(document.getElementById('page-content')?.getAttribute('data-completed-count') || '0');
-  if (completedNow !== renderedCompleted) { renderPage(); return; }
-  // Targeted update: just update progress text, bar width, and step indicators for each in-progress item
-  inProgress.forEach(function(q, idx) {
-    var container = document.getElementById('queue-item-' + q.id);
-    if (!container) { renderPage(); return; }
-    var elapsed = Date.now() - q.startTime;
-    var elapsedSec = Math.round(elapsed / 1000);
-    var elapsedMin = Math.floor(elapsedSec / 60);
-    var elapsedSecRem = elapsedSec % 60;
-    var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
-    var pct = q.progress || 0;
-    // Update elapsed time
-    var elapsedEl = container.querySelector('.queue-elapsed');
-    if (elapsedEl) elapsedEl.textContent = elapsedStr + ' elapsed';
-    // Update step text
-    var stepEl = container.querySelector('.queue-step-text');
-    if (stepEl) stepEl.textContent = q.step || 'Processing...';
-    // Update progress bar width
-    var bar = container.querySelector('.queue-progress-bar');
-    if (bar) bar.style.width = pct + '%';
-    // Update step indicators
-    var cs = q.currentStep || 1;
-    var ts = q.totalSteps || 7;
-    var labels = q.stepLabels || STEP_LABELS_DEFAULT;
-    var stepsContainer = container.querySelector('.queue-steps');
-    if (stepsContainer) {
-      var stepsHtml = '';
-      for (var si = 1; si <= ts; si++) {
-        var isDone = si < cs;
-        var isActive = si === cs;
-        var icon = isDone ? ICONS.check : (isActive ? '<span class="ai-step-spinner"></span>' : '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--border);box-sizing:border-box;"></span>');
-        var lc = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
-        stepsHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;"><span style="color:' + lc + ';flex-shrink:0;width:14px;text-align:center;">' + icon + '</span><span style="font-size:0.75rem;color:' + lc + ';font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || '') + '</span></div>';
-      }
-      stepsContainer.innerHTML = stepsHtml;
-    }
-    // Update activity log
-    var logContainer = container.querySelector('.queue-activity-log');
-    if (logContainer && AI_STATE.activityLog.length > 0) {
-      var logEntries = AI_STATE.activityLog.slice(-6);
-      logContainer.innerHTML = logEntries.map(function(entry) {
-        return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.72rem; line-height:1.4;">' +
-          '<span style="color:var(--text-muted); font-family:JetBrains Mono,monospace; flex-shrink:0; min-width:36px;">' + entry.ts + '</span>' +
-          '<span style="flex-shrink:0; width:14px; text-align:center;">' + entry.icon + '</span>' +
-          '<span style="color:var(--text-secondary);">' + entry.message + '</span>' +
-        '</div>';
-      }).join('');
-    }
-  });
+  renderPage(); // renderPage is now smart — won't blink during processing
 }, 4000);
 
 var STEP_LABELS_DEFAULT = ['', 'Document Extraction', 'Project Context', 'Structural Takeoff & Analysis', 'Line Item Assembly', 'Cost Structure', 'Benchmark Validation', 'Final Calculations'];
@@ -5210,12 +5159,82 @@ var PAGE_MAP = {
   'settings': { title: 'Settings', render: renderSettingsPage, breadcrumb: 'System > Settings' },
 };
 
-function renderPage() {
+function renderPage(forceFullRender) {
   var page = PAGE_MAP[STATE.currentPage];
   if (!page) return;
   var content = document.getElementById('page-content');
+  // For queue page during active processing, avoid full innerHTML replacement to prevent blinking.
+  // Only do targeted updates unless this is a forced full render or first render.
+  if (STATE.currentPage === 'queue' && !forceFullRender && content.getAttribute('data-page') === 'queue') {
+    var inProgress = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'processing'; });
+    if (inProgress.length > 0) {
+      // Check if completed count changed — need structural update
+      var completedNow = ESTIMATE_QUEUE.filter(function(q) { return q.status === 'completed'; }).length;
+      var renderedCompleted = parseInt(content.getAttribute('data-completed-count') || '0');
+      if (completedNow !== renderedCompleted) {
+        // Structural change — do full render but without fade animation
+        content.innerHTML = page.render();
+        content.setAttribute('data-page', 'queue');
+        return;
+      }
+      // Otherwise do incremental updates only
+      doQueueIncrementalUpdate(inProgress);
+      return;
+    }
+  }
   content.innerHTML = page.render();
+  content.setAttribute('data-page', STATE.currentPage);
   updateBreadcrumb(page.breadcrumb);
+}
+
+function doQueueIncrementalUpdate(inProgress) {
+  inProgress.forEach(function(q) {
+    var container = document.getElementById('queue-item-' + q.id);
+    if (!container) return; // skip if element not found, don't force re-render
+    var elapsed = Date.now() - q.startTime;
+    var elapsedSec = Math.round(elapsed / 1000);
+    var elapsedMin = Math.floor(elapsedSec / 60);
+    var elapsedSecRem = elapsedSec % 60;
+    var elapsedStr = elapsedMin > 0 ? elapsedMin + 'm ' + elapsedSecRem + 's' : elapsedSecRem + 's';
+    var pct = q.progress || 0;
+    // Update elapsed time
+    var elapsedEl = container.querySelector('.queue-elapsed');
+    if (elapsedEl) elapsedEl.textContent = elapsedStr + ' elapsed';
+    // Update step text
+    var stepEl = container.querySelector('.queue-step-text');
+    if (stepEl) stepEl.textContent = q.step || 'Processing...';
+    // Update progress bar width
+    var bar = container.querySelector('.queue-progress-bar');
+    if (bar) bar.style.width = pct + '%';
+    // Update step indicators
+    var cs = q.currentStep || 1;
+    var ts = q.totalSteps || 7;
+    var labels = q.stepLabels || STEP_LABELS_DEFAULT;
+    var stepsContainer = container.querySelector('.queue-steps');
+    if (stepsContainer) {
+      var stepsHtml = '';
+      for (var si = 1; si <= ts; si++) {
+        var isDone = si < cs;
+        var isActive = si === cs;
+        var icon = isDone ? ICONS.check : (isActive ? '<span class="ai-step-spinner"></span>' : '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--border);box-sizing:border-box;"></span>');
+        var lc = isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--text-muted)';
+        stepsHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;"><span style="color:' + lc + ';flex-shrink:0;width:14px;text-align:center;">' + icon + '</span><span style="font-size:0.75rem;color:' + lc + ';font-weight:' + (isActive ? '600' : '400') + ';">' + (labels[si] || '') + '</span></div>';
+      }
+      stepsContainer.innerHTML = stepsHtml;
+    }
+    // Update activity log
+    var logContainer = container.querySelector('.queue-activity-log');
+    if (logContainer && AI_STATE.activityLog.length > 0) {
+      var logEntries = AI_STATE.activityLog.slice(-6);
+      logContainer.innerHTML = logEntries.map(function(entry) {
+        return '<div style="display:flex; align-items:flex-start; gap:6px; font-size:0.72rem; line-height:1.4;">' +
+          '<span style="color:var(--text-muted); font-family:JetBrains Mono,monospace; flex-shrink:0; min-width:36px;">' + entry.ts + '</span>' +
+          '<span style="flex-shrink:0; width:14px; text-align:center;">' + entry.icon + '</span>' +
+          '<span style="color:var(--text-secondary);">' + entry.message + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  });
 }
 
 function updateBreadcrumb(text) {
