@@ -3381,11 +3381,9 @@ function generateFootbridgeEstimate() {
   // Promote footbridge estimate into main output flow
   STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate));
   STATE.outputActiveTab = 'summary';
-  STATE.currentPage = 'output';
   STATE.footbridgeOutputTab = 'summary';
   saveState();
-  renderPage();
-  updateNavigation();
+  navigateTo('output');
   showToast('Bridge estimate complete — view full output.', 'success');
 }
 
@@ -4207,7 +4205,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     hideAIProgress();
     AI_STATE.processing = false;
     showToast('Estimate "' + (est.name || 'Untitled') + '" completed! View it in the queue or output.', 'success');
-    if (STATE.currentPage === 'queue') renderPage();
+    if (STATE.currentPage === 'queue') renderPage(true);
 
   } catch(err) {
     logAIActivity(ICONS.warning, 'Error: ' + err.message);
@@ -4248,7 +4246,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
 
     updateQueue({ status: 'completed', progress: 100, step: 'Completed (template)', completedTime: Date.now(), totalCost: est.totalCost, estimateData: JSON.parse(JSON.stringify(est)), error: null });
     logActivity('Generated estimate (template)', (est.name || 'Untitled') + ' — ' + fmt(est.totalCost));
-    if (STATE.currentPage === 'queue') renderPage();
+    if (STATE.currentPage === 'queue') renderPage(true);
   }
 }
 
@@ -4292,10 +4290,7 @@ function generateEstimate() {
   saveState();
 
   // Navigate to queue
-  STATE.currentPage = 'queue';
-  updateNavigation();
-  renderPage();
-
+  navigateTo('queue');
   showToast('Estimate submitted. Claude is analyzing your documents.', 'info');
 
   var apiKey = localStorage.getItem('sc-anthropic-key');
@@ -4331,10 +4326,10 @@ function clearCurrentEstimate() {
 function connectEstimate(id) {
   STATE.connectedEstimateId = id;
   if (STATE.currentPage !== 'connector') {
-    STATE.currentPage = 'connector';
-    updateNavigation();
+    navigateTo('connector');
+  } else {
+    renderPage(true);
   }
-  renderPage();
 }
 
 function duplicateEstimate(id) {
@@ -4358,10 +4353,8 @@ function loadEstimateToWorkspace(id) {
   STATE.currentEstimate = JSON.parse(JSON.stringify(est));
   STATE.currentEstimate.id = generateId();
   STATE.currentEstimate.status = 'draft';
-  STATE.currentPage = 'input';
   saveState();
-  updateNavigation();
-  renderPage();
+  navigateTo('input');
   showToast('Estimate loaded into editor.', 'success');
 }
 
@@ -4369,11 +4362,9 @@ function viewEstimateDetail(id) {
   var est = STATE.estimates.find(function(e) { return e.id === id; });
   if (!est) return;
   STATE.currentEstimate = JSON.parse(JSON.stringify(est));
-  STATE.currentPage = 'output';
   STATE.outputActiveTab = 'summary';
   saveState();
-  updateNavigation();
-  renderPage();
+  navigateTo('output');
 }
 
 function toggleComparisonMode() {
@@ -5093,10 +5084,9 @@ function viewQueueEstimate(queueId) {
   var qItem = ESTIMATE_QUEUE.find(function(q) { return q.id === queueId; });
   if (!qItem || !qItem.estimateData) return;
   STATE.currentEstimate = JSON.parse(JSON.stringify(qItem.estimateData));
-  STATE.currentPage = 'output';
   STATE.outputActiveTab = 'summary';
-  renderPage();
-  updateNavigation();
+  saveState();
+  navigateTo('output');
 }
 
 function removeFromQueue(queueId) {
@@ -5251,6 +5241,7 @@ function renderPage(forceFullRender) {
         // Structural change — do full render but without fade animation
         content.innerHTML = page.render();
         content.setAttribute('data-page', 'queue');
+        updateBreadcrumb(page.breadcrumb);
         return;
       }
       // Otherwise do incremental updates only
