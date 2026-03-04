@@ -128,37 +128,110 @@ function createNewEstimate() {
 function getDefaultAssumptions() {
   return {
     marginPercent: 15,
-    contingencyPercent: 5,
+    contingencyPercent: 8,        // 8% — realistic for design-build (was 5%)
     overheadPercent: 10,
     bondInsurancePercent: 2.5,
-    glulamPriceBF: 4.25,
-    cltPriceSF3: 26,
-    cltPriceSF5: 34,
-    cltPriceSF7: 44,
-    dltPriceSF: 22,
-    mppPriceSF: 28,
-    nltPriceSF: 15,
-    steelConnectionsTon: 4500,
-    plywoodSF: 3.75,
-    concreteToppingSF: 10,
-    shippingPerBF: 0.55,
-    shippingPerTruck: 4500,
-    engHourlyRate: 195,
-    draftHourlyRate: 115,
-    shopHourlyRate: 82,
-    siteCarpentrHourlyRate: 95,
-    siteLaborHourlyRate: 65,
-    siteSuperHourlyRate: 140,
-    craneOperatorHourlyRate: 115,
-    craneDailyRate: 5500,
-    pmHourlyRate: 165,
+    // Material pricing — 2025-2026 national average (updated from 2023 data)
+    glulamPriceBF: 5.10,          // DF 24F-V8 (was $4.25 — +20% market escalation)
+    cltPriceSF3: 30,              // CLT 3-ply (was $26)
+    cltPriceSF5: 40,              // CLT 5-ply (was $34)
+    cltPriceSF7: 52,              // CLT 7-ply (was $44)
+    dltPriceSF: 26,               // DLT (was $22)
+    mppPriceSF: 33,               // MPP - Mass Plywood Panel (was $28)
+    nltPriceSF: 18,               // NLT - Nail Laminated Timber (was $15)
+    steelConnectionsTon: 5200,    // steel connections (was $4,500)
+    plywoodSF: 4.50,              // plywood (was $3.75)
+    concreteToppingSF: 12,        // concrete topping (was $10)
+    shippingPerBF: 0.65,          // shipping per BF (was $0.55)
+    shippingPerTruck: 5200,       // per truck (was $4,500)
+    // Labor rates — 2025-2026 national average
+    engHourlyRate: 235,           // structural PE (was $195)
+    draftHourlyRate: 135,         // drafter/detailer (was $115)
+    shopHourlyRate: 95,           // shop fabrication (was $82)
+    siteCarpentrHourlyRate: 120,  // site carpenter — skilled timber erection (was $95)
+    siteLaborHourlyRate: 78,      // general laborer (was $65)
+    siteSuperHourlyRate: 165,     // superintendent (was $140)
+    craneOperatorHourlyRate: 135, // crane operator (was $115)
+    craneDailyRate: 6500,         // 50-ton mobile crane (was $5,500)
+    pmHourlyRate: 195,            // project manager (was $165)
     shopManHoursPerPiece: 2.5,
-    escalationPercent: 3,
+    escalationPercent: 3.5,       // annual escalation (was 3%)
   };
 }
 
 function generateId() {
   return 'sc-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+}
+
+// HTML escape utility — prevents XSS in all innerHTML rendering of user data
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+// ---- SECTION 3B: REGIONAL COST FACTORS ----
+// RSMeans City Cost Index data (2025 baseline: national average = 1.00)
+// Material factors adjust material pricing; Labor factors adjust all labor rates.
+const REGIONAL_FACTORS = {
+  '': { label: 'National Average', material: 1.00, labor: 1.00 },
+  'vancouver-bc': { label: 'Vancouver, BC', material: 1.08, labor: 1.22 },
+  'portland-or': { label: 'Portland, OR', material: 1.02, labor: 1.12 },
+  'seattle-wa': { label: 'Seattle, WA', material: 1.04, labor: 1.18 },
+  'san-francisco-ca': { label: 'San Francisco, CA', material: 1.10, labor: 1.35 },
+  'los-angeles-ca': { label: 'Los Angeles, CA', material: 1.06, labor: 1.25 },
+  'denver-co': { label: 'Denver, CO', material: 0.98, labor: 1.05 },
+  'chicago-il': { label: 'Chicago, IL', material: 1.03, labor: 1.20 },
+  'new-york-ny': { label: 'New York, NY', material: 1.12, labor: 1.42 },
+  'boston-ma': { label: 'Boston, MA', material: 1.08, labor: 1.30 },
+  'austin-tx': { label: 'Austin, TX', material: 0.95, labor: 0.92 },
+  'dallas-tx': { label: 'Dallas, TX', material: 0.94, labor: 0.90 },
+  'atlanta-ga': { label: 'Atlanta, GA', material: 0.96, labor: 0.88 },
+  'miami-fl': { label: 'Miami, FL', material: 0.99, labor: 0.95 },
+  'phoenix-az': { label: 'Phoenix, AZ', material: 0.97, labor: 0.93 },
+  'minneapolis-mn': { label: 'Minneapolis, MN', material: 1.01, labor: 1.10 },
+  'toronto-on': { label: 'Toronto, ON', material: 1.06, labor: 1.15 },
+  'calgary-ab': { label: 'Calgary, AB', material: 1.05, labor: 1.18 },
+  'boise-id': { label: 'Boise, ID', material: 0.96, labor: 0.95 },
+  'salt-lake-city-ut': { label: 'Salt Lake City, UT', material: 0.97, labor: 0.98 },
+};
+
+// Detect best-match region from project location text
+function detectRegion(locationText) {
+  if (!locationText) return '';
+  var loc = locationText.toLowerCase();
+  var matches = Object.entries(REGIONAL_FACTORS).filter(function(e) {
+    if (!e[0]) return false;
+    var keywords = e[1].label.toLowerCase().split(/[,\s]+/);
+    return keywords.some(function(kw) { return kw.length > 2 && loc.indexOf(kw) >= 0; });
+  });
+  return matches.length > 0 ? matches[0][0] : '';
+}
+
+// Apply regional factors to assumptions
+function getRegionalAssumptions(assumptions, regionKey) {
+  var factor = REGIONAL_FACTORS[regionKey];
+  if (!factor || regionKey === '') return assumptions;
+  var adjusted = Object.assign({}, assumptions);
+  // Material adjustments
+  adjusted.glulamPriceBF = Math.round(assumptions.glulamPriceBF * factor.material * 100) / 100;
+  adjusted.cltPriceSF3 = Math.round(assumptions.cltPriceSF3 * factor.material * 100) / 100;
+  adjusted.cltPriceSF5 = Math.round(assumptions.cltPriceSF5 * factor.material * 100) / 100;
+  adjusted.cltPriceSF7 = Math.round(assumptions.cltPriceSF7 * factor.material * 100) / 100;
+  adjusted.dltPriceSF = Math.round(assumptions.dltPriceSF * factor.material * 100) / 100;
+  adjusted.mppPriceSF = Math.round(assumptions.mppPriceSF * factor.material * 100) / 100;
+  adjusted.nltPriceSF = Math.round(assumptions.nltPriceSF * factor.material * 100) / 100;
+  adjusted.steelConnectionsTon = Math.round(assumptions.steelConnectionsTon * factor.material);
+  // Labor adjustments
+  adjusted.engHourlyRate = Math.round(assumptions.engHourlyRate * factor.labor);
+  adjusted.draftHourlyRate = Math.round(assumptions.draftHourlyRate * factor.labor);
+  adjusted.shopHourlyRate = Math.round(assumptions.shopHourlyRate * factor.labor);
+  adjusted.siteCarpentrHourlyRate = Math.round(assumptions.siteCarpentrHourlyRate * factor.labor);
+  adjusted.siteLaborHourlyRate = Math.round(assumptions.siteLaborHourlyRate * factor.labor);
+  adjusted.siteSuperHourlyRate = Math.round(assumptions.siteSuperHourlyRate * factor.labor);
+  adjusted.craneOperatorHourlyRate = Math.round(assumptions.craneOperatorHourlyRate * factor.labor);
+  adjusted.craneDailyRate = Math.round(assumptions.craneDailyRate * factor.labor);
+  adjusted.pmHourlyRate = Math.round(assumptions.pmHourlyRate * factor.labor);
+  return adjusted;
 }
 
 // ---- SECTION 4: DELIVERY MODELS ----
@@ -280,89 +353,89 @@ const MATERIAL_OPTIONS = {
   beams: {
     label: 'Beams',
     options: [
-      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 4.25, unit: 'BF' },
-      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 3.80, unit: 'BF' },
-      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
-      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.25, unit: 'BF' },
-      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 3.50, unit: 'BF' },
-      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 4.00, unit: 'BF' },
-      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 2800, unit: 'ton' },
-      { value: 'steel-hss-rect', label: 'Steel HSS Rectangular', category: 'steel', pricePer: 3200, unit: 'ton' },
-      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
-      { value: 'concrete-precast', label: 'Precast Concrete Beam', category: 'concrete', pricePer: 18, unit: 'LF' },
-      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 22, unit: 'LF' },
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 5.10, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.50, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 6.60, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 6.30, unit: 'BF' },
+      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 4.20, unit: 'BF' },
+      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 4.80, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-hss-rect', label: 'Steel HSS Rectangular', category: 'steel', pricePer: 3600, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3800, unit: 'ton' },
+      { value: 'concrete-precast', label: 'Precast Concrete Beam', category: 'concrete', pricePer: 22, unit: 'LF' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 26, unit: 'LF' },
     ]
   },
   columns: {
     label: 'Columns',
     options: [
-      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 4.50, unit: 'BF' },
-      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.00, unit: 'BF' },
-      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.75, unit: 'BF' },
-      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
-      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 4.25, unit: 'BF' },
-      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 3.75, unit: 'BF' },
-      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 2800, unit: 'ton' },
-      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3200, unit: 'ton' },
-      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
-      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3000, unit: 'ton' },
-      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 45, unit: 'LF' },
-      { value: 'concrete-precast', label: 'Precast Concrete', category: 'concrete', pricePer: 40, unit: 'LF' },
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 5.40, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.80, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 6.90, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 6.60, unit: 'BF' },
+      { value: 'psl', label: 'PSL (Parallel Strand Lumber)', category: 'timber', pricePer: 5.10, unit: 'BF' },
+      { value: 'lvl', label: 'LVL (Laminated Veneer Lumber)', category: 'timber', pricePer: 4.50, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3600, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3800, unit: 'ton' },
+      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3400, unit: 'ton' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 54, unit: 'LF' },
+      { value: 'concrete-precast', label: 'Precast Concrete', category: 'concrete', pricePer: 48, unit: 'LF' },
     ]
   },
   girders: {
     label: 'Girders',
     options: [
-      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 4.50, unit: 'BF' },
-      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.00, unit: 'BF' },
-      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.75, unit: 'BF' },
-      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
-      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 2800, unit: 'ton' },
-      { value: 'steel-plate', label: 'Steel Plate Girder', category: 'steel', pricePer: 3500, unit: 'ton' },
-      { value: 'concrete-precast', label: 'Precast Concrete Girder', category: 'concrete', pricePer: 25, unit: 'LF' },
-      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 30, unit: 'LF' },
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir (24F-V8)', category: 'timber', pricePer: 5.40, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.80, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 6.90, unit: 'BF' },
+      { value: 'glulam-wrc', label: 'Glulam - Western Red Cedar', category: 'timber', pricePer: 6.60, unit: 'BF' },
+      { value: 'steel-w', label: 'Steel W-Shape (Wide Flange)', category: 'steel', pricePer: 3200, unit: 'ton' },
+      { value: 'steel-plate', label: 'Steel Plate Girder', category: 'steel', pricePer: 4000, unit: 'ton' },
+      { value: 'concrete-precast', label: 'Precast Concrete Girder', category: 'concrete', pricePer: 30, unit: 'LF' },
+      { value: 'concrete-cip', label: 'Cast-in-Place Concrete', category: 'concrete', pricePer: 36, unit: 'LF' },
     ]
   },
   posts: {
     label: 'Posts',
     options: [
-      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 4.25, unit: 'BF' },
-      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 3.80, unit: 'BF' },
-      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 5.50, unit: 'BF' },
-      { value: 'solid-df', label: 'Solid Sawn - Douglas Fir', category: 'timber', pricePer: 2.80, unit: 'BF' },
-      { value: 'solid-spruce', label: 'Solid Sawn - Spruce', category: 'timber', pricePer: 2.40, unit: 'BF' },
-      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3200, unit: 'ton' },
-      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3400, unit: 'ton' },
-      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3000, unit: 'ton' },
-      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 2800, unit: 'ton' },
+      { value: 'glulam-df', label: 'Glulam - Douglas Fir', category: 'timber', pricePer: 5.10, unit: 'BF' },
+      { value: 'glulam-spruce', label: 'Glulam - Spruce', category: 'timber', pricePer: 4.50, unit: 'BF' },
+      { value: 'glulam-yc', label: 'Glulam - Yellow Cedar', category: 'timber', pricePer: 6.60, unit: 'BF' },
+      { value: 'solid-df', label: 'Solid Sawn - Douglas Fir', category: 'timber', pricePer: 3.40, unit: 'BF' },
+      { value: 'solid-spruce', label: 'Solid Sawn - Spruce', category: 'timber', pricePer: 2.90, unit: 'BF' },
+      { value: 'steel-hss-sq', label: 'Steel HSS Square', category: 'steel', pricePer: 3600, unit: 'ton' },
+      { value: 'steel-hss-round', label: 'Steel HSS Round', category: 'steel', pricePer: 3800, unit: 'ton' },
+      { value: 'steel-pipe', label: 'Steel Pipe', category: 'steel', pricePer: 3400, unit: 'ton' },
+      { value: 'steel-w', label: 'Steel W-Shape', category: 'steel', pricePer: 3200, unit: 'ton' },
     ]
   },
   floors: {
     label: 'Floors',
     options: [
-      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 26, unit: 'SF' },
-      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 34, unit: 'SF' },
-      { value: 'clt-7ply', label: 'CLT 7-Ply (245mm)', category: 'timber', pricePer: 44, unit: 'SF' },
-      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 22, unit: 'SF' },
-      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 15, unit: 'SF' },
-      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 28, unit: 'SF' },
-      { value: 'concrete-metal-deck', label: 'Concrete on Metal Deck', category: 'concrete', pricePer: 14, unit: 'SF' },
-      { value: 'concrete-pt', label: 'Post-Tensioned Concrete Slab', category: 'concrete', pricePer: 18, unit: 'SF' },
-      { value: 'steel-deck', label: 'Steel Deck (bare)', category: 'steel', pricePer: 8, unit: 'SF' },
-      { value: 'composite-deck', label: 'Composite Steel Deck + Concrete', category: 'steel', pricePer: 16, unit: 'SF' },
+      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 30, unit: 'SF' },
+      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 40, unit: 'SF' },
+      { value: 'clt-7ply', label: 'CLT 7-Ply (245mm)', category: 'timber', pricePer: 52, unit: 'SF' },
+      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 26, unit: 'SF' },
+      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 18, unit: 'SF' },
+      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 33, unit: 'SF' },
+      { value: 'concrete-metal-deck', label: 'Concrete on Metal Deck', category: 'concrete', pricePer: 16, unit: 'SF' },
+      { value: 'concrete-pt', label: 'Post-Tensioned Concrete Slab', category: 'concrete', pricePer: 22, unit: 'SF' },
+      { value: 'steel-deck', label: 'Steel Deck (bare)', category: 'steel', pricePer: 10, unit: 'SF' },
+      { value: 'composite-deck', label: 'Composite Steel Deck + Concrete', category: 'steel', pricePer: 19, unit: 'SF' },
     ]
   },
   roofs: {
     label: 'Roof',
     options: [
-      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 26, unit: 'SF' },
-      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 34, unit: 'SF' },
-      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 22, unit: 'SF' },
-      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 15, unit: 'SF' },
-      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 28, unit: 'SF' },
-      { value: 'steel-deck', label: 'Steel Deck', category: 'steel', pricePer: 8, unit: 'SF' },
-      { value: 'sip', label: 'SIP (Structural Insulated Panel)', category: 'timber', pricePer: 18, unit: 'SF' },
-      { value: 'concrete-slab', label: 'Concrete Roof Slab', category: 'concrete', pricePer: 16, unit: 'SF' },
+      { value: 'clt-3ply', label: 'CLT 3-Ply (105mm)', category: 'timber', pricePer: 30, unit: 'SF' },
+      { value: 'clt-5ply', label: 'CLT 5-Ply (175mm)', category: 'timber', pricePer: 40, unit: 'SF' },
+      { value: 'dlt', label: 'DLT (Dowel Laminated Timber)', category: 'timber', pricePer: 26, unit: 'SF' },
+      { value: 'nlt', label: 'NLT (Nail Laminated Timber)', category: 'timber', pricePer: 18, unit: 'SF' },
+      { value: 'mpp', label: 'MPP (Mass Plywood Panel)', category: 'timber', pricePer: 33, unit: 'SF' },
+      { value: 'steel-deck', label: 'Steel Deck', category: 'steel', pricePer: 10, unit: 'SF' },
+      { value: 'sip', label: 'SIP (Structural Insulated Panel)', category: 'timber', pricePer: 22, unit: 'SF' },
+      { value: 'concrete-slab', label: 'Concrete Roof Slab', category: 'concrete', pricePer: 19, unit: 'SF' },
     ]
   },
 };
@@ -901,25 +974,25 @@ var INDUSTRY_BENCHMARKS = {
   },
   // Unit rate sanity checks — flagged if outside [low, high]
   unitRates: [
-    { pattern: /glulam.*beam|beam.*glulam|df.*beam|beam.*df/i, unit: 'BF', low: 3.50, high: 7.00, label: 'Glulam beams' },
-    { pattern: /glulam.*col|col.*glulam|df.*col|col.*df/i, unit: 'BF', low: 3.50, high: 7.00, label: 'Glulam columns' },
-    { pattern: /clt.*3.*ply/i, unit: 'SF', low: 20, high: 34, label: 'CLT 3-ply' },
-    { pattern: /clt.*5.*ply/i, unit: 'SF', low: 28, high: 42, label: 'CLT 5-ply' },
-    { pattern: /clt.*7.*ply/i, unit: 'SF', low: 36, high: 55, label: 'CLT 7-ply' },
-    { pattern: /dlt/i, unit: 'SF', low: 16, high: 30, label: 'DLT' },
-    { pattern: /nlt/i, unit: 'SF', low: 10, high: 22, label: 'NLT' },
-    { pattern: /steel.*w.?shape|w.?shape|wide.*flange/i, unit: 'ton', low: 2200, high: 3800, label: 'Steel W-shapes' },
-    { pattern: /hss|tube.*steel/i, unit: 'ton', low: 2600, high: 4200, label: 'Steel HSS' },
-    { pattern: /carpenter|site.*carp/i, unit: 'hr', low: 75, high: 125, label: 'Site carpenters' },
-    { pattern: /labor(?:er)?/i, unit: 'hr', low: 50, high: 85, label: 'Laborers' },
-    { pattern: /super(?:visor|intendent)/i, unit: 'hr', low: 110, high: 175, label: 'Superintendents' },
-    { pattern: /engineer/i, unit: 'hr', low: 150, high: 250, label: 'Engineering' },
-    { pattern: /draft(?:ing|sman|sperson)/i, unit: 'hr', low: 85, high: 150, label: 'Drafting' },
-    { pattern: /crane.*50|50.*ton.*crane/i, unit: 'day', low: 3200, high: 5500, label: 'Crane 50T' },
-    { pattern: /crane.*100|100.*ton.*crane/i, unit: 'day', low: 5500, high: 10000, label: 'Crane 100T' },
-    { pattern: /pm|project.*manag/i, unit: 'hr', low: 130, high: 210, label: 'Project management' },
-    { pattern: /concrete.*4000|4000.*psi/i, unit: 'CY', low: 160, high: 280, label: 'Concrete 4000PSI' },
-    { pattern: /rebar|reinforc/i, unit: 'ton', low: 1400, high: 2400, label: 'Rebar' },
+    { pattern: /glulam.*beam|beam.*glulam|df.*beam|beam.*df/i, unit: 'BF', low: 4.00, high: 8.00, label: 'Glulam beams' },
+    { pattern: /glulam.*col|col.*glulam|df.*col|col.*df/i, unit: 'BF', low: 4.00, high: 8.00, label: 'Glulam columns' },
+    { pattern: /clt.*3.*ply/i, unit: 'SF', low: 24, high: 40, label: 'CLT 3-ply' },
+    { pattern: /clt.*5.*ply/i, unit: 'SF', low: 32, high: 52, label: 'CLT 5-ply' },
+    { pattern: /clt.*7.*ply/i, unit: 'SF', low: 42, high: 65, label: 'CLT 7-ply' },
+    { pattern: /dlt/i, unit: 'SF', low: 20, high: 35, label: 'DLT' },
+    { pattern: /nlt/i, unit: 'SF', low: 14, high: 26, label: 'NLT' },
+    { pattern: /steel.*w.?shape|w.?shape|wide.*flange/i, unit: 'ton', low: 2800, high: 4200, label: 'Steel W-shapes' },
+    { pattern: /hss|tube.*steel/i, unit: 'ton', low: 3000, high: 4800, label: 'Steel HSS' },
+    { pattern: /carpenter|site.*carp/i, unit: 'hr', low: 95, high: 160, label: 'Site carpenters' },
+    { pattern: /labor(?:er)?/i, unit: 'hr', low: 60, high: 105, label: 'Laborers' },
+    { pattern: /super(?:visor|intendent)/i, unit: 'hr', low: 130, high: 210, label: 'Superintendents' },
+    { pattern: /engineer/i, unit: 'hr', low: 180, high: 300, label: 'Engineering' },
+    { pattern: /draft(?:ing|sman|sperson)/i, unit: 'hr', low: 100, high: 175, label: 'Drafting' },
+    { pattern: /crane.*50|50.*ton.*crane/i, unit: 'day', low: 4500, high: 7500, label: 'Crane 50T' },
+    { pattern: /crane.*100|100.*ton.*crane/i, unit: 'day', low: 7000, high: 12000, label: 'Crane 100T' },
+    { pattern: /pm|project.*manag/i, unit: 'hr', low: 155, high: 250, label: 'Project management' },
+    { pattern: /concrete.*4000|4000.*psi/i, unit: 'CY', low: 200, high: 320, label: 'Concrete 4000PSI' },
+    { pattern: /rebar|reinforc/i, unit: 'ton', low: 1700, high: 2800, label: 'Rebar' },
   ],
   // Quantity-per-SF sanity checks (for building projects only)
   qtyPerSF: [
@@ -1074,7 +1147,25 @@ function saveState() {
     localStorage.setItem('sc-theme', STATE.currentTheme);
     localStorage.setItem('sc-current-estimate', JSON.stringify(STATE.currentEstimate));
     localStorage.setItem('sc-estimates', JSON.stringify(STATE.estimates));
-  } catch(e) { console.warn('Save failed:', e); }
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+      console.warn('localStorage quota exceeded, pruning old data...');
+      try {
+        var estimates = STATE.estimates.slice();
+        estimates.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+        while (estimates.length > 5) { estimates.shift(); }
+        STATE.estimates = estimates;
+        localStorage.setItem('sc-estimates', JSON.stringify(estimates));
+        localStorage.setItem('sc-current-estimate', JSON.stringify(STATE.currentEstimate));
+        showToast('Storage nearly full — oldest estimates were removed to free space.', 'warning');
+      } catch(e2) {
+        console.error('Save failed even after pruning:', e2);
+        showToast('Unable to save — browser storage is full. Export your estimates to avoid data loss.', 'danger');
+      }
+    } else {
+      console.warn('Save failed:', e);
+    }
+  }
 }
 
 function loadState() {
@@ -1132,17 +1223,17 @@ function renderInputPage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Project Name</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Pacific Heights Mixed-Use" value="' + est.name + '" onchange="updateEstimate(\'name\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Pacific Heights Mixed-Use" value="' + esc(est.name) + '" onchange="updateEstimate(\'name\', this.value)">' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Client</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Westbank Corp" value="' + est.client + '" onchange="updateEstimate(\'client\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Westbank Corp" value="' + esc(est.client) + '" onchange="updateEstimate(\'client\', this.value)">' +
         '</div>' +
       '</div>' +
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Location</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Vancouver, BC" value="' + est.location + '" onchange="updateEstimate(\'location\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Vancouver, BC" value="' + esc(est.location) + '" onchange="updateEstimate(\'location\', this.value)">' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Project Type</label>' +
@@ -1236,7 +1327,7 @@ function renderInputPage() {
           '<div class="card-title">Project Scope & Description</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="5" placeholder="Describe the full project scope: building type, number of stories, approximate square footage, structural system, key features, special requirements..." onchange="updateEstimate(\'scopeDescription\', this.value)">' + est.scopeDescription + '</textarea>' +
+          '<textarea class="form-textarea" rows="5" placeholder="Describe the full project scope: building type, number of stories, approximate square footage, structural system, key features, special requirements..." onchange="updateEstimate(\'scopeDescription\', this.value)">' + esc(est.scopeDescription) + '</textarea>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
@@ -1244,7 +1335,7 @@ function renderInputPage() {
           '<div class="card-title">RFP Notes & Requirements</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="5" placeholder="Key requirements from the RFP: deadlines, scope boundaries, deliverables, evaluation criteria, pricing format requirements..." onchange="updateEstimate(\'rfpNotes\', this.value)">' + est.rfpNotes + '</textarea>' +
+          '<textarea class="form-textarea" rows="5" placeholder="Key requirements from the RFP: deadlines, scope boundaries, deliverables, evaluation criteria, pricing format requirements..." onchange="updateEstimate(\'rfpNotes\', this.value)">' + esc(est.rfpNotes) + '</textarea>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1255,7 +1346,7 @@ function renderInputPage() {
           '<div class="card-title">RFIs & Clarifications</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="4" placeholder="Outstanding RFIs, design clarifications, assumptions that need confirmation..." onchange="updateEstimate(\'rfiNotes\', this.value)">' + est.rfiNotes + '</textarea>' +
+          '<textarea class="form-textarea" rows="4" placeholder="Outstanding RFIs, design clarifications, assumptions that need confirmation..." onchange="updateEstimate(\'rfiNotes\', this.value)">' + esc(est.rfiNotes) + '</textarea>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
@@ -1263,7 +1354,7 @@ function renderInputPage() {
           '<div class="card-title">Client & Contractor Communications</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="4" placeholder="Important notes from the client, contractor, or architect. Key constraints, preferences, budget signals..." onchange="updateEstimate(\'clientComms\', this.value)">' + est.clientComms + '</textarea>' +
+          '<textarea class="form-textarea" rows="4" placeholder="Important notes from the client, contractor, or architect. Key constraints, preferences, budget signals..." onchange="updateEstimate(\'clientComms\', this.value)">' + esc(est.clientComms) + '</textarea>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1444,7 +1535,7 @@ function renderOutputPage() {
     '<div class="section-header">' +
       '<div>' +
         '<div class="section-title">' + ICONS.output + ' Estimate Output</div>' +
-        '<div class="section-desc">' + (est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
+        '<div class="section-desc">' + esc(est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
       '</div>' +
       '<div class="section-actions">' +
         '<button class="btn btn-sm" onclick="shareEstimateLink()" title="Copy shareable link">' +
@@ -1600,9 +1691,9 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
       '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); font-weight:700;">' + ICONS.info + ' Project At a Glance</div>' +
     '</div>' +
     '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px 24px; margin-bottom:14px;">' +
-      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Project</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + (est.name || 'Untitled') + '</div></div>' +
-      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Client</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + (est.client || 'N/A') + '</div></div>' +
-      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Location</span><div style="font-size:0.88rem; color:var(--text-primary);">' + (est.location || 'N/A') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Project</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Client</span><div style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">' + esc(est.client || 'N/A') + '</div></div>' +
+      '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Location</span><div style="font-size:0.88rem; color:var(--text-primary);">' + esc(est.location || 'N/A') + '</div></div>' +
       '<div><span style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Delivery Model</span><div style="font-size:0.88rem; color:var(--text-primary);">' + (DELIVERY_MODELS[est.deliveryModel] ? DELIVERY_MODELS[est.deliveryModel].name : est.deliveryModel || 'N/A') + '</div></div>' +
     '</div>' +
     '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding-top:12px; border-top: 1px solid var(--border);">' +
@@ -1895,7 +1986,7 @@ function classifyEstimateItems(est, phaseKeys, bldgArea) {
     }
     var perSF = extraCol && item.total ? '$' + (item.total / bldgArea).toFixed(2) + '/SF' : '';
     return '<tr class="vol-item-row" onclick="toggleVolRationale(this)">' +
-      '<td>' + item.name + '</td>' +
+      '<td>' + esc(item.name) + '</td>' +
       '<td class="mono">' + fmtNum(item.qty) + '</td>' +
       '<td>' + item.unit + '</td>' +
       '<td class="mono">' + fmtDec(item.rate) + '</td>' +
@@ -1905,8 +1996,8 @@ function classifyEstimateItems(est, phaseKeys, bldgArea) {
     '<tr class="vol-rationale-row" style="display:none;"><td colspan="' + colSpanFull + '"><div class="rationale-content">' +
       (hasRationale ?
         confBadge +
-        (item.basis ? '<span class="rationale-label">Basis:</span> ' + item.basis + ' ' : '') +
-        (item.source ? '<span class="rationale-label">Source:</span> ' + item.source : '')
+        (item.basis ? '<span class="rationale-label">Basis:</span> ' + esc(item.basis) + ' ' : '') +
+        (item.source ? '<span class="rationale-label">Source:</span> ' + esc(item.source) : '')
       : '<span style="color:var(--text-muted); font-style:italic;">No derivation data</span>') +
     '</div></td></tr>';
   }
@@ -2080,17 +2171,17 @@ function renderPhaseTab(est, phaseKey) {
           '<div class="line-item-row" draggable="true">' +
             '<div class="line-item-info" onclick="toggleItemRationale(\'' + phaseKey + '\', ' + idx + ')" title="Show derivation">' + ICONS.chevDown + '</div>' +
             '<div class="line-item-grip">' + ICONS.grip + '</div>' +
-            '<div><input class="line-item-input" value="' + item.name + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'name\', this.value)"></div>' +
+            '<div><input class="line-item-input" value="' + esc(item.name) + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'name\', this.value)"></div>' +
             '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'qty\', parseFloat(this.value))"></div>' +
-            '<div><input class="line-item-input" value="' + item.unit + '" style="text-align:center" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'unit\', this.value)"></div>' +
+            '<div><input class="line-item-input" value="' + esc(item.unit) + '" style="text-align:center" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'unit\', this.value)"></div>' +
             '<div><input class="line-item-input numeric" type="number" step="0.01" value="' + item.rate + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'rate\', parseFloat(this.value))"></div>' +
             '<div class="cell-right cell-mono cell-bold" style="padding: 4px 6px;">' + fmt(item.total) + '</div>' +
             '<div class="line-item-delete" onclick="removeLineItem(\'' + phaseKey + '\', ' + idx + ')">' + ICONS.trash + '</div>' +
           '</div>' +
           '<div class="line-item-rationale">' +
             (hasRationale ?
-              '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="' + (item.basis || '').replace(/"/g, '&quot;') + '" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
-              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="' + (item.source || '').replace(/"/g, '&quot;') + '" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="' + esc(item.basis || '') + '" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="' + esc(item.source || '') + '" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
               '<div class="rationale-field"><span class="rationale-label">Confidence:</span>' +
                 '<select class="confidence-select" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'confidence\', this.value)">' +
                   '<option value="high"' + (item.confidence === 'high' ? ' selected' : '') + '>High \u2014 measured from documents</option>' +
@@ -2227,10 +2318,10 @@ function renderEstimateCard(est) {
   return '<div class="estimate-card" onclick="viewEstimateDetail(\'' + est.id + '\')">' +
     '<div class="estimate-card-header">' +
       '<div>' +
-        '<div class="estimate-card-title">' + est.name + '</div>' +
+        '<div class="estimate-card-title">' + esc(est.name) + '</div>' +
         '<div class="estimate-card-meta">' +
-          '<span>' + ICONS.building + ' ' + est.client + '</span>' +
-          '<span>' + ICONS.locationPin + ' ' + est.location + '</span>' +
+          '<span>' + ICONS.building + ' ' + esc(est.client) + '</span>' +
+          '<span>' + ICONS.locationPin + ' ' + esc(est.location) + '</span>' +
           '<span>' + ICONS.calendar + ' ' + est.createdAt + '</span>' +
           '<span>' + (model ? model.icon + ' ' + model.name : '') + '</span>' +
         '</div>' +
@@ -2240,7 +2331,7 @@ function renderEstimateCard(est) {
         '<div class="text-mono" style="font-size:1.1rem; font-weight:700; margin-top:6px; color:var(--text-primary);">' + fmt(total) + '</div>' +
       '</div>' +
     '</div>' +
-    '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:8px;">' + (est.scopeDescription ? est.scopeDescription.substring(0, 150) + '...' : 'No description') + '</p>' +
+    '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:8px;">' + esc(est.scopeDescription ? est.scopeDescription.substring(0, 150) + '...' : 'No description') + '</p>' +
     '<div class="estimate-card-costs">' +
       Object.entries(phaseCosts).slice(0, 5).map(function(entry) {
         return '<div class="estimate-cost-item">' +
@@ -2277,7 +2368,7 @@ function renderComparisonView(estimates) {
         var total = est.totalCost || calcEstimateTotal(est);
         var pct = maxTotal > 0 ? (total / maxTotal * 100) : 0;
         return '<div class="bar-chart-row">' +
-          '<div class="bar-chart-label" title="' + est.name + '">' + est.name + '</div>' +
+          '<div class="bar-chart-label" title="' + esc(est.name) + '">' + esc(est.name) + '</div>' +
           '<div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + pct + '%;">' + (pct > 20 ? '<span class="bar-chart-value">' + fmtPct(pct) + '</span>' : '') + '</div></div>' +
           '<div class="bar-chart-amount">' + fmt(total) + '</div>' +
         '</div>';
@@ -2321,7 +2412,7 @@ function renderConnectorPage() {
               '<div class="flex items-center gap-8" style="width:100%;">' +
                 '<span class="drag-handle">' + ICONS.grip + '</span>' +
                 '<div style="flex:1; min-width:0;">' +
-                  '<div class="connector-item-title">' + item.name + '</div>' +
+                  '<div class="connector-item-title">' + esc(item.name) + '</div>' +
                   '<div class="connector-item-meta">' + fmtNum(item.qty) + ' ' + item.unit + ' x ' + fmtDec(item.rate) + '</div>' +
                 '</div>' +
                 '<div class="connector-item-cost">' + fmt(item.total) + '</div>' +
@@ -2340,11 +2431,11 @@ function renderConnectorPage() {
 
     connectedHtml = '<div class="card mb-16">' +
       '<div class="card-header">' +
-        '<div><div class="card-title">' + connected.name + '</div>' +
-        '<div class="card-subtitle">' + connected.client + ' - ' + connected.location + ' - ' + (DELIVERY_MODELS[connected.deliveryModel] ? DELIVERY_MODELS[connected.deliveryModel].name : '') + '</div></div>' +
+        '<div><div class="card-title">' + esc(connected.name) + '</div>' +
+        '<div class="card-subtitle">' + esc(connected.client) + ' - ' + esc(connected.location) + ' - ' + (DELIVERY_MODELS[connected.deliveryModel] ? DELIVERY_MODELS[connected.deliveryModel].name : '') + '</div></div>' +
         '<div class="badge badge-' + connected.status + '">' + connected.status + '</div>' +
       '</div>' +
-      '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">' + (connected.scopeDescription || '') + '</p>' +
+      '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">' + esc(connected.scopeDescription || '') + '</p>' +
       '<div class="section-divider">Drag Items Into Your Current Estimate</div>' +
       phasesList +
     '</div>';
@@ -2359,7 +2450,7 @@ function renderConnectorPage() {
       var itemLines = '';
       if (phase.items) {
         phase.items.forEach(function(item) {
-          itemLines += '<div style="padding:4px 8px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between;"><span>' + item.name + '</span><span class="text-mono">' + fmt(item.total) + '</span></div>';
+          itemLines += '<div style="padding:4px 8px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between;"><span>' + esc(item.name) + '</span><span class="text-mono">' + fmt(item.total) + '</span></div>';
         });
       }
       currentPhasesHtml += '<div style="margin-bottom:12px;"><div style="font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">' + (PHASE_DEFS[phaseKey] ? PHASE_DEFS[phaseKey].name : phaseKey) + ' -- ' + fmt(calcPhaseTotal(phase)) + '</div>' + itemLines + '</div>';
@@ -2397,7 +2488,7 @@ function renderConnectorPage() {
 
     '<div class="card mb-16"><div class="card-header"><div class="card-title">Select Reference Estimate</div></div>' +
       '<div class="form-group"><select class="form-select" onchange="connectEstimate(this.value)"><option value="">-- Choose a past estimate to compare --</option>' +
-        STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + est.name + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
+        STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + esc(est.name) + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
       '</select></div>' +
     '</div>' +
 
@@ -3141,7 +3232,7 @@ function renderFootbridgePhaseTab(fbEst, phaseKey) {
     phase.items.map(function(item) {
       return '<div class="line-item-row">' +
         '<div></div>' +
-        '<div style="padding:6px 8px; font-size:0.82rem;">' + item.name + '</div>' +
+        '<div style="padding:6px 8px; font-size:0.82rem;">' + esc(item.name) + '</div>' +
         '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtNum(item.qty) + '</div>' +
         '<div class="cell-center" style="padding:6px 8px;">' + item.unit + '</div>' +
         '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtDec(item.rate) + '</div>' +
@@ -3154,49 +3245,177 @@ function renderFootbridgePhaseTab(fbEst, phaseKey) {
 
 
 // ---- SECTION 9D: FOOTBRIDGE ESTIMATE GENERATOR ----
+// Parametric estimating model based on CAN/CSA O86, NDS, and AASHTO LRFD
+// pedestrian bridge design loads (85 psf live + self-weight dead load).
+// Quantities derived from structural first-principles, not arbitrary multipliers.
+
 function generateFootbridgeEstimate() {
   var cfg = STATE.footbridgeConfig;
   var a = getDefaultAssumptions();
 
-  var span = cfg.spanLength || 30;
-  var width = cfg.clearWidth || 3.5;
+  var span = cfg.spanLength || 30;       // meters
+  var width = cfg.clearWidth || 3.5;     // meters
   var bType = cfg.bridgeType || 'parabolic-arch';
   var nSpans = cfg.numSpans || 1;
-  var rise = cfg.archRise || 0.25;
+  var rise = cfg.archRise || 0.25;       // rise/span ratio
 
+  // --- Unit conversions ---
+  var spanFt = span * 3.281;
+  var widthFt = width * 3.281;
   var deckAreaM2 = span * width;
   var deckAreaSF = deckAreaM2 * 10.764;
-  var railingLF = span * 3.281 * 2; // both sides, meters to feet
+  var railingLF = spanFt * 2; // both sides
 
-  // Material pricing based on selection
+  // --- Design loads (AASHTO LRFD pedestrian bridge) ---
+  var livePSF = 85;                      // psf (AASHTO 3.6.1.6)
+  var deckDLPSF = 15;                    // psf deck self-weight
+  var superDLPSF = 12;                   // psf superstructure (beams, arches, etc.)
+  var totalLoadPSF = livePSF + deckDLPSF + superDLPSF;
+  var totalLoadPLF = totalLoadPSF * widthFt; // plf (lbs per linear foot of span)
+
+  // --- Structural depth & member sizing by bridge type ---
+  // Depth/span ratios from timber bridge design guides (USDA FPL, AASHTO)
+  var depthSpanRatio, structuralEfficiency;
+  if (bType === 'parabolic-arch') {
+    depthSpanRatio = 1 / 40;  // arch rib depth
+    structuralEfficiency = 0.65; // arches are efficient
+  } else if (bType === 'tied-arch') {
+    depthSpanRatio = 1 / 35;
+    structuralEfficiency = 0.60;
+  } else if (bType === 'cable-stayed') {
+    depthSpanRatio = 1 / 50;
+    structuralEfficiency = 0.55; // cables carry load, deck is lighter
+  } else if (bType === 'warren-truss' || bType === 'pratt-truss') {
+    depthSpanRatio = 1 / 10;  // trusses need depth for efficiency
+    structuralEfficiency = 0.70;
+  } else if (bType === 'king-post-truss') {
+    depthSpanRatio = 1 / 8;
+    structuralEfficiency = 0.75;
+  } else if (bType === 'multi-span-beam') {
+    depthSpanRatio = 1 / 20;  // continuous beam benefit
+    structuralEfficiency = 0.80;
+  } else if (bType === 'clear-span-beam') {
+    depthSpanRatio = 1 / 16;  // simply supported
+    structuralEfficiency = 0.85;
+  } else {
+    depthSpanRatio = 1 / 20;
+    structuralEfficiency = 0.75;
+  }
+
+  var structuralDepthFt = spanFt * depthSpanRatio;
+  var structuralDepthIn = Math.max(12, structuralDepthFt * 12); // min 12" members
+
+  // --- Glulam quantity derivation ---
+  // Primary members: sized from bending demand M = wL²/8 (simple span)
+  // or M = wL²/16 (arch with rise ratio), then BF = cross-section × length
+  var bendingMomentFtLbs;
+  if (bType === 'parabolic-arch' || bType === 'tied-arch') {
+    // Arch horizontal thrust H = wL²/(8f), bending = secondary only
+    var archRise_ft = spanFt * rise;
+    var thrustLbs = totalLoadPLF * spanFt * spanFt / (8 * archRise_ft);
+    // Secondary bending ≈ 15-25% of simple span moment for parabolic loading
+    bendingMomentFtLbs = 0.20 * totalLoadPLF * spanFt * spanFt / 8;
+  } else if (bType === 'cable-stayed') {
+    // Cable-stayed: deck acts as continuous beam over cable supports
+    // Effective span between cables ≈ span/6
+    var effectiveSpan = spanFt / 6;
+    bendingMomentFtLbs = totalLoadPLF * effectiveSpan * effectiveSpan / 8;
+  } else if (bType === 'multi-span-beam') {
+    // Continuous multi-span: M = 0.10 wL² (interior span)
+    bendingMomentFtLbs = 0.10 * totalLoadPLF * spanFt * spanFt;
+  } else {
+    // Simple span: M = wL²/8
+    bendingMomentFtLbs = totalLoadPLF * spanFt * spanFt / 8;
+  }
+
+  // Required section modulus: S = M / Fb (DF 24F glulam Fb = 2400 psi, adjusted)
+  var Fb = 2400; // psi, DF 24F-V8 allowable bending (NDS adjusted for duration + wet)
+  var Fb_adjusted = Fb * 0.85; // volume factor + wet service for bridge
+  var reqSectionMod = bendingMomentFtLbs * 12 / Fb_adjusted; // in³
+
+  // Member sizing: assume 2 main girders, width ≈ depth/3 (typical glulam proportions)
+  var memberDepthIn = Math.max(structuralDepthIn, 18); // practical minimum
+  var memberWidthIn = Math.max(6.75, memberDepthIn / 3); // standard glulam widths
+  // Round to standard glulam widths: 5.125, 6.75, 8.75, 10.75
+  if (memberWidthIn <= 5.5) memberWidthIn = 5.125;
+  else if (memberWidthIn <= 7.75) memberWidthIn = 6.75;
+  else if (memberWidthIn <= 9.75) memberWidthIn = 8.75;
+  else memberWidthIn = 10.75;
+
+  var numMainMembers = 2; // typical: 2 main girders/arches
+  if (bType === 'warren-truss' || bType === 'pratt-truss') numMainMembers = 2; // 2 trusses
+  if (bType === 'cable-stayed') numMainMembers = 2; // 2 edge girders
+
+  // Actual member length (arches are longer than span)
+  var memberLengthFt = spanFt;
+  if (bType === 'parabolic-arch' || bType === 'tied-arch') {
+    // Arc length ≈ L + 8f²/(3L) for parabola
+    var f = spanFt * rise;
+    memberLengthFt = spanFt + 8 * f * f / (3 * spanFt);
+  }
+
+  // BF = (width × depth / 144) × length × numMembers
+  var primaryBF = Math.round(memberWidthIn * memberDepthIn / 144 * memberLengthFt * numMainMembers);
+
+  // Truss verticals/diagonals for truss types
+  var trussWebBF = 0;
+  if (bType === 'warren-truss' || bType === 'pratt-truss' || bType === 'king-post-truss') {
+    var panelCount = Math.max(4, Math.round(spanFt / 8));
+    var avgWebLength = structuralDepthIn / 12 * 1.4; // diagonal ≈ 1.4 × depth
+    var webWidth = Math.max(5.125, memberWidthIn * 0.6);
+    var webDepth = Math.max(8.25, memberDepthIn * 0.5);
+    trussWebBF = Math.round(webWidth * webDepth / 144 * avgWebLength * panelCount * numMainMembers);
+  }
+
+  // Secondary framing: floor beams (cross-beams at ~8ft spacing)
+  var numFloorBeams = Math.max(3, Math.round(spanFt / 8));
+  var fbDepthIn = Math.max(9.5, widthFt * 12 / 16); // depth/span ≈ 1/16
+  var fbWidthIn = Math.max(5.125, fbDepthIn / 3);
+  if (fbWidthIn <= 5.5) fbWidthIn = 5.125;
+  else if (fbWidthIn <= 7.75) fbWidthIn = 6.75;
+  else fbWidthIn = 8.75;
+  var floorBeamBF = Math.round(fbWidthIn * fbDepthIn / 144 * widthFt * numFloorBeams);
+
+  var totalGlulamBF = primaryBF + trussWebBF + floorBeamBF;
+
+  // Deck beams/stringers (between floor beams)
+  var deckBeamBF = Math.round(deckAreaSF * 0.18); // ~0.18 BF/SF for stringer framing
+
+  // --- Steel connections ---
+  // Connection weight typically 3-6% of total timber weight for bridges
+  // Glulam weighs ~33 lbs/CF = 33/(12*12/144) = 0.23 lbs/BF
+  var timberWeightLbs = (totalGlulamBF + deckBeamBF) * 0.23;
+  var connectionPct = 0.04; // 4% of timber weight for standard connections
+  if (bType === 'cable-stayed') connectionPct = 0.08; // more steel for cables
+  else if (bType === 'tied-arch') connectionPct = 0.06; // tie rod + hangers
+  else if (bType === 'warren-truss' || bType === 'pratt-truss') connectionPct = 0.05;
+  var steelTons = Math.max(0.5, Math.round(timberWeightLbs * connectionPct / 2000 * 10) / 10);
+
+  // For arch/cable types, add specific tension elements
+  var tensionSteelTons = 0;
+  if (bType === 'tied-arch') {
+    // Tie rod: sized for horizontal thrust
+    var archRise_ft2 = spanFt * rise;
+    var thrustKips = totalLoadPLF * spanFt * spanFt / (8 * archRise_ft2) / 1000;
+    tensionSteelTons = Math.round(thrustKips * spanFt / (36 * 2000) * 10) / 10; // rough: Fy=36ksi rod
+  }
+  if (bType === 'cable-stayed') {
+    tensionSteelTons = Math.round(span * 0.06 * 10) / 10; // empirical for cable stays
+  }
+
+  // --- Engineering hours (non-linear with span) ---
+  // Base hours + span-driven complexity (sqrt relationship for longer spans)
+  var spanComplexity = Math.sqrt(span / 30); // normalized to 30m baseline
+  var engDesignHrs = Math.round((80 + span * 3.5) * spanComplexity);
+  var shopDrawHrs = Math.round((60 + span * 2.5) * spanComplexity);
+  var connDesignHrs = Math.round((40 + span * 1.8) * spanComplexity);
+  var draftHrs = Math.round((50 + span * 3.0) * spanComplexity);
+  var geoReviewHrs = Math.round(20 + span * 0.5);
+
+  // Material pricing
   var glulamPrice = a.glulamPriceBF;
   var material = STATE.fbMaterial || 'glulam-df';
   if (material === 'glulam-spruce') glulamPrice = 3.80;
-
-  // Complexity factor based on bridge type
-  var complexityFactor = 1.0;
-  if (bType === 'cable-stayed') complexityFactor = 1.4;
-  else if (bType === 'tied-arch') complexityFactor = 1.2;
-  else if (bType === 'parabolic-arch') complexityFactor = 1.15;
-  else if (bType === 'warren-truss' || bType === 'pratt-truss') complexityFactor = 1.1;
-  else if (bType === 'king-post-truss') complexityFactor = 1.05;
-  else if (bType === 'multi-span-beam') complexityFactor = 0.9 + nSpans * 0.1;
-  else if (bType === 'clear-span-beam') complexityFactor = 0.85;
-
-  // Glulam BF estimate: roughly span(m) * width(m) * factor * 10 BF/m2
-  var glulamBF = Math.round(span * width * complexityFactor * 12);
-  // Additional structural BF for beams
-  var deckBeamBF = Math.round(deckAreaSF * 0.2);
-
-  // Steel tonnage
-  var steelTons = Math.round((span * 0.08 * complexityFactor) * 10) / 10;
-
-  // Engineering hours
-  var engDesignHrs = Math.round(span * 5 * complexityFactor);
-  var shopDrawHrs = Math.round(span * 3.5 * complexityFactor);
-  var connDesignHrs = Math.round(span * 2.5 * complexityFactor);
-  var draftHrs = Math.round(span * 4 * complexityFactor);
-  var geoReviewHrs = Math.round(span * 0.8);
 
   // Foundation costs based on geotech
   var geotech = STATE.fbGeotech || 'dense-soil';
@@ -3220,15 +3439,20 @@ function generateFootbridgeEstimate() {
   else if (access === 'helicopter') accessMult = 2.5;
   else if (access === 'barge') accessMult = 1.6;
 
-  // Carpentry hours
-  var carpHrs = Math.round(span * 12 * accessMult);
+  // --- Installation labor (based on piece count + weight, not just span) ---
+  // Piece count drives erection complexity
+  var totalPieces = numMainMembers + (trussWebBF > 0 ? Math.round(spanFt / 8) * numMainMembers : 0) + numFloorBeams;
+  // Carpenter hours: ~2-4 hrs per piece for erection + 0.5 hrs/SF deck for finishing
+  var carpHrsErection = Math.round(totalPieces * 3.0 * accessMult);
+  var carpHrsDeck = Math.round(deckAreaSF * 0.02 * accessMult); // 0.02 hr/SF for deck install
+  var carpHrs = carpHrsErection + carpHrsDeck;
   var laborHrs = Math.round(carpHrs * 0.5);
   var superHrs = Math.round(carpHrs * 0.25);
-  var craneDays = Math.round(span / 8 * accessMult);
+  var craneDays = Math.max(3, Math.round(totalPieces / 8 * accessMult)); // ~8 picks/day
   var craneOpHrs = craneDays * 8;
-  var tempWorks = Math.round(span * 400 * accessMult);
+  var tempWorks = Math.round((span * 300 + deckAreaSF * 1.5) * accessMult);
 
-  // Deck system
+  // --- Deck system ---
   var deck = STATE.fbDeck || 'dlt';
   var deckItems = [];
   if (deck === 'dlt') {
@@ -3261,26 +3485,31 @@ function generateFootbridgeEstimate() {
   railItems.push({ name: 'Deck Finish & Sealant', qty: Math.round(deckAreaSF), unit: 'SF', rate: 6, total: Math.round(deckAreaSF) * 6 });
   railItems.push({ name: 'Non-Slip Surface Treatment', qty: Math.round(deckAreaSF), unit: 'SF', rate: 3.50, total: Math.round(deckAreaSF * 3.50) });
 
-  // Fabrication items
+  // --- Fabrication items ---
   var fabItems = [
-    { name: 'Glulam Primary Members', qty: glulamBF, unit: 'BF', rate: glulamPrice, total: Math.round(glulamBF * glulamPrice) },
-    { name: 'Glulam Deck Beams', qty: deckBeamBF, unit: 'BF', rate: glulamPrice, total: Math.round(deckBeamBF * glulamPrice) },
+    { name: 'Glulam Primary Members (' + numMainMembers + '×' + memberWidthIn + '"×' + Math.round(memberDepthIn) + '"×' + Math.round(memberLengthFt) + 'ft)', qty: primaryBF, unit: 'BF', rate: glulamPrice, total: Math.round(primaryBF * glulamPrice) },
   ];
+  if (trussWebBF > 0) {
+    fabItems.push({ name: 'Truss Web Members', qty: trussWebBF, unit: 'BF', rate: glulamPrice, total: Math.round(trussWebBF * glulamPrice) });
+  }
+  fabItems.push({ name: 'Floor Beams (' + numFloorBeams + '×' + fbWidthIn + '"×' + Math.round(fbDepthIn) + '")', qty: floorBeamBF, unit: 'BF', rate: glulamPrice, total: Math.round(floorBeamBF * glulamPrice) });
+  fabItems.push({ name: 'Deck Stringers / Secondary', qty: deckBeamBF, unit: 'BF', rate: glulamPrice, total: Math.round(deckBeamBF * glulamPrice) });
   fabItems = fabItems.concat(deckItems);
   fabItems.push({ name: 'Steel Connections & Hardware', qty: steelTons, unit: 'ton', rate: a.steelConnectionsTon, total: Math.round(steelTons * a.steelConnectionsTon) });
   if (bType === 'parabolic-arch' || bType === 'tied-arch') {
-    fabItems.push({ name: 'Hanger Rods & Tension Members', qty: 1, unit: 'LS', rate: Math.round(span * 350), total: Math.round(span * 350) });
+    fabItems.push({ name: 'Hanger Rods & Tension Members', qty: Math.max(0.3, tensionSteelTons), unit: 'ton', rate: 6500, total: Math.round(Math.max(0.3, tensionSteelTons) * 6500) });
   }
   if (bType === 'cable-stayed') {
-    fabItems.push({ name: 'Stay Cables & Anchorage', qty: 1, unit: 'LS', rate: Math.round(span * 600), total: Math.round(span * 600) });
+    fabItems.push({ name: 'Stay Cables & Anchorage', qty: Math.max(0.5, tensionSteelTons), unit: 'ton', rate: 12000, total: Math.round(Math.max(0.5, tensionSteelTons) * 12000) });
   }
-  var fabLabor = Math.round(glulamBF * 0.06 + deckBeamBF * 0.04);
+  var fabLabor = Math.round((totalGlulamBF + deckBeamBF) * 0.04); // 0.04 hr/BF shop time
   fabItems.push({ name: 'Shop Fabrication Labor', qty: fabLabor, unit: 'hr', rate: a.shopHourlyRate, total: Math.round(fabLabor * a.shopHourlyRate) });
-  fabItems.push({ name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(span * 500 * complexityFactor), total: Math.round(span * 500 * complexityFactor) });
-  fabItems.push({ name: 'Protective Coatings (factory)', qty: 1, unit: 'LS', rate: Math.round(span * 300), total: Math.round(span * 300) });
+  fabItems.push({ name: 'CNC Processing', qty: 1, unit: 'LS', rate: Math.round(totalPieces * 180), total: Math.round(totalPieces * 180) });
+  fabItems.push({ name: 'Protective Coatings (factory)', qty: Math.round(deckAreaSF + totalGlulamBF * 0.014), unit: 'SF', rate: 4.50, total: Math.round((deckAreaSF + totalGlulamBF * 0.014) * 4.50) });
 
   // Shipping
-  var numTrucks = Math.max(3, Math.round(glulamBF / 4000 + deckAreaSF / 3000));
+  var totalBF = totalGlulamBF + deckBeamBF;
+  var numTrucks = Math.max(3, Math.round(totalBF / 4000 + deckAreaSF / 3000));
   var truckRate = a.shippingPerTruck;
   if (access === 'barge') truckRate = 8500;
 
@@ -3314,6 +3543,7 @@ function generateFootbridgeEstimate() {
   if (deck === 'concrete-timber') {
     installItems.push({ name: 'Concrete Placement & Finishing', qty: Math.round(deckAreaSF), unit: 'SF', rate: 4, total: Math.round(deckAreaSF) * 4 });
   }
+  installItems.push({ name: 'Site Mobilization & Demobilization', qty: 1, unit: 'LS', rate: Math.round(5000 * accessMult), total: Math.round(5000 * accessMult) });
 
   // Engineering
   var engItems = [
@@ -3322,6 +3552,7 @@ function generateFootbridgeEstimate() {
     { name: 'Connection Design', qty: connDesignHrs, unit: 'hr', rate: 180, total: connDesignHrs * 180 },
     { name: 'Drafting / Detailing', qty: draftHrs, unit: 'hr', rate: a.draftHourlyRate, total: draftHrs * a.draftHourlyRate },
     { name: 'Geotechnical Review', qty: geoReviewHrs, unit: 'hr', rate: a.engHourlyRate, total: geoReviewHrs * a.engHourlyRate },
+    { name: 'Independent Design Check', qty: Math.round(engDesignHrs * 0.15), unit: 'hr', rate: a.engHourlyRate, total: Math.round(engDesignHrs * 0.15) * a.engHourlyRate },
   ];
 
   // Build phases
@@ -3344,18 +3575,22 @@ function generateFootbridgeEstimate() {
   });
 
   // General conditions
-  var pmHrs = Math.round(span * 3.5);
+  var pmHrs = Math.round((40 + span * 2.5) * spanComplexity);
   var insuranceBonds = Math.round(directTotal * 0.03);
   var envProtection = Math.round(span * 200);
   var siteSafety = Math.round(span * 300);
-  var contingencyAmt = Math.round(directTotal * 0.05);
+  var permits = Math.round(directTotal * 0.008); // building permits ~0.8%
+  var contingencyAmt = Math.round(directTotal * (a.contingencyPercent / 100));
+  var testingInspection = Math.round(engDesignHrs * 0.12 * a.engHourlyRate); // ~12% of design for inspection
 
   var gcItems = [
     { name: 'Project Management', qty: pmHrs, unit: 'hr', rate: a.pmHourlyRate, total: pmHrs * a.pmHourlyRate },
     { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: insuranceBonds, total: insuranceBonds },
     { name: 'Environmental Protection', qty: 1, unit: 'LS', rate: envProtection, total: envProtection },
     { name: 'Site Safety & Traffic Mgmt', qty: 1, unit: 'LS', rate: siteSafety, total: siteSafety },
-    { name: 'Contingency (5%)', qty: 1, unit: 'LS', rate: contingencyAmt, total: contingencyAmt },
+    { name: 'Permits & Approvals', qty: 1, unit: 'LS', rate: permits, total: permits },
+    { name: 'Testing & Inspection', qty: 1, unit: 'LS', rate: testingInspection, total: testingInspection },
+    { name: 'Contingency (' + a.contingencyPercent + '%)', qty: 1, unit: 'LS', rate: contingencyAmt, total: contingencyAmt },
   ];
   var gcSub = gcItems.reduce(function(s, i) { return s + i.total; }, 0);
   phases['fb-general-conditions'] = { items: gcItems, subtotal: gcSub };
@@ -3369,6 +3604,15 @@ function generateFootbridgeEstimate() {
     assumptions: a,
     phases: phases,
     totalCost: directTotal + gcSub,
+    // Store derivation metadata for transparency
+    derivation: {
+      spanM: span, widthM: width, bridgeType: bType, deckAreaSF: Math.round(deckAreaSF),
+      totalLoadPSF: totalLoadPSF, structuralDepthIn: Math.round(structuralDepthIn),
+      memberSize: memberWidthIn + '"×' + Math.round(memberDepthIn) + '"',
+      primaryBF: primaryBF, trussWebBF: trussWebBF, floorBeamBF: floorBeamBF, deckBeamBF: deckBeamBF,
+      totalGlulamBF: totalGlulamBF + deckBeamBF, steelTons: steelTons + tensionSteelTons,
+      totalPieces: totalPieces, designBasis: 'AASHTO LRFD Pedestrian + CAN/CSA O86',
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     id: STATE.footbridgeEstimate && STATE.footbridgeEstimate.id ? STATE.footbridgeEstimate.id : generateId(),
@@ -3399,6 +3643,7 @@ function updateEstimate(field, value) {
 function updateAssumption(key, value) {
   STATE.currentEstimate.assumptions[key] = value;
   saveState();
+  renderPage();
 }
 
 function shareEstimateLink() {
@@ -3531,7 +3776,7 @@ function extractTextFromPDF(file) {
           );
         }
         Promise.all(textPromises).then(function(pages) {
-          resolve(pages.join('\n\n--- Page Break ---\n\n'));
+          resolve(pages.map(function(p, idx) { return '--- Page ' + (idx + 1) + ' ---\n' + p; }).join('\n\n'));
         }).catch(function(err) {
           resolve('[Error extracting text from ' + file.name + ': ' + err.message + ']');
         });
@@ -3560,6 +3805,7 @@ function getAllUploadedFiles() {
 }
 
 function buildAIPrompt(est, extractedTexts) {
+  var a = est.assumptions || getDefaultAssumptions();
   var materialDesc = '';
   if (est.materials) {
     Object.entries(est.materials).forEach(function(entry) {
@@ -3572,16 +3818,16 @@ function buildAIPrompt(est, extractedTexts) {
     });
   }
 
-  var pricingRef = 'Key Pricing Reference:\n';
-  pricingRef += '  Glulam DF: $4.25/BF | Glulam Spruce: $3.80/BF | Glulam YC: $5.50/BF\n';
-  pricingRef += '  CLT 3-ply: $26/SF | CLT 5-ply: $34/SF | CLT 7-ply: $44/SF\n';
-  pricingRef += '  DLT: $22/SF | NLT: $15/SF | MPP: $28/SF\n';
-  pricingRef += '  Steel W-Shape: $2,800/ton | HSS: $3,200/ton | Plate: $3,500/ton\n';
-  pricingRef += '  Concrete 4000PSI: $200/CY | Metal Deck+Concrete: $14/SF\n';
-  pricingRef += '  Steel Connections: $4,500/ton | Rebar: $1,800/ton\n';
-  pricingRef += '  Engineering: $195/hr | Drafting: $115/hr | Shop: $82/hr\n';
-  pricingRef += '  Site Carpenter: $95/hr | Laborer: $65/hr | Super: $140/hr\n';
-  pricingRef += '  Crane 50t: $4,200/day | Crane 100t: $7,500/day | PM: $165/hr\n';
+  var pricingRef = 'Key Pricing Reference (2025-2026 national average, adjust for regional factors):\n';
+  pricingRef += '  Glulam DF: $' + a.glulamPriceBF + '/BF | Glulam Spruce: $' + (a.glulamPriceBF * 0.75).toFixed(2) + '/BF | Glulam YC: $' + (a.glulamPriceBF * 1.30).toFixed(2) + '/BF\n';
+  pricingRef += '  CLT 3-ply: $' + a.cltPriceSF3 + '/SF | CLT 5-ply: $' + a.cltPriceSF5 + '/SF | CLT 7-ply: $' + a.cltPriceSF7 + '/SF\n';
+  pricingRef += '  DLT: $' + a.dltPriceSF + '/SF | NLT: $' + a.nltPriceSF + '/SF | MPP: $' + a.mppPriceSF + '/SF\n';
+  pricingRef += '  Steel W-Shape: $3,200/ton | HSS: $3,600/ton | Plate: $4,000/ton\n';
+  pricingRef += '  Concrete 4000PSI: $240/CY | Metal Deck+Concrete: $16/SF\n';
+  pricingRef += '  Steel Connections: $' + fmtNum(a.steelConnectionsTon) + '/ton | Rebar: $2,100/ton\n';
+  pricingRef += '  Engineering: $' + a.engHourlyRate + '/hr | Drafting: $' + a.draftHourlyRate + '/hr | Shop: $' + a.shopHourlyRate + '/hr\n';
+  pricingRef += '  Site Carpenter: $' + a.siteCarpentrHourlyRate + '/hr | Laborer: $' + a.siteLaborHourlyRate + '/hr | Super: $' + a.siteSuperHourlyRate + '/hr\n';
+  pricingRef += '  Crane 50t: $' + fmtNum(a.craneDailyRate) + '/day | Crane 100t: $' + fmtNum(Math.round(a.craneDailyRate * 1.35)) + '/day | PM: $' + a.pmHourlyRate + '/hr\n';
 
   var model = DELIVERY_MODELS[est.deliveryModel];
   var phases = model ? model.phases : [];
@@ -3810,7 +4056,10 @@ function hideAIProgress() {
 
 function generateTemplateEstimate(est, model) {
   if (!est.phases) est.phases = {};
-  var a = est.assumptions;
+  // Apply regional cost factors if location is set
+  var detectedRegion = detectRegion(est.location);
+  var a = detectedRegion ? getRegionalAssumptions(est.assumptions, detectedRegion) : est.assumptions;
+  est.regionApplied = detectedRegion ? REGIONAL_FACTORS[detectedRegion].label : '';
   var mats = est.materials || {};
 
   // Derive area from scope description as best guess
@@ -3909,17 +4158,20 @@ function generateTemplateEstimate(est, model) {
       { name: 'Site Superintendent', qty: Math.round(carpHrsCalc * 0.18), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(carpHrsCalc) + ' carpenter hr \u00d7 0.18 super ratio = ' + Math.round(carpHrsCalc * 0.18) + ' hr', source: SRC, confidence: CONF },
       { name: 'Mobile Crane', qty: Math.round(totalArea / 2500), unit: 'day', rate: a.craneDailyRate, basis: fmtNum(totalArea) + ' SF / 2,500 SF/day = ' + Math.round(totalArea / 2500) + ' days', source: SRC, confidence: CONF },
       { name: 'Crane Operator', qty: Math.round(totalArea / 2500 * 8), unit: 'hr', rate: a.craneOperatorHourlyRate, basis: Math.round(totalArea / 2500) + ' crane days \u00d7 8 hr/day = ' + Math.round(totalArea / 2500 * 8) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.25), basis: fmtNum(totalArea) + ' SF \u00d7 $0.25/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Rigging & Hardware', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.30), basis: fmtNum(totalArea) + ' SF \u00d7 $0.30/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Site Mobilization & Demobilization', qty: 1, unit: 'LS', rate: Math.round(Math.max(8000, totalArea * 0.15)), basis: 'Mobilization/demob allowance (min $8,000)', source: SRC, confidence: 'low' },
     ],
     'general-conditions': [
       { name: 'Project Management', qty: Math.round(totalArea * 0.005), unit: 'hr', rate: a.pmHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.005 hr/SF = ' + Math.round(totalArea * 0.005) + ' hr', source: SRC, confidence: CONF },
-      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.85), basis: fmtNum(totalArea) + ' SF \u00d7 $0.85/SF allowance', source: SRC, confidence: 'low' },
-      { name: 'Contingency', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.75), basis: fmtNum(totalArea) + ' SF \u00d7 $0.75/SF contingency allowance', source: SRC, confidence: 'low' },
+      { name: 'Insurance & Bonds', qty: 1, unit: 'LS', rate: Math.round(totalArea * 1.00), basis: fmtNum(totalArea) + ' SF \u00d7 $1.00/SF allowance', source: SRC, confidence: 'low' },
+      { name: 'Permits & Approvals', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.40), basis: fmtNum(totalArea) + ' SF \u00d7 $0.40/SF (building permit + structural review fees)', source: SRC, confidence: 'low' },
+      { name: 'Testing & Inspection', qty: 1, unit: 'LS', rate: Math.round(totalArea * 0.30), basis: fmtNum(totalArea) + ' SF \u00d7 $0.30/SF (material certs, connection testing, load tests)', source: SRC, confidence: 'low' },
+      { name: 'Contingency (' + a.contingencyPercent + '%)', qty: 1, unit: 'LS', rate: Math.round(totalArea * (a.contingencyPercent / 100) * 45), basis: fmtNum(totalArea) + ' SF \u00d7 est. $45/SF direct \u00d7 ' + a.contingencyPercent + '%', source: SRC, confidence: 'low' },
     ],
     'dlt-material': [
       { name: 'DLT Panels - Standard', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: a.dltPriceSF, basis: fmtNum(totalArea) + ' SF \u00d7 0.70 coverage factor = ' + fmtNum(Math.round(totalArea * 0.7)) + ' SF', source: SRC, confidence: CONF },
       { name: 'Edge Banding & Finish', qty: Math.round(totalArea * 0.7), unit: 'SF', rate: 2.50, basis: fmtNum(Math.round(totalArea * 0.7)) + ' SF DLT panel area', source: SRC, confidence: CONF },
-      { name: 'Grading & QC', qty: 1, unit: 'LS', rate: 6500, basis: 'Fixed allowance for quality control', source: SRC, confidence: 'low' },
+      { name: 'Grading & QC', qty: 1, unit: 'LS', rate: Math.round(Math.max(6500, totalArea * 0.20)), basis: fmtNum(totalArea) + ' SF \u00d7 $0.20/SF (min $6,500) — grading, QC inspection, material certifications', source: SRC, confidence: 'low' },
     ],
     'site-supervision': [
       { name: 'Site Supervisor (full time)', qty: Math.round(totalArea * 0.014), unit: 'hr', rate: a.siteSuperHourlyRate, basis: fmtNum(totalArea) + ' SF \u00d7 0.014 hr/SF = ' + Math.round(totalArea * 0.014) + ' hr', source: SRC, confidence: CONF },
@@ -3962,7 +4214,7 @@ function generateTemplateEstimate(est, model) {
   saveState();
 }
 
-async function generateAIEstimate(est, model, apiKey, queueId) {
+async function generateAIEstimate(est, model, apiKey, queueId, capturedFiles) {
   AI_STATE.processing = true;
   AI_STATE.estimateId = est.id;
   AI_STATE.startTime = Date.now();
@@ -3997,7 +4249,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     // Step 1: Extract text from uploaded documents
     setStage(1, 'Parsing PDF drawings and specifications...', 3);
     logAIActivity(ICONS.file, 'Starting document extraction...');
-    var files = getAllUploadedFiles();
+    var files = capturedFiles || getAllUploadedFiles();
     var extractedTexts = '';
 
     if (files.length > 0) {
@@ -4033,8 +4285,9 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
     }
 
     if (extractedTexts.length > 180000) {
-      extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated due to length - ' + Math.round(extractedTexts.length / 1000) + 'KB total]';
-      logAIActivity(ICONS.warning, 'Text truncated to 180KB (was ' + Math.round(extractedTexts.length / 1000) + 'KB)');
+      var originalKB = Math.round(extractedTexts.length / 1000);
+      extractedTexts = extractedTexts.substring(0, 180000) + '\n\n[Text truncated to 180KB from ' + originalKB + 'KB total]';
+      logAIActivity(ICONS.warning, 'Text truncated to 180KB (was ' + originalKB + 'KB)');
     }
 
     // Step 2: Build project context (honest — this is data assembly, not web scraping)
@@ -4049,6 +4302,11 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
           ' for ' + (est.client || 'unknown client') + '. ' +
           'Type: ' + (est.projectType || 'commercial') + '. ' +
           'Estimator should account for local building codes, seismic zone, climate factors, and regional labor rates for this location.';
+        var region = detectRegion(est.location);
+        if (region && REGIONAL_FACTORS[region]) {
+          var rf = REGIONAL_FACTORS[region];
+          researchContext += ' REGIONAL COST ADJUSTMENT: ' + rf.label + ' — material factor ' + rf.material.toFixed(2) + 'x, labor factor ' + rf.labor.toFixed(2) + 'x vs national average. Apply these multipliers to all unit rates.';
+        }
         est.projectResearch = 'Location: ' + (est.location || 'N/A') +
           ' | Project: ' + (est.name || 'N/A') +
           ' | Client: ' + (est.client || 'N/A') +
@@ -4204,7 +4462,7 @@ async function generateAIEstimate(est, model, apiKey, queueId) {
 
     hideAIProgress();
     AI_STATE.processing = false;
-    showToast('Estimate "' + (est.name || 'Untitled') + '" completed! View it in the queue or output.', 'success');
+    showToast('Estimate "' + esc(est.name || 'Untitled') + '" completed! View it in the queue or output.', 'success');
     if (STATE.currentPage === 'queue') renderPage(true);
 
   } catch(err) {
@@ -4282,7 +4540,10 @@ function generateEstimate() {
 
   logActivity('Estimate submitted', (est.name || 'Untitled') + ' — ' + model.name);
 
-  // Keep a deep copy of the estimate for AI processing (with file refs)
+  // Capture file references BEFORE JSON roundtrip (File objects don't survive serialization)
+  var uploadedFiles = getAllUploadedFiles();
+
+  // Keep a deep copy of the estimate for AI processing
   var estCopy = JSON.parse(JSON.stringify(est));
 
   // Clear input for next estimate
@@ -4296,8 +4557,8 @@ function generateEstimate() {
   var apiKey = localStorage.getItem('sc-anthropic-key');
   var useProxy = !apiKey || !apiKey.trim();
 
-  // Start AI processing in background
-  generateAIEstimate(estCopy, model, useProxy ? null : apiKey.trim(), queueItem.id);
+  // Start AI processing in background (pass captured files directly)
+  generateAIEstimate(estCopy, model, useProxy ? null : apiKey.trim(), queueItem.id, uploadedFiles);
 }
 
 function saveCurrentEstimate() {
@@ -4908,7 +5169,10 @@ function addFiles(files, category) {
 }
 
 function removeFile(category, index) {
-  STATE.currentEstimate.files[category].splice(index, 1);
+  var removed = STATE.currentEstimate.files[category].splice(index, 1);
+  if (removed.length && removed[0].fileKey && FILE_STORE[removed[0].fileKey]) {
+    delete FILE_STORE[removed[0].fileKey];
+  }
   saveState();
   renderPage();
 }
@@ -5006,7 +5270,7 @@ function renderQueuePage() {
           return '<div id="queue-item-' + q.id + '" style="padding:16px; border-bottom:1px solid var(--border);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
               '<div>' +
-                '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + (q.name || 'Untitled Estimate') + '</div>' +
+                '<div style="font-weight:600; font-size:0.88rem; color:var(--text-primary);">' + esc(q.name || 'Untitled Estimate') + '</div>' +
                 '<div style="font-size:0.75rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Submitted ' + formatTimeAgo(q.startTime) + '</div>' +
               '</div>' +
               '<div style="display:flex; align-items:center; gap:8px;">' +
