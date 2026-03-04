@@ -1919,9 +1919,125 @@ tbody tr:last-child td { border-bottom: none; }
 .vol-table .vol-total .unit-rate-cell { color: var(--accent) !important; }
 .vol-table .vol-grand-total .unit-rate-cell { color: var(--accent) !important; font-size: 0.88rem; }
 
+/* --- STRUCTURESCOTT AI BOT --- */
+.scott-widget {
+  position: fixed;
+  bottom: 20px;
+  right: 24px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.scott-widget.hidden { opacity: 0; pointer-events: none; }
+
+/* Speech bubble */
+.scott-bubble {
+  pointer-events: auto;
+  max-width: 300px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 4px 12px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-lg);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  cursor: default;
+  position: relative;
+}
+.scott-bubble.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.scott-bubble-name {
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.scott-bubble-name svg { flex-shrink: 0; }
+.scott-bubble-text { color: var(--text-primary); }
+.scott-bubble-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.scott-bubble:hover .scott-bubble-dismiss { opacity: 1; }
+.scott-bubble-dismiss:hover { color: var(--text-primary); }
+
+/* Avatar button */
+.scott-avatar {
+  pointer-events: auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg), 0 0 16px rgba(200,149,108,0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+  overflow: visible;
+}
+.scott-avatar:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg), 0 0 24px rgba(200,149,108,0.25);
+}
+.scott-avatar:active { transform: scale(0.95); }
+
+/* Hardhat + face SVG */
+.scott-face { width: 32px; height: 32px; }
+
+/* Gentle idle animation */
+@keyframes scottFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.scott-avatar { animation: scottFloat 3s ease-in-out infinite; }
+.scott-avatar:hover { animation: none; }
+
+/* New-tip indicator dot */
+.scott-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-card);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.scott-dot.active { opacity: 1; }
+
 /* --- PRINT --- */
 @media print {
-  #sidebar, #topbar, .user-guide, .connector-panel, #toast-container, #command-palette, #modal-overlay { display: none !important; }
+  #sidebar, #topbar, .user-guide, .connector-panel, #toast-container, #command-palette, #modal-overlay, .scott-widget { display: none !important; }
   #main-content { margin: 0; }
   body { background: white; color: black; }
   .card { box-shadow: none; border: 1px solid #ddd; }

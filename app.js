@@ -5338,6 +5338,7 @@ function navigateTo(page, skipHash) {
   renderPage(true);
   saveState();
   _navigating = false;
+  scottOnPageChange(page);
 }
 
 function handleHashChange() {
@@ -5431,6 +5432,9 @@ function initCommandPalette() {
     { label: 'Ship Everything (CSV)', action: exportAllData, icon: ICONS.download },
     { label: 'First-Timer Guide', action: toggleGuide, icon: ICONS.info },
     { label: 'Cycle Ambience', action: cycleTheme, icon: ICONS.palette },
+    { label: 'Ask StructureScott', action: scottToggle, icon: ICONS.bolt },
+    { label: 'Hide StructureScott', action: scottHide, icon: ICONS.bolt },
+    { label: 'Show StructureScott', action: scottReveal, icon: ICONS.bolt },
   ];
 
   THEMES.forEach(function(t) {
@@ -5479,6 +5483,178 @@ function toggleGuide() {
   var guide = document.getElementById('user-guide');
   guide.classList.toggle('collapsed');
   STATE.guideOpen = !guide.classList.contains('collapsed');
+}
+
+// ---- SECTION 13B: STRUCTURESCOTT AI BOT ----
+var SCOTT_TIPS = {
+  input: [
+    "Tip: the more detail you put in the <strong>Project Scope</strong> box, the better my estimates get. Paste in RFP excerpts, RFIs, even email threads!",
+    "Did you know? Uploading actual drawings lets me extract quantities automatically. PDFs and images both work.",
+    "Pro move: pick your <strong>Delivery Model</strong> before generating — it completely changes which phases show up in your estimate.",
+    "Material choice matters! Glulam beams vs. steel W-shapes can swing your $/SF by 30% or more on a typical 4-story.",
+    "If you're unsure about the structural system, <strong>Post & Beam</strong> is a safe default for most mass timber commercial projects.",
+    "Quick tip: use <strong>Stash It</strong> to save your current inputs before experimenting with different configurations.",
+    "The element material dropdowns filter based on your primary material. Switch from Timber to Steel to see the full steel catalog.",
+  ],
+  queue: [
+    "I'm crunching numbers! Each step — takeoff, pricing, labor — builds on the last. The whole thing usually takes under 2 minutes.",
+    "You can queue up multiple estimates and I'll process them one at a time. Go grab a coffee!",
+    "If an estimate gets stuck, hit Stop and re-generate. Sometimes the AI just needs a fresh start.",
+    "Fun fact: the 7-step pipeline mirrors how a real estimating team works — takeoff, material pricing, connections, labor, logistics, overhead, then summary.",
+    "While I'm working, feel free to browse the <strong>Pricing Library</strong> or <strong>Analytics</strong> — I'll keep crunching in the background.",
+  ],
+  output: [
+    "Click any <strong>blue assumption value</strong> to edit it inline. The entire estimate recalculates instantly!",
+    "Try adjusting the <strong>Contingency %</strong> — 5% is typical for DDs, but early-stage budgets often use 10-15%.",
+    "The <strong>AI Notes</strong> tab has my reasoning and flagged risks. Always worth a read before sending to a client.",
+    "Use <strong>Export XLSX</strong> to get a formatted spreadsheet ready for your proposal. It includes all phases and assumptions.",
+    "Pro tip: open the <strong>Connector</strong> panel to drag unit rates from a past estimate into this one for comparison.",
+    "Building metrics like <strong>$/SF</strong> and <strong>BF/SF</strong> are editable too — change the building area and watch everything recalculate.",
+  ],
+  footbridge: [
+    "Try dragging the <strong>Span Length</strong> slider — the SVG diagram updates in real-time so you can visualize the structure!",
+    "Parabolic arches are the most common pedestrian bridge type, but check out <strong>Warren Truss</strong> for longer spans.",
+    "The <strong>Arch Rise</strong> ratio affects both aesthetics and structural efficiency. 0.15-0.25 is the sweet spot for most sites.",
+    "Footbridge estimates include fabrication, shipping, and install. Don't forget to factor in site access conditions!",
+    "For multi-span bridges, each span adds roughly 60-70% of the first span's cost (shared abutments save money).",
+  ],
+  'past-estimates': [
+    "Your estimate library grows over time. Use it as a benchmarking database — filter by project type to find comparable jobs.",
+    "Click any past estimate to load it back into the workspace for review or re-pricing with updated rates.",
+    "Tip: historical estimates are gold for proposals. Reference similar completed projects to build client confidence.",
+  ],
+  connector: [
+    "The Connector lets you view a reference estimate side-by-side with your current workspace. Great for sanity-checking unit rates!",
+    "Try comparing your current estimate's $/SF against a completed project of similar scope. If they're way off, dig into why.",
+  ],
+  'pricing-library': [
+    "These are baseline material and labor rates. Your estimate assumptions can override them on a per-project basis.",
+    "Glulam prices vary by species — Douglas Fir is the most common, but Spruce can save 15-20% on material for non-exposed applications.",
+    "Connection hardware is often the sneaky cost driver. Steel connections can run $4,000-6,000 per ton fully installed.",
+  ],
+  analytics: [
+    "The analytics dashboard shows trends across your estimate history. The more estimates you generate, the smarter these benchmarks get!",
+    "Look for outliers in your $/SF chart — they might flag scope issues or assumption errors worth investigating.",
+  ],
+  qa: [
+    "Can't find your answer here? The <strong>Project Scope</strong> field in Estimate Input is a great place to add context and special conditions.",
+    "Most FAQ answers come from real estimating questions our team gets. If you think of a new one, it probably belongs here!",
+  ],
+  settings: [
+    "Try the <strong>Blueprint</strong> theme if you want that old-school engineering drawing vibe. Or <strong>Timber</strong> for warm wood tones.",
+    "All your data lives in browser local storage. Use <strong>Ship Everything</strong> from the command palette to export a full backup.",
+    "Keyboard shortcut fan? Press <kbd>Cmd+K</kbd> to see all available commands, or <kbd>T</kbd> to cycle themes.",
+  ],
+};
+
+// Greetings Scott shows on first load or when toggled with no active tip
+var SCOTT_GREETINGS = [
+  "Hey there! I'm <strong>StructureScott</strong>, your estimating buddy. Click me anytime for tips!",
+  "Howdy! Need a hand with your estimate? I've got tips for every page. Just click!",
+  "Welcome back! Ready to crunch some numbers? I'll be right here if you need pointers.",
+  "StructureScott reporting for duty! I know a thing or two about mass timber estimating.",
+  "Hard hat's on, calculator's ready. Let's build something!",
+];
+
+var _scottState = {
+  bubbleVisible: false,
+  lastPage: null,
+  tipIndex: {},       // per-page tip index to cycle through
+  autoDismissTimer: null,
+  greetingShown: false,
+  dismissed: localStorage.getItem('sc-scott-dismissed') === 'true',
+};
+
+function scottGetTip(page) {
+  var tips = SCOTT_TIPS[page];
+  if (!tips || tips.length === 0) return null;
+  if (!_scottState.tipIndex[page]) _scottState.tipIndex[page] = 0;
+  var idx = _scottState.tipIndex[page];
+  var tip = tips[idx % tips.length];
+  _scottState.tipIndex[page] = (idx + 1) % tips.length;
+  return tip;
+}
+
+function scottShow(text, autoDismiss) {
+  var bubble = document.getElementById('scott-bubble');
+  var textEl = document.getElementById('scott-text');
+  var dot = document.getElementById('scott-dot');
+  if (!bubble || !textEl) return;
+  textEl.innerHTML = text;
+  bubble.classList.add('visible');
+  _scottState.bubbleVisible = true;
+  if (dot) dot.classList.remove('active');
+  // Clear previous timer
+  if (_scottState.autoDismissTimer) clearTimeout(_scottState.autoDismissTimer);
+  if (autoDismiss !== false) {
+    _scottState.autoDismissTimer = setTimeout(scottDismiss, 12000);
+  }
+}
+
+function scottDismiss() {
+  var bubble = document.getElementById('scott-bubble');
+  if (bubble) bubble.classList.remove('visible');
+  _scottState.bubbleVisible = false;
+  if (_scottState.autoDismissTimer) {
+    clearTimeout(_scottState.autoDismissTimer);
+    _scottState.autoDismissTimer = null;
+  }
+}
+
+function scottToggle() {
+  if (_scottState.bubbleVisible) {
+    scottDismiss();
+    return;
+  }
+  var tip = scottGetTip(STATE.currentPage);
+  if (tip) {
+    scottShow(tip);
+  } else {
+    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
+    scottShow(g);
+  }
+}
+
+function scottHide() {
+  _scottState.dismissed = true;
+  localStorage.setItem('sc-scott-dismissed', 'true');
+  var widget = document.getElementById('scott-widget');
+  if (widget) widget.classList.add('hidden');
+  scottDismiss();
+}
+
+function scottReveal() {
+  _scottState.dismissed = false;
+  localStorage.removeItem('sc-scott-dismissed');
+  var widget = document.getElementById('scott-widget');
+  if (widget) widget.classList.remove('hidden');
+}
+
+// Show a contextual tip when the user navigates to a new page
+function scottOnPageChange(page) {
+  if (_scottState.dismissed) return;
+  if (page === _scottState.lastPage) return;
+  _scottState.lastPage = page;
+  // Show a little dot to hint there's a new tip (don't auto-popup on every nav)
+  var dot = document.getElementById('scott-dot');
+  if (dot && SCOTT_TIPS[page]) {
+    dot.classList.add('active');
+  }
+}
+
+function initScott() {
+  if (_scottState.dismissed) {
+    var widget = document.getElementById('scott-widget');
+    if (widget) widget.classList.add('hidden');
+    return;
+  }
+  // Show greeting after app loads with a slight delay
+  setTimeout(function() {
+    if (_scottState.dismissed) return;
+    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
+    scottShow(g, true);
+    _scottState.greetingShown = true;
+  }, 2800);
 }
 
 // ---- SECTION 14: KEYBOARD SHORTCUTS ----
@@ -5704,6 +5880,9 @@ function initApp() {
   // Render initial page
   renderPage();
   updateNavigation();
+
+  // Init StructureScott
+  initScott();
 
   // Hide loading screen
   setTimeout(function() {
