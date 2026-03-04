@@ -1512,7 +1512,7 @@ tbody tr:last-child td { border-bottom: none; }
 /* --- LINE ITEM ROWS (editable) --- */
 .line-item-row {
   display: grid;
-  grid-template-columns: 40px 1fr 80px 80px 100px 120px 40px;
+  grid-template-columns: 28px 40px 1fr 80px 80px 100px 120px 40px;
   gap: 8px;
   align-items: center;
   padding: 8px 0;
@@ -1552,7 +1552,7 @@ tbody tr:last-child td { border-bottom: none; }
 .line-item-delete:hover { color: var(--danger); }
 .line-items-header {
   display: grid;
-  grid-template-columns: 40px 1fr 80px 80px 100px 120px 40px;
+  grid-template-columns: 28px 40px 1fr 80px 80px 100px 120px 40px;
   gap: 8px;
   padding: 8px 0;
   border-bottom: 2px solid var(--border);
