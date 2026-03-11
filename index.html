@@ -184,14 +184,14 @@
   <!-- StructureScott AI Bot -->
   <div id="scott-widget" class="scott-widget">
     <div id="scott-bubble" class="scott-bubble">
-      <button class="scott-bubble-dismiss" onclick="scottDismiss()" title="Dismiss">&times;</button>
+      <button class="scott-bubble-dismiss" data-action="scottDismiss" title="Dismiss">&times;</button>
       <div class="scott-bubble-name">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         StructureScott
       </div>
       <div class="scott-bubble-text" id="scott-text"></div>
     </div>
-    <button id="scott-avatar" class="scott-avatar" onclick="scottToggle()" title="StructureScott — your estimating buddy">
+    <button id="scott-avatar" class="scott-avatar" data-action="scottToggle" title="StructureScott — your estimating buddy">
       <svg class="scott-face" viewBox="0 0 48 48" fill="none">
         <!-- Hardhat -->
         <rect x="8" y="10" width="32" height="5" rx="1.5" fill="var(--accent)"/>
