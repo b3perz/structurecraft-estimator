@@ -67,7 +67,7 @@ const THEMES = [
 
 // ---- SECTION 3: STATE MANAGEMENT ----
 const STATE = {
-  currentPage: 'input',
+  currentPage: 'home',
   currentTheme: localStorage.getItem('sc-theme') || 'midnight',
   sidebarCollapsed: false,
   guideOpen: false,
@@ -89,6 +89,13 @@ const STATE = {
   footbridgeEstimate: null,
   footbridgeOutputTab: 'summary',
 };
+
+// Footbridge extended input defaults
+if (!STATE.fbSeismic) STATE.fbSeismic = 'zone-1';
+if (!STATE.fbDesignCode) STATE.fbDesignCode = 'aashto';
+if (!STATE.fbRamps) STATE.fbRamps = 'none';
+if (!STATE.fbLighting) STATE.fbLighting = 'none';
+if (!STATE.fbEnvironmental) STATE.fbEnvironmental = [];
 
 function createNewEstimate() {
   return {
@@ -232,6 +239,29 @@ function initDelegation() {
     var params = raw ? JSON.parse(raw) : {};
     if (action === 'handleDrop') handleDrop(e, params.category);
   });
+
+  // Delegation on modal overlay so data-action works inside modals
+  var modalOverlay = document.getElementById('modal-overlay');
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) {
+      var t = e.target.closest('[data-action]');
+      if (!t) return;
+      e.preventDefault();
+      var action = t.getAttribute('data-action');
+      var raw = t.getAttribute('data-params');
+      var params = raw ? JSON.parse(raw) : {};
+      if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+    });
+    modalOverlay.addEventListener('change', function(e) {
+      var t = e.target.closest('[data-change]');
+      if (!t) return;
+      var action = t.getAttribute('data-change');
+      var raw = t.getAttribute('data-params');
+      var params = raw ? JSON.parse(raw) : {};
+      params._value = t.value;
+      if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+    });
+  }
 }
 
 // Register all action handlers
@@ -256,7 +286,6 @@ registerAction('shareEstimateLink', function() { shareEstimateLink(); });
 registerAction('toggleUnitRatePanel', function() { toggleUnitRatePanel(); });
 registerAction('exportEstimateXLSX', function() { exportEstimateXLSX(); });
 registerAction('exportEstimate', function() { exportEstimate(); });
-registerAction('connectEstimate', function(p) { navigateTo('benchmarks'); });
 registerAction('viewQueueEstimate', function(p) { viewQueueEstimate(p.id); });
 registerAction('removeFromQueue', function(p) { removeFromQueue(p.id); });
 registerAction('stopQueueItem', function(p) { stopQueueItem(p.id); });
@@ -278,7 +307,6 @@ registerAction('toggleVolRationale', function(p, target) { toggleVolRationale(ta
 registerAction('viewEstimateDetail', function(p) { viewEstimateDetail(p.id); });
 registerAction('duplicateEstimate', function(p, t, e) { e.stopPropagation(); duplicateEstimate(p.id); });
 registerAction('loadEstimateToWorkspace', function(p, t, e) { e.stopPropagation(); loadEstimateToWorkspace(p.id); });
-registerAction('connectEstimateFromCard', function(p, t, e) { e.stopPropagation(); navigateTo('benchmarks'); });
 registerAction('toggleComparisonMode', function() { toggleComparisonMode(); });
 registerAction('pastFilterModel', function(p) { STATE.pastFilterModel = p._value; renderPage(); });
 registerAction('pastFilterStatus', function(p) { STATE.pastFilterStatus = p._value; renderPage(); });
@@ -297,11 +325,36 @@ registerAction('removeFile', function(p) { removeFile(p.category, parseInt(p.idx
 registerAction('filterPricing', function(p) { filterPricing(p._value); });
 registerAction('handleFileSelect', function(p, t, e) { handleFileSelect(e, p.category); });
 registerAction('fbViewOutput', function() { STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab = 'summary'; navigateTo('output'); });
+registerAction('navigateToOutputFromFB', function() { STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab = 'summary'; navigateTo('output'); });
 registerAction('setFbState', function(p) { STATE[p.key] = p._value; });
+registerAction('updateFbState', function(p) { STATE[p.key] = p._value; saveState(); });
+registerAction('toggleFbEnv', function(p, target) {
+  if (!STATE.fbEnvironmental) STATE.fbEnvironmental = [];
+  var idx = STATE.fbEnvironmental.indexOf(p.env);
+  if (target.checked && idx === -1) STATE.fbEnvironmental.push(p.env);
+  else if (!target.checked && idx >= 0) STATE.fbEnvironmental.splice(idx, 1);
+  saveState();
+});
 registerAction('closeNotifPanel', function() { var el = document.getElementById('notif-panel'); if(el) el.remove(); });
 registerAction('viewQueue', function() { navigateTo('queue'); var el = document.getElementById('notif-panel'); if(el) el.remove(); });
+registerAction('newEstimateFromHome', function() {
+  STATE.currentEstimate = createNewEstimate();
+  navigateTo('input');
+});
+registerAction('loadEstimateFromHome', function(p) {
+  var found = STATE.estimates.find(function(e) { return e.id === p.id; });
+  if (found) {
+    STATE.currentEstimate = JSON.parse(JSON.stringify(found));
+    STATE.outputActiveTab = 'summary';
+    navigateTo('output');
+  }
+});
 registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.removeItem('sc-activity-log'); var el = document.getElementById('notif-panel'); if(el) el.remove(); showToast('Activity log cleared.', 'info'); });
 registerAction('executePaletteCommand', function(p) { executePaletteCommand(parseInt(p.idx)); });
+registerAction('startVoiceInput', function() { startVoiceInput(); });
+registerAction('submitVoiceText', function() { submitVoiceText(); });
+registerAction('hideModal', function() { hideModal(); });
+registerAction('printPage', function() { window.print(); });
 
 // ---- SECTION 3B: REGIONAL COST FACTORS ----
 // RSMeans City Cost Index data (2025 baseline: national average = 1.00)
@@ -1271,11 +1324,6 @@ function calcEstimateTotal(estimate) {
   return total;
 }
 
-function getEstimatePhases(deliveryModel) {
-  const model = DELIVERY_MODELS[deliveryModel];
-  return model ? model.phases : [];
-}
-
 function saveState() {
   try {
     localStorage.setItem('sc-theme', STATE.currentTheme);
@@ -1429,6 +1477,19 @@ function renderInputPage() {
       '</div>' +
     '</div>' +
 
+    '<!-- 3D Building Visualizer -->' +
+    '<div class="card mb-16">' +
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="card-title">' + ICONS.building + ' 3D Preview</div>' +
+          '<div class="card-subtitle">Interactive building model. Drag to orbit, scroll to zoom.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="building-viz-container" style="width:100%; height:260px; border-radius:8px; overflow:hidden; background:var(--bg-tertiary); position:relative;">' +
+        '<div id="building-viz-fallback" style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:0.78rem;">Loading 3D view...</div>' +
+      '</div>' +
+    '</div>' +
+
     '<!-- Material Selections -->' +
     '<div class="card mb-16">' +
       '<div class="card-header">' +
@@ -1512,7 +1573,7 @@ function renderInputPage() {
     '<div class="section-divider">Document Uploads</div>' +
     '<div class="upload-grid mb-16">' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-params=\'{"category":"rfp"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
+        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">RFP / Bid Documents</div>' +
           '<div class="upload-subtitle">Drop files here or click to browse</div>' +
@@ -1522,7 +1583,7 @@ function renderInputPage() {
         renderFileList(est.files.rfp, 'rfp') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-params=\'{"category":"drawings"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
+        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Architectural Drawings</div>' +
           '<div class="upload-subtitle">SD or DD drawing sets</div>' +
@@ -1532,7 +1593,7 @@ function renderInputPage() {
         renderFileList(est.files.drawings, 'drawings') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-params=\'{"category":"structural"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
+        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Structural Drawings</div>' +
           '<div class="upload-subtitle">Structural engineering docs</div>' +
@@ -1542,7 +1603,7 @@ function renderInputPage() {
         renderFileList(est.files.structural, 'structural') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-params=\'{"category":"narratives"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
+        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Narratives & Specs</div>' +
           '<div class="upload-subtitle">Structural narratives, specs</div>' +
@@ -1680,19 +1741,27 @@ function renderOutputPage() {
   var grandTotal = subtotal + margin + overhead + contingency + bondIns;
   var bldgArea = est.buildingArea || 0;
 
+  var isClient = STATE.clientViewEnabled;
+  var projectFee = isClient ? margin + overhead + bondIns : 0;
+
   return '<div class="fade-in">' +
     '<div class="section-header">' +
       '<div>' +
-        '<div class="section-title">' + ICONS.output + ' Estimate Output</div>' +
+        '<div class="section-title">' + (isClient ? 'StructureCraft &mdash; Cost Estimate' : ICONS.output + ' Estimate Output') + '</div>' +
         '<div class="section-desc">' + esc(est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
       '</div>' +
       '<div class="section-actions">' +
-        '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
+        '<button class="btn btn-sm' + (isClient ? ' btn-accent' : '') + '" data-action="toggleClientView">' +
+          (isClient ? '&larr; Internal View' : 'Client View &rarr;') +
+        '</button>' +
+        (isClient ? '<button class="btn btn-sm no-hide" data-action="printPage">' + ICONS.download + ' Export PDF</button>' : '') +
+        (!isClient ? '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
           ICONS.share + ' Share' +
         '</button>' +
         '<button class="btn btn-sm' + (STATE.showUnitRateComparison ? ' btn-accent' : '') + '" data-action="toggleUnitRatePanel" title="Compare $/SF with past estimates">' +
           ICONS.analytics + ' $/SF Compare' +
-        '</button>' +
+        '</button>' : '') +
+        (!isClient ?
         '<button class="btn btn-sm" data-action="exportEstimateXLSX">' +
           ICONS.download + ' Ship as XLSX' +
         '</button>' +
@@ -1701,10 +1770,39 @@ function renderOutputPage() {
         '</button>' +
         '<button class="btn btn-sm btn-accent" data-action="saveCurrentEstimate">' +
           ICONS.check + ' Stash' +
-        '</button>' +
+        '</button>' : '') +
       '</div>' +
     '</div>' +
 
+    // Client view: Executive Summary
+    (isClient ?
+      '<div class="card mb-20" style="border-left:4px solid var(--accent); padding:20px;">' +
+        '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700; margin-bottom:10px;">Executive Summary</div>' +
+        '<p style="color:var(--text-primary); line-height:1.7; margin:0;">' +
+          'This estimate covers <strong>' + (model ? model.name : '') + '</strong> services for <strong>' + esc(est.name || 'Untitled Project') + '</strong>' +
+          (est.numStories ? ', a ' + est.numStories + '-story' : '') +
+          (est.projectType ? ' ' + est.projectType : '') +
+          ' structure' +
+          (bldgArea > 0 ? ' totaling <strong>' + fmtNum(bldgArea) + ' SF</strong>' : '') +
+          (est.location ? ' in ' + esc(est.location) : '') + '.' +
+          ' Total project cost is <strong>' + fmt(grandTotal) + '</strong>' +
+          (bldgArea > 0 ? ' (<strong>$' + (grandTotal / bldgArea).toFixed(2) + '</strong>/SF)' : '') + '.' +
+          (est.client ? ' Prepared for: <strong>' + esc(est.client) + '</strong>.' : '') +
+          ' Date: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '.' +
+        '</p>' +
+      '</div>' : ''
+    ) +
+
+    // Client view: collapsed fee summary instead of assumptions
+    (isClient ?
+      '<div class="card mb-20">' +
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; text-align:center;">' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Direct Costs</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(subtotal) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Project Fee</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(projectFee) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Contingency</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(contingency) + '</div></div>' +
+        '</div>' +
+      '</div>'
+    :
     '<!-- Assumptions Box -->' +
     '<div class="assumptions-box mb-20">' +
       '<div class="assumptions-header">' +
@@ -1725,8 +1823,10 @@ function renderOutputPage() {
         '<div class="assumption-item"><div class="assumption-label">Site Carpenter (per hr)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"siteCarpentrHourlyRate"}\'>' + fmtDec(est.assumptions.siteCarpentrHourlyRate) + '</div></div>' +
         '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"craneDailyRate"}\'>' + fmt(est.assumptions.craneDailyRate) + '</div></div>' +
       '</div>' +
-    '</div>' +
+    '</div>') +
 
+    // Hide live building metrics and second metrics dashboard in client view
+    (!isClient ?
     '<!-- Live Building Metrics -->' +
     '<div class="card mb-20" style="border-left: 3px solid var(--accent);">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
@@ -1794,22 +1894,25 @@ function renderOutputPage() {
           (est.installDays > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.installDays)) + ' SF/day</div>' : '') +
         '</div>' +
       '</div>' +
-    '</div>' +
+    '</div>' : '') +
 
     '<!-- Phase Tabs -->' +
     '<div class="tabs">' +
       '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
       phaseKeys.map(function(pk) {
+        var phaseName = isClient ? (CLIENT_PHASE_NAMES[pk] || (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk)) : (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk);
         return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' +
-          (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) +
+          phaseName +
         '</div>';
       }).join('') +
-      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\' style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (!isClient && est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\' style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (!isClient ? '<div class="tab ' + (activeTab === 'scenarios' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"scenarios"}\'>' + ICONS.scenario + ' Scenarios</div>' : '') +
     '</div>' +
 
     '<!-- Tab Content -->' +
     (activeTab === 'summary' ? renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) : '') +
     (activeTab === 'ai-notes' ? renderAINotesTab(est) : '') +
+    (activeTab === 'scenarios' ? renderScenariosTab(est, phaseKeys, subtotal, grandTotal) : '') +
     phaseKeys.map(function(pk) { return activeTab === pk ? renderPhaseTab(est, pk) : ''; }).join('') +
   '</div>';
 }
@@ -3067,6 +3170,72 @@ var BRIDGE_COST_HEURISTICS = {
   'king-post-truss': { low: 240, high: 400 },
 };
 
+function generatePlanSVG(cfg) {
+  var spanM = cfg.spanLength || 30;
+  var widthM = cfg.clearWidth || 3.5;
+  var svgW = 800, svgH = 200, pad = 50;
+  var drawW = svgW - pad * 2;
+  var drawH = svgH - pad * 2;
+  var scaleX = drawW / spanM;
+  var scaleY = drawH / Math.max(widthM, 2);
+  var scale = Math.min(scaleX, scaleY, 22);
+  var deckW = spanM * scale;
+  var deckH = widthM * scale;
+  var x0 = (svgW - deckW) / 2;
+  var y0 = (svgH - deckH) / 2;
+
+  var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">';
+  // Background
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="var(--bg-primary)" rx="4"/>';
+  // Deck rectangle
+  svg += '<rect x="' + x0 + '" y="' + y0 + '" width="' + deckW + '" height="' + deckH + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
+  // Fill
+  svg += '<rect x="' + x0 + '" y="' + y0 + '" width="' + deckW + '" height="' + deckH + '" fill="var(--accent)" opacity="0.08" rx="2"/>';
+  // Railing lines (both sides)
+  var railOff = 3;
+  svg += '<line x1="' + x0 + '" y1="' + (y0 - railOff) + '" x2="' + (x0 + deckW) + '" y2="' + (y0 - railOff) + '" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6,3"/>';
+  svg += '<line x1="' + x0 + '" y1="' + (y0 + deckH + railOff) + '" x2="' + (x0 + deckW) + '" y2="' + (y0 + deckH + railOff) + '" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6,3"/>';
+  // Floor beam lines at ~2.4m spacing
+  var beamSpacing = 2.4 * scale;
+  var numBeams = Math.max(1, Math.floor(deckW / beamSpacing));
+  var actualSpacing = deckW / (numBeams + 1);
+  for (var i = 1; i <= numBeams; i++) {
+    var bx = x0 + i * actualSpacing;
+    svg += '<line x1="' + bx + '" y1="' + y0 + '" x2="' + bx + '" y2="' + (y0 + deckH) + '" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.5"/>';
+  }
+  // Dimension: Clear Width (right side)
+  var dimX = x0 + deckW + 18;
+  svg += '<line x1="' + dimX + '" y1="' + y0 + '" x2="' + dimX + '" y2="' + (y0 + deckH) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (dimX - 4) + '" y1="' + y0 + '" x2="' + (dimX + 4) + '" y2="' + y0 + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (dimX - 4) + '" y1="' + (y0 + deckH) + '" x2="' + (dimX + 4) + '" y2="' + (y0 + deckH) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<text x="' + (dimX + 6) + '" y="' + (y0 + deckH / 2) + '" fill="var(--text-secondary)" font-size="11" dominant-baseline="middle">' + widthM.toFixed(1) + 'm</text>';
+  // Dimension: Span length (bottom)
+  var dimY = y0 + deckH + 25;
+  svg += '<line x1="' + x0 + '" y1="' + dimY + '" x2="' + (x0 + deckW) + '" y2="' + dimY + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + x0 + '" y1="' + (dimY - 4) + '" x2="' + x0 + '" y2="' + (dimY + 4) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (x0 + deckW) + '" y1="' + (dimY - 4) + '" x2="' + (x0 + deckW) + '" y2="' + (dimY + 4) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<text x="' + (x0 + deckW / 2) + '" y="' + (dimY + 14) + '" fill="var(--text-secondary)" font-size="11" text-anchor="middle">' + spanM + 'm span</text>';
+  // Label
+  svg += '<text x="' + (svgW / 2) + '" y="18" fill="var(--text-muted)" font-size="10" text-anchor="middle" text-transform="uppercase" letter-spacing="0.08em">PLAN VIEW</text>';
+  svg += '</svg>';
+  return svg;
+}
+
+function generateFbMetrics(cfg) {
+  var spanFt = cfg.spanLength * 3.281;
+  var widthFt = cfg.clearWidth * 3.281;
+  var deckSF = Math.round(spanFt * widthFt);
+  var glulamBF = Math.round(deckSF * 0.6);
+  var weightTons = Math.round(glulamBF * 0.23 / 2000 * 10) / 10;
+  var designLoad = 85 + 15 + 12;
+  return '<div class="fb-metrics-bar">' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + fmtNum(deckSF) + '</div><div class="fb-metric-label">Deck SF</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + fmtNum(glulamBF) + '</div><div class="fb-metric-label">Est. Glulam BF</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + weightTons + 't</div><div class="fb-metric-label">Est. Weight</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + designLoad + '</div><div class="fb-metric-label">Design Load (psf)</div></div>' +
+  '</div>';
+}
+
 function renderFootbridgePage() {
   var cfg = STATE.footbridgeConfig;
   var fbEst = STATE.footbridgeEstimate;
@@ -3086,14 +3255,14 @@ function renderFootbridgePage() {
     var fbCostPerDeckSF = fbDeckArea > 0 ? (fbGrand / fbDeckArea) : 0;
     var fbCostPerLF = fbSpanLF > 0 ? (fbGrand / fbSpanLF) : 0;
     outputHtml = '<div class="section-divider mt-24">Estimate Generated</div>' +
-      '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
+      '<div class="card mb-16 fb-estimate-output" style="border-left: 4px solid var(--accent);">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:12px;">' +
           '<div>' +
             '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
-            '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
+            '<div id="fb-animated-total" style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
             '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
           '</div>' +
-          '<button class="btn btn-accent" data-action="fbViewOutput">' +
+          '<button class="btn btn-accent" data-action="navigateToOutputFromFB">' +
             ICONS.output + ' View Full Output &rarr;' +
           '</button>' +
         '</div>' +
@@ -3139,6 +3308,10 @@ function renderFootbridgePage() {
           '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"clearWidth"}\'>' +
         '</div>' +
       '</div>' +
+      '<div id="fb-plan-container" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">' +
+        generatePlanSVG(cfg) +
+      '</div>' +
+      '<div id="fb-metrics-container">' + generateFbMetrics(cfg) + '</div>' +
     '</div>' +
 
     '<!-- Scope & Parameters -->' +
@@ -3229,6 +3402,57 @@ function renderFootbridgePage() {
       '</div>' +
     '</div>' +
 
+    '<!-- Design Constraints & Add-ons -->' +
+    '<div class="card mb-16">' +
+      '<div class="card-header"><div class="card-title">' + ICONS.warning + ' Design Constraints & Add-ons</div></div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Seismic Zone</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbSeismic"}\'>' +
+            '<option value="zone-1"' + (STATE.fbSeismic==='zone-1'?' selected':'') + '>Zone 1 (Low)</option>' +
+            '<option value="zone-2"' + (STATE.fbSeismic==='zone-2'?' selected':'') + '>Zone 2 (Moderate)</option>' +
+            '<option value="zone-3"' + (STATE.fbSeismic==='zone-3'?' selected':'') + '>Zone 3 (High)</option>' +
+            '<option value="zone-4"' + (STATE.fbSeismic==='zone-4'?' selected':'') + '>Zone 4 (Very High)</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Design Code</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbDesignCode"}\'>' +
+            '<option value="aashto"' + (STATE.fbDesignCode==='aashto'?' selected':'') + '>AASHTO LRFD</option>' +
+            '<option value="csa-s6"' + (STATE.fbDesignCode==='csa-s6'?' selected':'') + '>CAN/CSA S6</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Approach Ramps</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbRamps"}\'>' +
+            '<option value="none"' + (STATE.fbRamps==='none'?' selected':'') + '>None</option>' +
+            '<option value="one-side"' + (STATE.fbRamps==='one-side'?' selected':'') + '>One Side</option>' +
+            '<option value="both-sides"' + (STATE.fbRamps==='both-sides'?' selected':'') + '>Both Sides</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Lighting</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbLighting"}\'>' +
+            '<option value="none"' + (STATE.fbLighting==='none'?' selected':'') + '>None</option>' +
+            '<option value="bollard"' + (STATE.fbLighting==='bollard'?' selected':'') + '>Bollard ($15K)</option>' +
+            '<option value="integrated"' + (STATE.fbLighting==='integrated'?' selected':'') + '>Integrated ($35K+)</option>' +
+            '<option value="overhead"' + (STATE.fbLighting==='overhead'?' selected':'') + '>Overhead ($55K+)</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<label class="form-label">Environmental Constraints</label>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:4px;">' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"fish-bearing"}\'' + ((STATE.fbEnvironmental||[]).indexOf('fish-bearing')>=0?' checked':'') + '> Fish-bearing waterway (+$25K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"nesting-season"}\'' + ((STATE.fbEnvironmental||[]).indexOf('nesting-season')>=0?' checked':'') + '> Nesting season (+$15K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"contaminated-soil"}\'' + ((STATE.fbEnvironmental||[]).indexOf('contaminated-soil')>=0?' checked':'') + '> Contaminated soil (+$40K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"wetland"}\'' + ((STATE.fbEnvironmental||[]).indexOf('wetland')>=0?' checked':'') + '> Wetland (+$30K)</label>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
     '<!-- Heuristic Range + Generate Button -->' +
     (function() {
       var heuristic = BRIDGE_COST_HEURISTICS[cfg.bridgeType];
@@ -3265,10 +3489,19 @@ function updateFootbridgeConfig(key, value) {
     if (_fbRafId) cancelAnimationFrame(_fbRafId);
     _fbRafId = requestAnimationFrame(function() {
       _fbRafId = null;
-      // Update SVG
+      // Update SVGs
       var svgContainer = document.getElementById('fb-svg-container');
       if (svgContainer) {
         svgContainer.innerHTML = generateBridgeSVG(STATE.footbridgeConfig);
+      }
+      var planContainer = document.getElementById('fb-plan-container');
+      if (planContainer) {
+        planContainer.innerHTML = generatePlanSVG(STATE.footbridgeConfig);
+      }
+      // Update metrics bar
+      var metricsContainer = document.getElementById('fb-metrics-container');
+      if (metricsContainer) {
+        metricsContainer.innerHTML = generateFbMetrics(STATE.footbridgeConfig);
       }
       // Update slider labels
       var labelMap = {
@@ -3284,79 +3517,14 @@ function updateFootbridgeConfig(key, value) {
         else labelEl.textContent = value;
       }
     });
+    scottNotifyChange();
     return;
   }
 
   // Full re-render for bridge type changes
   renderPage();
+  scottNotifyChange();
 }
-
-function renderFootbridgeOutput(fbEst) {
-  var phaseKeys = ['fb-engineering', 'fb-fabrication', 'fb-shipping', 'fb-foundations', 'fb-installation', 'fb-railing-finishes', 'fb-general-conditions'];
-  var activeTab = STATE.footbridgeOutputTab || 'summary';
-
-  var subtotal = 0;
-  phaseKeys.forEach(function(pk) {
-    if (fbEst.phases && fbEst.phases[pk]) {
-      subtotal += calcPhaseTotal(fbEst.phases[pk]);
-    }
-  });
-  var a = fbEst.assumptions || getDefaultAssumptions();
-  var margin = subtotal * (a.marginPercent / 100);
-  var overhead = subtotal * (a.overheadPercent / 100);
-  var contingency = subtotal * (a.contingencyPercent / 100);
-  var bondIns = subtotal * (a.bondInsurancePercent / 100);
-  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
-
-  return '<div class="section-divider mt-24">Footbridge Estimate Output</div>' +
-
-    '<div class="assumptions-box mb-20">' +
-      '<div class="assumptions-header">' + ICONS.warning + ' Footbridge Pricing Assumptions</div>' +
-      '<div class="assumptions-grid">' +
-        '<div class="assumption-item"><div class="assumption-label">Margin</div><div class="assumption-value">' + fmtPct(a.marginPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Overhead</div><div class="assumption-value">' + fmtPct(a.overheadPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Contingency</div><div class="assumption-value">' + fmtPct(a.contingencyPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Bond & Insurance</div><div class="assumption-value">' + fmtPct(a.bondInsurancePercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Glulam (per BF)</div><div class="assumption-value">' + fmtDec(a.glulamPriceBF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">DLT (per SF)</div><div class="assumption-value">' + fmtDec(a.dltPriceSF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Steel Connections (per ton)</div><div class="assumption-value">' + fmt(a.steelConnectionsTon) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value">' + fmt(a.craneDailyRate) + '</div></div>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="tabs">' +
-      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
-      phaseKeys.map(function(pk) {
-        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' + (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) + '</div>';
-      }).join('') +
-    '</div>' +
-
-    (activeTab === 'summary' ? renderOutputSummary(fbEst, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) : '') +
-    phaseKeys.map(function(pk) { return activeTab === pk ? renderFootbridgePhaseTab(fbEst, pk) : ''; }).join('');
-}
-
-function renderFootbridgePhaseTab(fbEst, phaseKey) {
-  var phase = fbEst.phases && fbEst.phases[phaseKey] ? fbEst.phases[phaseKey] : { items: [] };
-  var phaseDef = PHASE_DEFS[phaseKey] || { name: phaseKey, description: '' };
-  var phaseSubtotal = calcPhaseTotal(phase);
-
-  return '<div class="slide-up"><div class="card">' +
-    '<div class="card-header"><div><div class="card-title">' + phaseDef.name + '</div><div class="card-subtitle">' + phaseDef.description + '</div></div></div>' +
-    '<div class="line-items-header"><div></div><div>Description</div><div class="cell-right">Qty</div><div class="cell-center">Unit</div><div class="cell-right">Rate</div><div class="cell-right">Total</div></div>' +
-    phase.items.map(function(item) {
-      return '<div class="line-item-row">' +
-        '<div></div>' +
-        '<div style="padding:6px 8px; font-size:0.82rem;">' + esc(item.name) + '</div>' +
-        '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtNum(item.qty) + '</div>' +
-        '<div class="cell-center" style="padding:6px 8px;">' + item.unit + '</div>' +
-        '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtDec(item.rate) + '</div>' +
-        '<div class="cell-right cell-mono cell-bold" style="padding:6px 8px;">' + fmt(item.total) + '</div>' +
-      '</div>';
-    }).join('') +
-    (phase.items.length > 0 ? '<div class="line-item-row subtotal-row"><div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div><div></div><div></div><div></div><div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">' + fmt(phaseSubtotal) + '</div></div>' : '') +
-  '</div></div>';
-}
-
 
 // ---- SECTION 9D: FOOTBRIDGE ESTIMATE GENERATOR ----
 // Parametric estimating model based on CAN/CSA O86, NDS, and AASHTO LRFD
@@ -3543,6 +3711,14 @@ function generateFootbridgeEstimate() {
     foundationCostPer = 75000; geoInvestCost = 28000;
     extraFoundItems.push({ name: 'Cofferdam / Dewatering', qty: 1, unit: 'LS', rate: 35000, total: 35000 });
   }
+  // Seismic zone multiplier on foundation cost
+  var seismic = STATE.fbSeismic || 'zone-1';
+  var seismicMult = 1.0;
+  if (seismic === 'zone-2') seismicMult = 1.15;
+  else if (seismic === 'zone-3') seismicMult = 1.35;
+  else if (seismic === 'zone-4') seismicMult = 1.6;
+  foundationCostPer = Math.round(foundationCostPer * seismicMult);
+
   var numAbutments = 2;
   var numPiers = (bType === 'multi-span-beam') ? nSpans - 1 : 0;
 
@@ -3659,6 +3835,25 @@ function generateFootbridgeEstimate() {
   }
   installItems.push({ name: 'Site Mobilization & Demobilization', qty: 1, unit: 'LS', rate: Math.round(5000 * accessMult), total: Math.round(5000 * accessMult) });
 
+  // Approach ramps
+  var ramps = STATE.fbRamps || 'none';
+  var numRamps = ramps === 'both-sides' ? 2 : (ramps === 'one-side' ? 1 : 0);
+  if (numRamps > 0) {
+    var rampLen = Math.round(width * 3.281 * 12); // ADA 1:12 slope, length in LF
+    installItems.push({ name: 'Ramp Structure (' + numRamps + ' side' + (numRamps > 1 ? 's' : '') + ')', qty: numRamps, unit: 'each', rate: Math.round(rampLen * 320), total: numRamps * Math.round(rampLen * 320) });
+    installItems.push({ name: 'Ramp Railing', qty: Math.round(rampLen * numRamps * 2), unit: 'LF', rate: 85, total: Math.round(rampLen * numRamps * 2) * 85 });
+  }
+
+  // Lighting
+  var lighting = STATE.fbLighting || 'none';
+  if (lighting === 'bollard') {
+    railItems.push({ name: 'Bollard Lighting', qty: 1, unit: 'LS', rate: 15000, total: 15000 });
+  } else if (lighting === 'integrated') {
+    railItems.push({ name: 'Integrated LED Lighting', qty: 1, unit: 'LS', rate: 35000, total: 35000 });
+  } else if (lighting === 'overhead') {
+    railItems.push({ name: 'Overhead Lighting System', qty: 1, unit: 'LS', rate: 55000, total: 55000 });
+  }
+
   // Engineering
   var engItems = [
     { name: 'Structural Design & Analysis', qty: engDesignHrs, unit: 'hr', rate: a.engHourlyRate, total: engDesignHrs * a.engHourlyRate },
@@ -3706,6 +3901,14 @@ function generateFootbridgeEstimate() {
     { name: 'Testing & Inspection', qty: 1, unit: 'LS', rate: testingInspection, total: testingInspection },
     { name: 'Contingency (' + a.contingencyPercent + '%)', qty: 1, unit: 'LS', rate: contingencyAmt, total: contingencyAmt },
   ];
+
+  // Environmental constraints
+  var envItems = STATE.fbEnvironmental || [];
+  if (envItems.indexOf('fish-bearing') >= 0) gcItems.push({ name: 'Fish-Bearing Waterway Mitigation', qty: 1, unit: 'LS', rate: 25000, total: 25000 });
+  if (envItems.indexOf('nesting-season') >= 0) gcItems.push({ name: 'Nesting Season Restrictions', qty: 1, unit: 'LS', rate: 15000, total: 15000 });
+  if (envItems.indexOf('contaminated-soil') >= 0) gcItems.push({ name: 'Contaminated Soil Remediation', qty: 1, unit: 'LS', rate: 40000, total: 40000 });
+  if (envItems.indexOf('wetland') >= 0) gcItems.push({ name: 'Wetland Protection & Restoration', qty: 1, unit: 'LS', rate: 30000, total: 30000 });
+
   var gcSub = gcItems.reduce(function(s, i) { return s + i.total; }, 0);
   phases['fb-general-conditions'] = { items: gcItems, subtotal: gcSub };
 
@@ -3725,7 +3928,8 @@ function generateFootbridgeEstimate() {
       memberSize: memberWidthIn + '"×' + Math.round(memberDepthIn) + '"',
       primaryBF: primaryBF, trussWebBF: trussWebBF, floorBeamBF: floorBeamBF, deckBeamBF: deckBeamBF,
       totalGlulamBF: totalGlulamBF + deckBeamBF, steelTons: steelTons + tensionSteelTons,
-      totalPieces: totalPieces, designBasis: 'AASHTO LRFD Pedestrian + CAN/CSA O86',
+      totalPieces: totalPieces, seismicZone: seismic, ramps: ramps, lighting: lighting,
+      designBasis: (STATE.fbDesignCode === 'csa-s6' ? 'CAN/CSA S6' : 'AASHTO LRFD') + ' + CAN/CSA O86',
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -3741,8 +3945,44 @@ function generateFootbridgeEstimate() {
   STATE.outputActiveTab = 'summary';
   STATE.footbridgeOutputTab = 'summary';
   saveState();
-  navigateTo('output');
-  showToast('Bridge estimate complete — view full output.', 'success');
+
+  // Stay on footbridge page with animated reveal
+  renderPage(true);
+  showToast('Bridge estimate complete!', 'success');
+
+  // Animate the output card
+  setTimeout(function() {
+    var outputCard = document.querySelector('.fb-estimate-output');
+    if (outputCard) {
+      outputCard.style.opacity = '0';
+      outputCard.style.transform = 'translateY(16px)';
+      outputCard.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+      // Force reflow
+      outputCard.offsetHeight;
+      outputCard.style.opacity = '1';
+      outputCard.style.transform = 'translateY(0)';
+      // Scroll into view
+      outputCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Animate total counting up
+    var totalEl = document.getElementById('fb-animated-total');
+    if (totalEl) {
+      var finalVal = STATE.footbridgeEstimate.totalCost || 0;
+      var startTime = null;
+      var duration = 1200;
+      function animateCount(ts) {
+        if (!startTime) startTime = ts;
+        var progress = Math.min((ts - startTime) / duration, 1);
+        // ease-out cubic
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var current = Math.round(finalVal * eased);
+        totalEl.textContent = fmt(current);
+        if (progress < 1) requestAnimationFrame(animateCount);
+      }
+      totalEl.textContent = fmt(0);
+      requestAnimationFrame(animateCount);
+    }
+  }, 50);
 }
 
 
@@ -3753,12 +3993,14 @@ function updateEstimate(field, value) {
   STATE.currentEstimate[field] = value;
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
+  scottNotifyChange();
 }
 
 function updateAssumption(key, value) {
   STATE.currentEstimate.assumptions[key] = value;
   saveState();
   renderPage();
+  scottNotifyChange();
 }
 
 function shareEstimateLink() {
@@ -3795,6 +4037,7 @@ function updateBuildingMetric(key, value) {
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
   renderPage();
+  scottNotifyChange();
 }
 
 function setDeliveryModel(model) {
@@ -5553,6 +5796,7 @@ function showNotificationsPanel() {
 // ---- SECTION 11: ROUTING & RENDERING ----
 
 var PAGE_MAP = {
+  'home': { title: 'Home', render: renderHomePage, breadcrumb: 'Home' },
   'dashboard': { title: 'Dashboard', render: renderDashboardPage, breadcrumb: 'Home > Dashboard' },
   'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Estimate > Input' },
   'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Estimate > Queue' },
@@ -5560,7 +5804,6 @@ var PAGE_MAP = {
   'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Estimate > Footbridge' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Library > Past Estimates' },
   'benchmarks': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
-  'connector': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Library > Pricing Library' },
   'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Library > Analytics' },
   'scenarios': { title: 'What-If Scenarios', render: renderScenariosPage, breadcrumb: 'Tools > What-If Scenarios' },
@@ -5605,6 +5848,10 @@ function renderPage(forceFullRender) {
   setTimeout(initCustomSelects, 0);
   // Phase 3A: Run rule engine after render
   setTimeout(runRuleEngine, 0);
+  // Phase 7C: Initialize 3D building visualizer on input page
+  if (STATE.currentPage === 'input') {
+    setTimeout(initBuildingVisualizer, 50);
+  }
 }
 
 function doQueueIncrementalUpdate(inProgress) {
@@ -5687,7 +5934,7 @@ function navigateTo(page, skipHash) {
 
 function handleHashChange() {
   var hash = window.location.hash.replace('#', '');
-  if (!hash) return;
+  if (!hash) { navigateTo('home', true); return; }
   var parts = hash.split('/');
   var page = parts[0];
   var estId = parts[1] || null;
@@ -5820,93 +6067,116 @@ function toggleGuide() {
 }
 
 // ---- SECTION 13B: STRUCTURESCOTT AI BOT ----
-var SCOTT_TIPS = {
-  input: [
-    "Tip: the more detail you put in the <strong>Project Scope</strong> box, the better my estimates get. Paste in RFP excerpts, RFIs, even email threads!",
-    "Did you know? Uploading actual drawings lets me extract quantities automatically. PDFs and images both work.",
-    "Pro move: pick your <strong>Delivery Model</strong> before generating — it completely changes which phases show up in your estimate.",
-    "Material choice matters! Glulam beams vs. steel W-shapes can swing your $/SF by 30% or more on a typical 4-story.",
-    "If you're unsure about the structural system, <strong>Post & Beam</strong> is a safe default for most mass timber commercial projects.",
-    "Quick tip: use <strong>Stash It</strong> to save your current inputs before experimenting with different configurations.",
-    "The element material dropdowns filter based on your primary material. Switch from Timber to Steel to see the full steel catalog.",
-  ],
-  queue: [
-    "I'm crunching numbers! Each step — takeoff, pricing, labor — builds on the last. The whole thing usually takes under 2 minutes.",
-    "You can queue up multiple estimates and I'll process them one at a time. Go grab a coffee!",
-    "If an estimate gets stuck, hit Stop and re-generate. Sometimes the AI just needs a fresh start.",
-    "Fun fact: the 7-step pipeline mirrors how a real estimating team works — takeoff, material pricing, connections, labor, logistics, overhead, then summary.",
-    "While I'm working, feel free to browse the <strong>Pricing Library</strong> or <strong>Analytics</strong> — I'll keep crunching in the background.",
-  ],
-  output: [
-    "Click any <strong>blue assumption value</strong> to edit it inline. The entire estimate recalculates instantly!",
-    "Try adjusting the <strong>Contingency %</strong> — 5% is typical for DDs, but early-stage budgets often use 10-15%.",
-    "The <strong>AI Notes</strong> tab has my reasoning and flagged risks. Always worth a read before sending to a client.",
-    "Use <strong>Export XLSX</strong> to get a formatted spreadsheet ready for your proposal. It includes all phases and assumptions.",
-    "Pro tip: open the <strong>Connector</strong> panel to drag unit rates from a past estimate into this one for comparison.",
-    "Building metrics like <strong>$/SF</strong> and <strong>BF/SF</strong> are editable too — change the building area and watch everything recalculate.",
-  ],
-  footbridge: [
-    "Try dragging the <strong>Span Length</strong> slider — the SVG diagram updates in real-time so you can visualize the structure!",
-    "Parabolic arches are the most common pedestrian bridge type, but check out <strong>Warren Truss</strong> for longer spans.",
-    "The <strong>Arch Rise</strong> ratio affects both aesthetics and structural efficiency. 0.15-0.25 is the sweet spot for most sites.",
-    "Footbridge estimates include fabrication, shipping, and install. Don't forget to factor in site access conditions!",
-    "For multi-span bridges, each span adds roughly 60-70% of the first span's cost (shared abutments save money).",
-  ],
-  'past-estimates': [
-    "Your estimate library grows over time. Use it as a benchmarking database — filter by project type to find comparable jobs.",
-    "Click any past estimate to load it back into the workspace for review or re-pricing with updated rates.",
-    "Tip: historical estimates are gold for proposals. Reference similar completed projects to build client confidence.",
-  ],
-  connector: [
-    "The Connector lets you view a reference estimate side-by-side with your current workspace. Great for sanity-checking unit rates!",
-    "Try comparing your current estimate's $/SF against a completed project of similar scope. If they're way off, dig into why.",
-  ],
-  'pricing-library': [
-    "These are baseline material and labor rates. Your estimate assumptions can override them on a per-project basis.",
-    "Glulam prices vary by species — Douglas Fir is the most common, but Spruce can save 15-20% on material for non-exposed applications.",
-    "Connection hardware is often the sneaky cost driver. Steel connections can run $4,000-6,000 per ton fully installed.",
-  ],
-  analytics: [
-    "The analytics dashboard shows trends across your estimate history. The more estimates you generate, the smarter these benchmarks get!",
-    "Look for outliers in your $/SF chart — they might flag scope issues or assumption errors worth investigating.",
-  ],
-  qa: [
-    "Can't find your answer here? The <strong>Project Scope</strong> field in Estimate Input is a great place to add context and special conditions.",
-    "Most FAQ answers come from real estimating questions our team gets. If you think of a new one, it probably belongs here!",
-  ],
-  settings: [
-    "Try the <strong>Blueprint</strong> theme if you want that old-school engineering drawing vibe. Or <strong>Timber</strong> for warm wood tones.",
-    "All your data lives in browser local storage. Use <strong>Ship Everything</strong> from the command palette to export a full backup.",
-    "Keyboard shortcut fan? Press <kbd>Cmd+K</kbd> to see all available commands, or <kbd>T</kbd> to cycle themes.",
-  ],
-};
+// ---- STRUCTURESCOTT RULE ENGINE ----
 
-// Greetings Scott shows on first load or when toggled with no active tip
-var SCOTT_GREETINGS = [
-  "Hey there! I'm <strong>StructureScott</strong>, your estimating buddy. Click me anytime for tips!",
-  "Howdy! Need a hand with your estimate? I've got tips for every page. Just click!",
-  "Welcome back! Ready to crunch some numbers? I'll be right here if you need pointers.",
-  "StructureScott reporting for duty! I know a thing or two about mass timber estimating.",
-  "Hard hat's on, calculator's ready. Let's build something!",
+var SCOTT_RULES = [
+  { test: function(s) { return s.marginPercent > 40; },
+    msg: function(s) { return 'Margin at ' + s.marginPercent + '% is way above typical SC range (15-30%). Intentional?'; },
+    priority: 0 },
+  { test: function(s) { return s.marginPercent > 0 && s.marginPercent < 10; },
+    msg: function(s) { return 'Margin at ' + s.marginPercent + '% is tight. Make sure overhead is covered separately.'; },
+    priority: 0 },
+  { test: function(s) { return s.contingencyPercent > 15; },
+    msg: function(s) { return 'Contingency at ' + s.contingencyPercent + '% — concept/SD level. DDs are typically 5-8%.'; },
+    priority: 1 },
+  { test: function(s) { return s.contingencyPercent > 0 && s.contingencyPercent < 3; },
+    msg: function(s) { return 'Under 3% contingency is risky unless this is a repeat project with locked pricing.'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 200 && s.primaryMaterial === 'timber'; },
+    msg: function(s) { return '$' + Math.round(s.costPerSF) + '/SF for SC timber scope is high. Double-check member sizing.'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 0 && s.costPerSF < 25 && s.deliveryModel === 'eor-build'; },
+    msg: function(s) { return '$' + Math.round(s.costPerSF) + '/SF for EOR Build seems very low. All phases included?'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 0 && s.targetPerSF > 0 && s.costPerSF > s.targetPerSF * 1.15; },
+    msg: function(s) { return 'You\'re ' + Math.round((s.costPerSF / s.targetPerSF - 1) * 100) + '% over budget target. Fabrication and installation are usually where you find savings.'; },
+    priority: 0 },
+  { test: function(s) { return s.overheadPercent > 20; },
+    msg: function(s) { return 'Overhead at ' + s.overheadPercent + '% is above typical (8-15%). Should some of this be in general conditions?'; },
+    priority: 1 },
+  { test: function(s) { return s.page === 'footbridge' && s.spanLength > 60 && s.bridgeType === 'clear-span-beam'; },
+    msg: function(s) { return s.spanLength + 'm clear span beam is pushing limits for timber. Consider arch or cable-stayed.'; },
+    priority: 0 },
+  { test: function(s) { return s.page === 'footbridge' && s.clearWidth && s.clearWidth < 2.5; },
+    msg: function(s) { return 'Clear width under 2.5m may not meet AASHTO/CSA pedestrian bridge minimums.'; },
+    priority: 1 },
+  { test: function(s) { return s.page === 'output' && !s.buildingArea; },
+    msg: function(s) { return 'No building area set — can\'t calculate $/SF. Add it in the Input page or metrics section.'; },
+    priority: 2 },
+  { test: function(s) { return s.page === 'input' && s.deliveryModel && !s.scopeDescription; },
+    msg: function(s) { return 'More scope detail = better Claude estimate. Paste in RFP excerpts, drawing notes, anything.'; },
+    priority: 2 },
+  { test: function(s) { return s.page === 'output' && s.lineItemCount === 0; },
+    msg: function(s) { return 'No line items yet. Generate an estimate from the Input page, or add items manually in the phase tabs.'; },
+    priority: 2 },
+  { test: function(s) { return s.bondInsurancePercent > 5; },
+    msg: function(s) { return 'Bond & insurance at ' + s.bondInsurancePercent + '% is high. Typical SC range is 1.5-3%.'; },
+    priority: 1 },
 ];
+
+function getScottSnapshot() {
+  var est = STATE.currentEstimate || {};
+  var assumptions = est.assumptions || getDefaultAssumptions();
+  var total = est.totalCost || calcEstimateTotal(est);
+  var area = est.buildingArea || 0;
+  var cfg = STATE.footbridgeConfig || {};
+  var lineItems = 0;
+  if (est.phases) {
+    Object.values(est.phases).forEach(function(p) {
+      if (p.items) lineItems += p.items.length;
+    });
+  }
+  return {
+    page: STATE.currentPage,
+    projectName: est.name || '',
+    projectType: est.projectType || 'commercial',
+    deliveryModel: est.deliveryModel || '',
+    primaryMaterial: est.primaryMaterial || 'timber',
+    buildingArea: area,
+    numStories: est.numStories || 0,
+    totalCost: total,
+    costPerSF: area > 0 ? total / area : 0,
+    targetPerSF: est.targetCostPerSF || 0,
+    marginPercent: assumptions.marginPercent || 0,
+    overheadPercent: assumptions.overheadPercent || 0,
+    contingencyPercent: assumptions.contingencyPercent || 0,
+    bondInsurancePercent: assumptions.bondInsurancePercent || 0,
+    scopeDescription: est.scopeDescription || '',
+    lineItemCount: lineItems,
+    spanLength: cfg.spanLength || 0,
+    clearWidth: cfg.clearWidth || 0,
+    bridgeType: cfg.bridgeType || '',
+    estimateCount: STATE.estimates ? STATE.estimates.length : 0,
+  };
+}
 
 var _scottState = {
   bubbleVisible: false,
   lastPage: null,
-  tipIndex: {},       // per-page tip index to cycle through
   autoDismissTimer: null,
-  greetingShown: false,
+  chatOpen: false,
+  chatHistory: [],
   dismissed: localStorage.getItem('sc-scott-dismissed') === 'true',
 };
 
-function scottGetTip(page) {
-  var tips = SCOTT_TIPS[page];
-  if (!tips || tips.length === 0) return null;
-  if (!_scottState.tipIndex[page]) _scottState.tipIndex[page] = 0;
-  var idx = _scottState.tipIndex[page];
-  var tip = tips[idx % tips.length];
-  _scottState.tipIndex[page] = (idx + 1) % tips.length;
-  return tip;
+var _scottEvalTimer = null;
+var _scottLastRule = null;
+
+function scottEvaluateRules() {
+  var snap = getScottSnapshot();
+  var triggered = SCOTT_RULES.filter(function(r) { try { return r.test(snap); } catch(e) { return false; } });
+  if (!triggered.length) return;
+  triggered.sort(function(a, b) { return a.priority - b.priority; });
+  var msgText = triggered[0].msg(snap);
+  if (msgText === _scottLastRule) return;
+  _scottLastRule = msgText;
+  scottShow(msgText, true);
+}
+
+function scottNotifyChange() {
+  if (_scottState.dismissed) return;
+  if (_scottEvalTimer) clearTimeout(_scottEvalTimer);
+  _scottEvalTimer = setTimeout(scottEvaluateRules, 800);
 }
 
 function scottShow(text, autoDismiss) {
@@ -5918,7 +6188,6 @@ function scottShow(text, autoDismiss) {
   bubble.classList.add('visible');
   _scottState.bubbleVisible = true;
   if (dot) dot.classList.remove('active');
-  // Clear previous timer
   if (_scottState.autoDismissTimer) clearTimeout(_scottState.autoDismissTimer);
   if (autoDismiss !== false) {
     _scottState.autoDismissTimer = setTimeout(scottDismiss, 12000);
@@ -5936,17 +6205,11 @@ function scottDismiss() {
 }
 
 function scottToggle() {
-  if (_scottState.bubbleVisible) {
-    scottDismiss();
+  if (_scottState.chatOpen) {
+    scottMinimize();
     return;
   }
-  var tip = scottGetTip(STATE.currentPage);
-  if (tip) {
-    scottShow(tip);
-  } else {
-    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
-    scottShow(g);
-  }
+  scottExpand();
 }
 
 function scottHide() {
@@ -5955,6 +6218,7 @@ function scottHide() {
   var widget = document.getElementById('scott-widget');
   if (widget) widget.classList.add('hidden');
   scottDismiss();
+  scottMinimize();
 }
 
 function scottReveal() {
@@ -5964,16 +6228,123 @@ function scottReveal() {
   if (widget) widget.classList.remove('hidden');
 }
 
-// Show a contextual tip when the user navigates to a new page
 function scottOnPageChange(page) {
   if (_scottState.dismissed) return;
   if (page === _scottState.lastPage) return;
   _scottState.lastPage = page;
-  // Show a little dot to hint there's a new tip (don't auto-popup on every nav)
   var dot = document.getElementById('scott-dot');
-  if (dot && SCOTT_TIPS[page]) {
-    dot.classList.add('active');
+  if (dot) dot.classList.add('active');
+  // Run rule engine on page change
+  scottNotifyChange();
+}
+
+// ---- SCOTT CHAT PANEL ----
+
+function scottExpand() {
+  var chat = document.getElementById('scott-chat');
+  var bubble = document.getElementById('scott-bubble');
+  var avatar = document.getElementById('scott-avatar');
+  if (!chat) return;
+  chat.classList.remove('collapsed');
+  chat.classList.add('open');
+  if (bubble) bubble.classList.remove('visible');
+  _scottState.chatOpen = true;
+  _scottState.bubbleVisible = false;
+  // Add greeting if first open
+  var msgs = document.getElementById('scott-messages');
+  if (msgs && msgs.children.length === 0) {
+    var snap = getScottSnapshot();
+    var greeting = snap.projectName
+      ? 'Hey! I\'m looking at <strong>' + esc(snap.projectName) + '</strong>' + (snap.totalCost > 0 ? ' — ' + fmt(snap.totalCost) + ' total' : '') + '. What do you want to know?'
+      : 'Hey! I\'m StructureScott, your estimating copilot. Ask me anything about your estimate.';
+    scottAddChatMessage('scott', greeting);
   }
+  var input = document.getElementById('scott-input');
+  if (input) setTimeout(function() { input.focus(); }, 100);
+}
+
+function scottMinimize() {
+  var chat = document.getElementById('scott-chat');
+  if (!chat) return;
+  chat.classList.remove('open');
+  chat.classList.add('collapsed');
+  _scottState.chatOpen = false;
+}
+
+function scottAddChatMessage(role, html) {
+  var msgs = document.getElementById('scott-messages');
+  if (!msgs) return;
+  var div = document.createElement('div');
+  div.className = 'scott-msg scott-msg-' + role;
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function scottReplaceLast(html) {
+  var msgs = document.getElementById('scott-messages');
+  if (!msgs || !msgs.lastElementChild) return;
+  msgs.lastElementChild.innerHTML = html;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function scottSendMessage() {
+  var input = document.getElementById('scott-input');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  scottAddChatMessage('user', esc(text));
+
+  var apiKey = localStorage.getItem('sc-anthropic-key');
+  if (!apiKey) {
+    scottAddChatMessage('scott', 'I need an API key to chat. Add your Anthropic key in <strong>Settings</strong> under "AI Configuration".');
+    return;
+  }
+
+  var thinkingEl = scottAddChatMessage('scott', '<em>Thinking...</em>');
+
+  _scottState.chatHistory.push({ role: 'user', content: text });
+
+  var snap = getScottSnapshot();
+  var systemPrompt = 'You are StructureScott, a senior mass timber estimator at StructureCraft. ' +
+    'Current estimate state: ' + JSON.stringify(snap) + '. ' +
+    'Speak in short, direct, practical sentences. Never hedge. Reference specific numbers. ' +
+    'Keep responses under 100 words unless asked for detail.';
+
+  var model = localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-5-20250929';
+
+  var messages = _scottState.chatHistory.slice(-10);
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: model,
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: messages,
+    }),
+  })
+  .then(function(res) {
+    if (!res.ok) throw new Error('API error ' + res.status);
+    return res.json();
+  })
+  .then(function(data) {
+    var reply = data.content && data.content[0] ? data.content[0].text : 'No response.';
+    _scottState.chatHistory.push({ role: 'assistant', content: reply });
+    scottReplaceLast(reply.replace(/\n/g, '<br>'));
+  })
+  .catch(function(err) {
+    scottReplaceLast('<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>');
+  });
 }
 
 function initScott() {
@@ -5982,12 +6353,21 @@ function initScott() {
     if (widget) widget.classList.add('hidden');
     return;
   }
-  // Show greeting after app loads with a slight delay
+  // Enter key sends message in chat
+  var chatInput = document.getElementById('scott-input');
+  if (chatInput) {
+    chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); scottSendMessage(); }
+    });
+  }
+  // Show greeting after app loads
   setTimeout(function() {
     if (_scottState.dismissed) return;
-    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
-    scottShow(g, true);
-    _scottState.greetingShown = true;
+    var snap = getScottSnapshot();
+    var greeting = snap.projectName
+      ? 'Working on <strong>' + esc(snap.projectName) + '</strong>? Click me to chat!'
+      : 'Hey! I\'m <strong>StructureScott</strong>, your estimating copilot. Click to chat!';
+    scottShow(greeting, true);
   }, 2800);
 }
 
@@ -6077,6 +6457,8 @@ function initApp() {
   loadState();
 
   // Set nav icons
+  var homeNav = document.getElementById('nav-icon-home');
+  if (homeNav) homeNav.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
   document.getElementById('nav-icon-input').innerHTML = ICONS.input;
   var queueNav = document.getElementById('nav-icon-queue');
   if (queueNav) queueNav.innerHTML = ICONS.bolt;
@@ -6084,10 +6466,8 @@ function initApp() {
   document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
   document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
-  var analyticsNav = document.getElementById('nav-icon-analytics');
-  if (analyticsNav) analyticsNav.innerHTML = ICONS.analytics;
-  var qaNav = document.getElementById('nav-icon-qa');
-  if (qaNav) qaNav.innerHTML = ICONS.qa;
+  var bmNav2 = document.getElementById('nav-icon-benchmarks');
+  if (bmNav2) bmNav2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>';
   document.getElementById('nav-icon-settings').innerHTML = ICONS.settings;
 
   // Badge counts
@@ -6402,7 +6782,110 @@ function runRuleEngine() {
   }).join('');
 }
 
-// ---- PHASE 5A: DASHBOARD PAGE ----
+// ---- PHASE 5A: HOME PAGE ----
+function renderHomePage() {
+  var estimates = STATE.estimates;
+  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
+  var estimatesWithArea = estimates.filter(function(e) { return e.buildingArea > 0; });
+  var avgPerSF = estimatesWithArea.length > 0
+    ? estimatesWithArea.reduce(function(s, e) { return s + (e.totalCost || 0) / e.buildingArea; }, 0) / estimatesWithArea.length
+    : 0;
+  var activeQueue = (typeof ESTIMATE_QUEUE !== 'undefined' ? ESTIMATE_QUEUE : []).filter(function(q) { return q.status === 'processing'; }).length;
+  var recentEstimates = estimates.slice(-5).reverse();
+
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  return '<div class="fade-in">' +
+
+    // Branded header
+    '<div class="home-header">' +
+      '<div class="home-header-left">' +
+        '<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">' +
+          '<svg width="40" height="40" viewBox="0 0 100 100" fill="none"><rect x="15" y="30" width="70" height="8" rx="2" fill="var(--accent)"/><rect x="30" y="18" width="8" height="64" rx="2" fill="var(--accent)"/><rect x="62" y="18" width="8" height="64" rx="2" fill="var(--accent)"/><rect x="15" y="62" width="70" height="8" rx="2" fill="var(--accent)" opacity="0.7"/></svg>' +
+          '<div><div style="font-size:1.3rem; font-weight:800; color:var(--text-primary);">StructureCraft Estimator</div>' +
+          '<div style="font-size:0.82rem; color:var(--text-muted);">Structural cost intelligence</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="home-header-right">' +
+        '<div style="font-size:0.82rem; color:var(--text-muted); text-align:right;">' + dateStr + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI row
+    '<div class="kpi-grid mb-20">' +
+      '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(totalPipeline) + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Avg $/SF</div><div class="kpi-value">' + (avgPerSF > 0 ? '$' + avgPerSF.toFixed(2) : '—') + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Active Queue</div><div class="kpi-value">' + activeQueue + '</div></div>' +
+    '</div>' +
+
+    // Recent Estimates
+    (recentEstimates.length > 0 ?
+      '<div class="section-divider">Recent Estimates</div>' +
+      '<div class="dashboard-grid mb-20">' +
+        recentEstimates.map(function(est) {
+          var total = est.totalCost || calcEstimateTotal(est);
+          var model = DELIVERY_MODELS[est.deliveryModel];
+          var perSF = est.buildingArea > 0 ? '$' + (total / est.buildingArea).toFixed(2) + '/SF' : '';
+          var ago = timeAgo(est.updatedAt || est.createdAt);
+          return '<div class="card home-estimate-card" data-action="loadEstimateFromHome" data-params=\'{"id":"' + est.id + '"}\'>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">' +
+              '<div>' +
+                '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
+                '<div style="font-size:0.75rem; color:var(--text-muted);">' + esc(est.client || '') + (model ? ' &mdash; ' + model.name : '') + '</div>' +
+              '</div>' +
+              '<div style="font-size:0.7rem; color:var(--text-muted);">' + ago + '</div>' +
+            '</div>' +
+            '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(total) + '</div>' +
+            (perSF ? '<div style="font-size:0.72rem; color:var(--text-muted);">' + perSF + '</div>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>'
+      : ''
+    ) +
+
+    // New Estimate button
+    '<div style="text-align:center; margin:24px 0;">' +
+      '<button class="btn btn-lg btn-accent" data-action="newEstimateFromHome" style="padding:14px 48px; font-size:1rem;">' +
+        ICONS.plus + ' New Estimate' +
+      '</button>' +
+    '</div>' +
+
+    // Quick links
+    '<div class="section-divider">Quick Links</div>' +
+    '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"footbridge"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.footbridge + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Footbridge Estimator</div>' +
+      '</div>' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"pricing-library"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.pricing + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Pricing Library</div>' +
+      '</div>' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"benchmarks"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.benchmarks + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Benchmarks</div>' +
+      '</div>' +
+    '</div>' +
+
+  '</div>';
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  var diff = Date.now() - new Date(dateStr).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.floor(days / 30) + 'mo ago';
+}
+
+// ---- PHASE 5A (LEGACY): DASHBOARD PAGE ----
 function renderDashboardPage() {
   var estimates = STATE.estimates;
   var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
@@ -6500,14 +6983,23 @@ function renderBenchmarksPage() {
   var filterType = STATE.benchmarkFilterType || 'all';
   var filteredWithArea = filterType === 'all' ? withArea : withArea.filter(function(e) { return e.projectType === filterType; });
 
+  // Escalation helper: returns adjusted total for an estimate
+  var escOn = STATE.escalationEnabled;
+  function getAdjustedTotal(e) {
+    var raw = e.totalCost || calcEstimateTotal(e);
+    if (!escOn || !e.createdAt) return raw;
+    var fromQ = getQuarterKey(e.createdAt);
+    return raw * getBlendedEscalation(fromQ);
+  }
+
   // Current estimate $/SF
-  var currentTotal = currentEst ? (currentEst.totalCost || calcEstimateTotal(currentEst)) : 0;
+  var currentTotal = currentEst ? getAdjustedTotal(currentEst) : 0;
   var currentArea = currentEst ? (currentEst.buildingArea || 0) : 0;
   var currentSF = currentArea > 0 ? (currentTotal / currentArea) : 0;
 
   // Distribution chart SVG
   var chartWidth = 700, chartHeight = 120, dotR = 6, padding = 40;
-  var allSF = filteredWithArea.map(function(e) { return (e.totalCost || calcEstimateTotal(e)) / e.buildingArea; });
+  var allSF = filteredWithArea.map(function(e) { return getAdjustedTotal(e) / e.buildingArea; });
   if (currentSF > 0) allSF.push(currentSF);
   var minSF = allSF.length > 0 ? Math.min.apply(null, allSF) : 0;
   var maxSF = allSF.length > 0 ? Math.max.apply(null, allSF) : 100;
@@ -6517,11 +7009,13 @@ function renderBenchmarksPage() {
   range = maxSF - minSF;
 
   var svgDots = filteredWithArea.map(function(e) {
-    var sf = (e.totalCost || calcEstimateTotal(e)) / e.buildingArea;
+    var sf = getAdjustedTotal(e) / e.buildingArea;
+    var origSF = (e.totalCost || calcEstimateTotal(e)) / e.buildingArea;
     var x = padding + ((sf - minSF) / range) * (chartWidth - padding * 2);
     var isCurrent = currentEst && e.id === currentEst.id;
+    var tooltipExtra = escOn && sf !== origSF ? ' (orig $' + origSF.toFixed(2) + ')' : '';
     return '<circle cx="' + x + '" cy="' + (chartHeight / 2) + '" r="' + (isCurrent ? dotR + 3 : dotR) + '" fill="' + (isCurrent ? 'var(--accent)' : 'var(--text-muted)') + '" opacity="' + (isCurrent ? '1' : '0.5') + '" style="cursor:pointer;">' +
-      '<title>' + esc(e.name || 'Untitled') + ': $' + sf.toFixed(2) + '/SF</title></circle>';
+      '<title>' + esc(e.name || 'Untitled') + ': $' + sf.toFixed(2) + '/SF' + tooltipExtra + '</title></circle>';
   }).join('');
 
   // Add current estimate dot if not in saved list
@@ -6554,7 +7048,7 @@ function renderBenchmarksPage() {
       '<select class="form-select" data-change="setBenchmarkComp" data-params=\'{"index":"' + ci + '"}\'>' +
         '<option value="">-- Select --</option>' +
         estimates.map(function(e) {
-          var eTotal = e.totalCost || calcEstimateTotal(e);
+          var eTotal = getAdjustedTotal(e);
           var disabled = !e.buildingArea || e.buildingArea <= 0;
           return '<option value="' + e.id + '"' + (selId === e.id ? ' selected' : '') + (disabled ? ' disabled style="color:var(--text-muted);"' : '') + '>' + esc(e.name || 'Untitled') + (disabled ? ' (no area)' : ' — $' + (eTotal / e.buildingArea).toFixed(2) + '/SF') + '</option>';
         }).join('') +
@@ -6639,11 +7133,38 @@ function renderBenchmarksPage() {
       }).join('') +
     '</div>';
 
+  // Escalation toggle and adjustments
+  var escEnabled = STATE.escalationEnabled;
+  var escToggleHtml = '<div class="card mb-20" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px;">' +
+    '<div><div style="font-weight:600; font-size:0.85rem;">Historical Cost Escalation</div>' +
+    '<div style="font-size:0.72rem; color:var(--text-muted);">Adjust past estimates to current-quarter dollars using lumber/steel/labor indices</div></div>' +
+    '<label class="toggle-switch" style="flex-shrink:0;">' +
+      '<input type="checkbox"' + (escEnabled ? ' checked' : '') + ' data-action="toggleEscalation">' +
+      '<span class="toggle-slider"></span>' +
+    '</label>' +
+  '</div>';
+
+  var escInfoHtml = '';
+  if (escEnabled) {
+    var nowQ = '2026-Q1';
+    escInfoHtml = '<div class="card mb-20" style="padding:12px 16px;">' +
+      '<div style="font-size:0.75rem; font-weight:600; margin-bottom:8px; color:var(--accent);">Cost Index Values (base 2023-Q1 = 1.00)</div>' +
+      '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:0.72rem;">' +
+        '<div><span style="color:var(--text-muted);">Lumber:</span> <span class="mono">' + (COST_INDICES.lumber[nowQ] || 1).toFixed(2) + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Steel:</span> <span class="mono">' + (COST_INDICES.steel[nowQ] || 1).toFixed(2) + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Labor:</span> <span class="mono">' + (COST_INDICES.labor[nowQ] || 1).toFixed(2) + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+
   return '<div class="fade-in">' +
     '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Benchmarks</div><div class="section-desc">$/SF benchmarks across your estimate library and industry data</div></div></div>' +
 
+    // Escalation toggle
+    escToggleHtml + escInfoHtml +
+
     // Section 1: Distribution Chart
-    '<div class="section-divider">$/SF Distribution</div>' +
+    '<div class="section-divider">$/SF Distribution' + (escEnabled ? ' <span style="font-size:0.7rem; color:var(--accent); font-weight:400;">(escalation-adjusted)</span>' : '') + '</div>' +
     '<div class="card mb-20">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
         '<div style="font-size:0.72rem; color:var(--text-muted);">' +
@@ -6679,44 +7200,47 @@ function renderBenchmarksPage() {
 // ---- PHASE 6A: WATERFALL CHART ----
 function renderWaterfallChart(est, phaseKeys) {
   if (!est || !est.phases) return '';
-  var phases = [];
-  var runningTotal = 0;
+  var bldgArea = est.buildingArea || 0;
+  var bars = [];
   phaseKeys.forEach(function(pk) {
     if (est.phases[pk]) {
       var cost = calcPhaseTotal(est.phases[pk]);
       if (cost > 0) {
-        phases.push({ key: pk, name: PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk, cost: cost, start: runningTotal });
-        runningTotal += cost;
+        bars.push({ key: pk, name: PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk, cost: cost, isPhase: true });
       }
     }
   });
-  var subtotal = runningTotal;
-  var margin = subtotal * ((est.assumptions.marginPercent || 0) / 100);
-  var overhead = subtotal * ((est.assumptions.overheadPercent || 0) / 100);
-  var contingency = subtotal * ((est.assumptions.contingencyPercent || 0) / 100);
-  var bondIns = subtotal * ((est.assumptions.bondInsurancePercent || 0) / 100);
-
-  phases.push({ key: 'subtotal', name: 'Subtotal', cost: subtotal, start: 0, isSubtotal: true });
-  if (margin > 0) { phases.push({ key: 'margin', name: 'Margin', cost: margin, start: subtotal }); runningTotal += margin; }
-  if (overhead > 0) { phases.push({ key: 'overhead', name: 'Overhead', cost: overhead, start: runningTotal - overhead }); }
-  if (contingency > 0) { phases.push({ key: 'contingency', name: 'Contingency', cost: contingency, start: runningTotal }); runningTotal += contingency; }
-  if (bondIns > 0) { phases.push({ key: 'bond', name: 'Bond/Ins', cost: bondIns, start: runningTotal }); runningTotal += bondIns; }
+  var subtotal = bars.reduce(function(s, b) { return s + b.cost; }, 0);
+  var a = est.assumptions || {};
+  var margin = subtotal * ((a.marginPercent || 0) / 100);
+  var overhead = subtotal * ((a.overheadPercent || 0) / 100);
+  var contingency = subtotal * ((a.contingencyPercent || 0) / 100);
+  var bondIns = subtotal * ((a.bondInsurancePercent || 0) / 100);
+  if (margin > 0) bars.push({ key: 'margin', name: 'Margin (' + fmtPct(a.marginPercent) + ')', cost: margin, isMuted: true });
+  if (overhead > 0) bars.push({ key: 'overhead', name: 'Overhead (' + fmtPct(a.overheadPercent) + ')', cost: overhead, isMuted: true });
+  if (contingency > 0) bars.push({ key: 'contingency', name: 'Contingency (' + fmtPct(a.contingencyPercent) + ')', cost: contingency, isMuted: true });
+  if (bondIns > 0) bars.push({ key: 'bond', name: 'Bond & Ins (' + fmtPct(a.bondInsurancePercent) + ')', cost: bondIns, isMuted: true });
   var grandTotal = subtotal + margin + overhead + contingency + bondIns;
-  phases.push({ key: 'total', name: 'Total', cost: grandTotal, start: 0, isTotal: true });
+  bars.push({ key: 'total', name: 'Grand Total', cost: grandTotal, isTotal: true });
 
   var maxVal = grandTotal;
+  var perSFStr = bldgArea > 0 ? ' ($' + (grandTotal / bldgArea).toFixed(2) + '/SF)' : '';
+
   return '<div class="card mb-20">' +
     '<div class="card-header"><div class="card-title">' + ICONS.analytics + ' Cost Waterfall</div></div>' +
-    '<div class="waterfall-chart">' +
-      phases.map(function(p) {
-        var heightPct = maxVal > 0 ? (p.cost / maxVal * 100) : 0;
-        var barClass = p.isTotal ? 'total' : p.isSubtotal ? 'subtotal' : 'positive';
-        return '<div class="waterfall-bar-group">' +
-          '<div class="waterfall-bar ' + barClass + '" style="height:' + Math.max(heightPct, 3) + '%;">' +
-            '<div class="waterfall-bar-tooltip">' + fmt(p.cost) + '</div>' +
-          '</div>' +
-          '<div class="waterfall-label">' + p.name + '</div>' +
-          '<div class="waterfall-value">' + fmt(p.cost) + '</div>' +
+    '<div class="wf-chart">' +
+      bars.map(function(b, i) {
+        var pct = maxVal > 0 ? (b.cost / maxVal * 100) : 0;
+        var barPct = Math.max(pct, 2);
+        var cls = b.isTotal ? 'wf-bar-total' : (b.isMuted ? 'wf-bar-muted' : 'wf-bar-accent');
+        var sfStr = bldgArea > 0 ? ' · $' + (b.cost / bldgArea).toFixed(2) + '/SF' : '';
+        var pctOfTotal = grandTotal > 0 ? ' · ' + (b.cost / grandTotal * 100).toFixed(1) + '%' : '';
+        var tooltip = b.name + ': ' + fmt(b.cost) + sfStr + pctOfTotal;
+        var clickAttr = b.isPhase ? ' data-action="switchOutputTab" data-params=\'{"tab":"' + b.key + '"}\' style="cursor:pointer;"' : '';
+        return '<div class="wf-row wf-fade-in" style="animation-delay:' + (i * 0.12) + 's;"' + clickAttr + ' title="' + esc(tooltip) + '">' +
+          '<div class="wf-label">' + b.name + '</div>' +
+          '<div class="wf-bar-track"><div class="' + cls + '" style="width:' + barPct + '%;"></div></div>' +
+          '<div class="wf-amount">' + fmt(b.cost) + (b.isTotal ? perSFStr : '') + '</div>' +
         '</div>';
       }).join('') +
     '</div>' +
@@ -6847,8 +7371,232 @@ registerAction('updateScenario', function(p) {
   }
 });
 
+// ---- PHASE 6B: SCENARIOS TAB (OUTPUT PAGE) ----
+function renderScenariosTab(est, phaseKeys, baseSubtotal, baseGrandTotal) {
+  if (!est.scenarios) est.scenarios = [];
+  var scenarios = est.scenarios;
+  var bldgArea = est.buildingArea || 0;
+  var basePerSF = bldgArea > 0 ? '$' + (baseGrandTotal / bldgArea).toFixed(2) + '/SF' : '—';
+  var model = DELIVERY_MODELS[est.deliveryModel || 'eor-build'];
+
+  var html = '<div class="fade-in">' +
+    // Base Case card
+    '<div class="card mb-16" style="border-left:4px solid var(--accent);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<div>' +
+          '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700; margin-bottom:4px;">Base Case</div>' +
+          '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + (model ? model.name : '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:1.3rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(baseGrandTotal) + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + basePerSF + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Scenario cards
+  scenarios.forEach(function(sc, idx) {
+    var scTotal = sc.snapshot ? (sc.snapshot.totalCost || 0) : 0;
+    var scPerSF = bldgArea > 0 && scTotal > 0 ? '$' + (scTotal / bldgArea).toFixed(2) + '/SF' : '—';
+    var delta = baseGrandTotal > 0 ? ((scTotal - baseGrandTotal) / baseGrandTotal * 100) : 0;
+    var deltaClass = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+    var deltaStr = (delta > 0 ? '+' : '') + delta.toFixed(1) + '%';
+
+    html += '<div class="card mb-16">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">' +
+        '<div>' +
+          '<div style="font-weight:600; color:var(--text-primary);">' + esc(sc.name) + '</div>' +
+          '<div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">' +
+            (sc.changes || []).map(function(c) { return c.label; }).join(' · ') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(scTotal) + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + scPerSF + '</div>' +
+          '<div class="scenario-diff ' + deltaClass + '" style="font-size:0.78rem; font-weight:600;">' + deltaStr + ' vs base</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end;">' +
+        '<button class="btn btn-sm" data-action="editScenarioModal" data-params=\'{"idx":' + idx + '}\'>' + ICONS.edit + ' Edit</button>' +
+        '<button class="btn btn-sm" data-action="mergeScenario" data-params=\'{"idx":' + idx + '}\'>Merge to Base</button>' +
+        '<button class="btn btn-sm" data-action="deleteScenario" data-params=\'{"idx":' + idx + '}\'>' + ICONS.trash + ' Delete</button>' +
+      '</div>' +
+    '</div>';
+  });
+
+  // New Scenario button (max 3)
+  if (scenarios.length < 3) {
+    html += '<div style="text-align:center; margin:16px 0;">' +
+      '<button class="btn btn-accent" data-action="createScenario">' + ICONS.plus + ' New Scenario</button>' +
+    '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function showModal(html) {
+  document.getElementById('modal-container').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+function hideModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+registerAction('createScenario', function() {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios) est.scenarios = [];
+  if (est.scenarios.length >= 3) { showToast('Maximum 3 scenarios allowed.', 'warning'); return; }
+  var snapshot = JSON.parse(JSON.stringify(est));
+  // Reduce margin by 5% as starting point
+  snapshot.assumptions.marginPercent = Math.max(0, (snapshot.assumptions.marginPercent || 0) - 5);
+  // Recalculate total
+  var modelKey = snapshot.deliveryModel || 'eor-build';
+  var model = DELIVERY_MODELS[modelKey];
+  var phaseKeys = model ? model.phases : [];
+  var sub = 0;
+  phaseKeys.forEach(function(pk) {
+    if (snapshot.phases && snapshot.phases[pk]) sub += calcPhaseTotal(snapshot.phases[pk]);
+  });
+  var a = snapshot.assumptions;
+  snapshot.totalCost = sub + sub * ((a.marginPercent + a.overheadPercent + a.contingencyPercent + a.bondInsurancePercent) / 100);
+
+  est.scenarios.push({
+    id: generateId(),
+    name: 'Scenario ' + (est.scenarios.length + 1),
+    changes: [{ label: 'Margin -5%' }],
+    snapshot: snapshot
+  });
+  saveState();
+  renderPage(true);
+});
+
+registerAction('deleteScenario', function(p) {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios) return;
+  est.scenarios.splice(parseInt(p.idx), 1);
+  saveState();
+  renderPage(true);
+});
+
+registerAction('mergeScenario', function(p) {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios || !est.scenarios[parseInt(p.idx)]) return;
+  if (!confirm('Merge this scenario\'s assumptions into the base estimate? This will update margin, overhead, contingency, and bond/insurance.')) return;
+  var sc = est.scenarios[parseInt(p.idx)];
+  if (sc.snapshot && sc.snapshot.assumptions) {
+    est.assumptions.marginPercent = sc.snapshot.assumptions.marginPercent;
+    est.assumptions.overheadPercent = sc.snapshot.assumptions.overheadPercent;
+    est.assumptions.contingencyPercent = sc.snapshot.assumptions.contingencyPercent;
+    est.assumptions.bondInsurancePercent = sc.snapshot.assumptions.bondInsurancePercent;
+    if (sc.snapshot.buildingArea) est.buildingArea = sc.snapshot.buildingArea;
+    if (sc.snapshot.numStories) est.numStories = sc.snapshot.numStories;
+  }
+  est.scenarios.splice(parseInt(p.idx), 1);
+  saveState();
+  renderPage(true);
+  showToast('Scenario merged into base estimate.', 'success');
+});
+
+registerAction('editScenarioModal', function(p) {
+  var est = STATE.currentEstimate;
+  var idx = parseInt(p.idx);
+  if (!est.scenarios || !est.scenarios[idx]) return;
+  var sc = est.scenarios[idx];
+  var snap = sc.snapshot || {};
+  var a = snap.assumptions || est.assumptions;
+  var modal = document.getElementById('modal-container');
+  modal.innerHTML =
+    '<div style="padding:24px; max-width:440px;">' +
+      '<h3 style="margin:0 0 16px;">Edit Scenario</h3>' +
+      '<div style="display:flex; flex-direction:column; gap:12px;">' +
+        '<div><label class="form-label">Name</label><input class="form-input" id="sc-edit-name" value="' + esc(sc.name) + '"></div>' +
+        '<div><label class="form-label">Margin %</label><input type="number" class="form-input" id="sc-edit-margin" step="0.5" value="' + a.marginPercent + '"></div>' +
+        '<div><label class="form-label">Overhead %</label><input type="number" class="form-input" id="sc-edit-overhead" step="0.5" value="' + a.overheadPercent + '"></div>' +
+        '<div><label class="form-label">Contingency %</label><input type="number" class="form-input" id="sc-edit-contingency" step="0.5" value="' + a.contingencyPercent + '"></div>' +
+        '<div><label class="form-label">Building Area (SF)</label><input type="number" class="form-input" id="sc-edit-area" value="' + (snap.buildingArea || est.buildingArea || '') + '"></div>' +
+        '<div><label class="form-label">Stories</label><input type="number" class="form-input" id="sc-edit-stories" value="' + (snap.numStories || est.numStories || '') + '"></div>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">' +
+        '<button class="btn" data-action="hideModal">Cancel</button>' +
+        '<button class="btn btn-accent" data-action="saveScenarioEdit" data-params=\'{"idx":' + idx + '}\'>Save</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+});
+
+registerAction('saveScenarioEdit', function(p) {
+  var est = STATE.currentEstimate;
+  var idx = parseInt(p.idx);
+  if (!est.scenarios || !est.scenarios[idx]) return;
+  var sc = est.scenarios[idx];
+  sc.name = document.getElementById('sc-edit-name').value || sc.name;
+  var newMargin = parseFloat(document.getElementById('sc-edit-margin').value) || 0;
+  var newOverhead = parseFloat(document.getElementById('sc-edit-overhead').value) || 0;
+  var newContingency = parseFloat(document.getElementById('sc-edit-contingency').value) || 0;
+  var newArea = parseFloat(document.getElementById('sc-edit-area').value) || 0;
+  var newStories = parseInt(document.getElementById('sc-edit-stories').value) || 0;
+
+  if (!sc.snapshot) sc.snapshot = JSON.parse(JSON.stringify(est));
+  sc.snapshot.assumptions.marginPercent = newMargin;
+  sc.snapshot.assumptions.overheadPercent = newOverhead;
+  sc.snapshot.assumptions.contingencyPercent = newContingency;
+  if (newArea) sc.snapshot.buildingArea = newArea;
+  if (newStories) sc.snapshot.numStories = newStories;
+
+  // Rebuild change labels
+  var changes = [];
+  if (newMargin !== est.assumptions.marginPercent) changes.push({ label: 'Margin ' + newMargin + '%' });
+  if (newOverhead !== est.assumptions.overheadPercent) changes.push({ label: 'Overhead ' + newOverhead + '%' });
+  if (newContingency !== est.assumptions.contingencyPercent) changes.push({ label: 'Contingency ' + newContingency + '%' });
+  if (newArea && newArea !== est.buildingArea) changes.push({ label: 'Area ' + fmtNum(newArea) + ' SF' });
+  if (newStories && newStories !== est.numStories) changes.push({ label: newStories + ' stories' });
+  sc.changes = changes.length > 0 ? changes : [{ label: 'Custom' }];
+
+  // Recalculate snapshot total
+  var modelKey = sc.snapshot.deliveryModel || 'eor-build';
+  var model = DELIVERY_MODELS[modelKey];
+  var phaseKeys = model ? model.phases : [];
+  var sub = 0;
+  phaseKeys.forEach(function(pk) {
+    if (sc.snapshot.phases && sc.snapshot.phases[pk]) sub += calcPhaseTotal(sc.snapshot.phases[pk]);
+  });
+  var sa = sc.snapshot.assumptions;
+  sc.snapshot.totalCost = sub + sub * ((sa.marginPercent + sa.overheadPercent + sa.contingencyPercent + sa.bondInsurancePercent) / 100);
+
+  hideModal();
+  saveState();
+  renderPage(true);
+});
+
 // ---- PHASE 6C: CLIENT-FACING VIEW TOGGLE ----
 STATE.clientMode = false;
+if (typeof STATE.clientViewEnabled === 'undefined') STATE.clientViewEnabled = false;
+
+var CLIENT_PHASE_NAMES = {
+  'consulting': 'Consulting Engineering Services',
+  'structural-engineering': 'Structural Engineering Services',
+  'timber-engineering': 'Timber Engineering & Shop Drawings',
+  'construction-engineering': 'Construction Engineering Services',
+  'fabrication': 'Material Supply & Fabrication',
+  'shipping': 'Delivery & Logistics',
+  'installation': 'Site Installation',
+  'general-conditions': 'Project Management & General Conditions',
+  'fb-engineering': 'Engineering Services',
+  'fb-fabrication': 'Material Supply & Fabrication',
+  'fb-shipping': 'Delivery & Logistics',
+  'fb-foundations': 'Foundation Work',
+  'fb-installation': 'Site Installation & Erection',
+  'fb-railing-finishes': 'Railing & Finish Work',
+  'fb-general-conditions': 'Project Management & General Conditions',
+};
+
+registerAction('toggleClientView', function() {
+  STATE.clientViewEnabled = !STATE.clientViewEnabled;
+  renderPage(true);
+});
 
 function toggleClientMode() {
   STATE.clientMode = !STATE.clientMode;
@@ -6872,6 +7620,11 @@ function toggleClientMode() {
 }
 
 // ---- PHASE 5B: FAQ MODAL ----
+function showHelpModal() {
+  // Topbar ? button → reuse the FAQ modal
+  showFAQModal();
+}
+
 function showFAQModal() {
   var modal = document.getElementById('faq-modal');
   if (!modal) return;
@@ -6888,12 +7641,393 @@ function closeFAQModal() {
 }
 
 // ---- PHASE 4C: ANIMATED GENERATION REVEAL ----
-function animateEstimateReveal() {
-  var cards = document.querySelectorAll('#page-content .card');
-  cards.forEach(function(card, i) {
-    card.classList.add('estimate-reveal');
-    card.style.animationDelay = (i * 0.1) + 's';
-  });
+// ---- PHASE 7C: 3D BUILDING VISUALIZER ----
+var _vizScene, _vizCamera, _vizRenderer, _vizAnimId, _vizAbort;
+
+function initBuildingVisualizer() {
+  if (typeof THREE === 'undefined') {
+    var fb = document.getElementById('building-viz-fallback');
+    if (fb) fb.textContent = '3D not available (WebGL required)';
+    return;
+  }
+  var container = document.getElementById('building-viz-container');
+  if (!container) return;
+  var fallback = document.getElementById('building-viz-fallback');
+  if (fallback) fallback.style.display = 'none';
+
+  // Clean up previous renderer and event listeners
+  if (_vizRenderer) {
+    cancelAnimationFrame(_vizAnimId);
+    if (_vizRenderer.domElement.parentNode) _vizRenderer.domElement.parentNode.removeChild(_vizRenderer.domElement);
+    _vizRenderer.dispose();
+  }
+  if (_vizAbort) _vizAbort.abort();
+  _vizAbort = new AbortController();
+
+  var w = container.clientWidth, h = container.clientHeight;
+  _vizScene = new THREE.Scene();
+  _vizScene.background = new THREE.Color(0x1a1e2e);
+
+  _vizCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 500);
+  _vizCamera.position.set(30, 20, 30);
+  _vizCamera.lookAt(0, 5, 0);
+
+  _vizRenderer = new THREE.WebGLRenderer({ antialias: true });
+  _vizRenderer.setSize(w, h);
+  _vizRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(_vizRenderer.domElement);
+
+  // Lights
+  var ambient = new THREE.AmbientLight(0xffffff, 0.5);
+  _vizScene.add(ambient);
+  var dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(20, 30, 10);
+  _vizScene.add(dir);
+
+  // Ground plane
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshStandardMaterial({ color: 0x2a2e3e, roughness: 0.9 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.05;
+  _vizScene.add(ground);
+
+  // Grid helper
+  var grid = new THREE.GridHelper(80, 40, 0x3a3e4e, 0x2a2e3e);
+  _vizScene.add(grid);
+
+  updateBuildingModel();
+
+  // Mouse orbit (simplified)
+  var isDragging = false, prevX = 0, prevY = 0, angleX = 0.6, angleY = 0.4, radius = 40;
+  function updateCamera() {
+    _vizCamera.position.x = radius * Math.sin(angleX) * Math.cos(angleY);
+    _vizCamera.position.y = radius * Math.sin(angleY) + 5;
+    _vizCamera.position.z = radius * Math.cos(angleX) * Math.cos(angleY);
+    _vizCamera.lookAt(0, 5, 0);
+  }
+  updateCamera();
+
+  var sig = { signal: _vizAbort.signal };
+  _vizRenderer.domElement.addEventListener('mousedown', function(e) { isDragging = true; prevX = e.clientX; prevY = e.clientY; }, sig);
+  window.addEventListener('mouseup', function() { isDragging = false; }, sig);
+  window.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    angleX += (e.clientX - prevX) * 0.008;
+    angleY = Math.max(0.05, Math.min(1.4, angleY + (e.clientY - prevY) * 0.008));
+    prevX = e.clientX; prevY = e.clientY;
+    updateCamera();
+  }, sig);
+  _vizRenderer.domElement.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    radius = Math.max(10, Math.min(80, radius + e.deltaY * 0.05));
+    updateCamera();
+  }, { passive: false, signal: _vizAbort.signal });
+
+  // Touch support
+  _vizRenderer.domElement.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; }
+  }, sig);
+  _vizRenderer.domElement.addEventListener('touchmove', function(e) {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    angleX += (e.touches[0].clientX - prevX) * 0.008;
+    angleY = Math.max(0.05, Math.min(1.4, angleY + (e.touches[0].clientY - prevY) * 0.008));
+    prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+    updateCamera();
+  }, { passive: false, signal: _vizAbort.signal });
+  _vizRenderer.domElement.addEventListener('touchend', function() { isDragging = false; }, sig);
+
+  function animate() {
+    _vizAnimId = requestAnimationFrame(animate);
+    _vizRenderer.render(_vizScene, _vizCamera);
+  }
+  animate();
+}
+
+function updateBuildingModel() {
+  if (!_vizScene) return;
+  // Remove old building group
+  var old = _vizScene.getObjectByName('buildingGroup');
+  if (old) _vizScene.remove(old);
+
+  var group = new THREE.Group();
+  group.name = 'buildingGroup';
+
+  var est = STATE.currentEstimate;
+  var stories = Math.max(1, Math.min(20, est ? (est.numStories || 3) : 3));
+  var area = est ? (est.buildingArea || 10000) : 10000;
+  var mat = est ? (est.primaryMaterial || 'timber') : 'timber';
+
+  // Derive floor dimensions from area and stories
+  var floorArea = area / stories;
+  var aspect = 1.5;
+  var floorW = Math.sqrt(floorArea / aspect) * 0.3; // scale to scene
+  var floorD = floorW * aspect;
+  var storyH = 2.0;
+
+  // Material colors
+  var matColors = {
+    timber: { col: 0xc8956c, floor: 0xa87c56 },
+    steel: { col: 0x8899aa, floor: 0x667788 },
+    concrete: { col: 0x999999, floor: 0x888888 },
+    hybrid: { col: 0xbbaa88, floor: 0x998877 }
+  };
+  var mc = matColors[mat] || matColors.timber;
+  var colMat = new THREE.MeshStandardMaterial({ color: mc.col, roughness: 0.6 });
+  var floorMat = new THREE.MeshStandardMaterial({ color: mc.floor, roughness: 0.5, transparent: true, opacity: 0.85 });
+
+  // Column grid: ~6m spacing
+  var colSpacingX = Math.max(2, floorW / Math.max(1, Math.round(floorW / 3)));
+  var colSpacingZ = Math.max(2, floorD / Math.max(1, Math.round(floorD / 3)));
+  var nColsX = Math.round(floorW / colSpacingX) + 1;
+  var nColsZ = Math.round(floorD / colSpacingZ) + 1;
+  var colGeo = new THREE.BoxGeometry(0.25, storyH, 0.25);
+
+  for (var s = 0; s < stories; s++) {
+    // Floor plate
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(floorW, 0.15, floorD), floorMat);
+    plate.position.y = s * storyH;
+    group.add(plate);
+
+    // Columns
+    for (var cx = 0; cx < nColsX; cx++) {
+      for (var cz = 0; cz < nColsZ; cz++) {
+        var col = new THREE.Mesh(colGeo, colMat);
+        col.position.set(
+          -floorW / 2 + cx * colSpacingX,
+          s * storyH + storyH / 2,
+          -floorD / 2 + cz * colSpacingZ
+        );
+        group.add(col);
+      }
+    }
+  }
+
+  // Roof plate
+  var roof = new THREE.Mesh(new THREE.BoxGeometry(floorW, 0.15, floorD), floorMat);
+  roof.position.y = stories * storyH;
+  group.add(roof);
+
+  // Center the building
+  group.position.y = 0.05;
+
+  _vizScene.add(group);
+}
+
+// ---- PHASE 7B: HISTORICAL COST ESCALATION ----
+var COST_INDICES = {
+  lumber: {
+    '2023-Q1': 1.00, '2023-Q2': 1.03, '2023-Q3': 1.05, '2023-Q4': 1.04,
+    '2024-Q1': 1.06, '2024-Q2': 1.09, '2024-Q3': 1.12, '2024-Q4': 1.11,
+    '2025-Q1': 1.14, '2025-Q2': 1.17, '2025-Q3': 1.19, '2025-Q4': 1.21,
+    '2026-Q1': 1.24
+  },
+  steel: {
+    '2023-Q1': 1.00, '2023-Q2': 1.02, '2023-Q3': 1.01, '2023-Q4': 1.03,
+    '2024-Q1': 1.05, '2024-Q2': 1.08, '2024-Q3': 1.10, '2024-Q4': 1.09,
+    '2025-Q1': 1.11, '2025-Q2': 1.13, '2025-Q3': 1.15, '2025-Q4': 1.17,
+    '2026-Q1': 1.19
+  },
+  labor: {
+    '2023-Q1': 1.00, '2023-Q2': 1.01, '2023-Q3': 1.02, '2023-Q4': 1.03,
+    '2024-Q1': 1.04, '2024-Q2': 1.06, '2024-Q3': 1.07, '2024-Q4': 1.08,
+    '2025-Q1': 1.10, '2025-Q2': 1.12, '2025-Q3': 1.13, '2025-Q4': 1.15,
+    '2026-Q1': 1.17
+  }
+};
+
+function getQuarterKey(dateStr) {
+  if (!dateStr) return '2026-Q1';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '2026-Q1';
+  var y = d.getFullYear();
+  var q = Math.ceil((d.getMonth() + 1) / 3);
+  return y + '-Q' + q;
+}
+
+function getBlendedEscalation(fromQuarter, toQuarter) {
+  toQuarter = toQuarter || '2026-Q1';
+  var lFrom = COST_INDICES.lumber[fromQuarter] || 1.0;
+  var lTo = COST_INDICES.lumber[toQuarter] || 1.24;
+  var sFrom = COST_INDICES.steel[fromQuarter] || 1.0;
+  var sTo = COST_INDICES.steel[toQuarter] || 1.19;
+  var labFrom = COST_INDICES.labor[fromQuarter] || 1.0;
+  var labTo = COST_INDICES.labor[toQuarter] || 1.17;
+  // Blended: 40% lumber, 25% steel, 35% labor (typical mass timber project)
+  var factor = 0.40 * (lTo / lFrom) + 0.25 * (sTo / sFrom) + 0.35 * (labTo / labFrom);
+  return factor;
+}
+
+if (STATE.escalationEnabled === undefined) STATE.escalationEnabled = false;
+
+registerAction('toggleEscalation', function() {
+  STATE.escalationEnabled = !STATE.escalationEnabled;
+  saveState();
+  renderPage(true);
+});
+
+// ---- PHASE 7A: VOICE-TO-ESTIMATE ----
+function startVoiceInput() {
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    startSpeechRecognition(SpeechRecognition);
+  } else {
+    showVoiceTextFallback();
+  }
+}
+
+function startSpeechRecognition(SpeechRecognition) {
+  var recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  var micBtn = document.getElementById('btn-voice-input');
+  if (micBtn) micBtn.classList.add('voice-active');
+
+  showModal(
+    '<div class="voice-listening-modal">' +
+      '<div class="voice-pulse-ring"></div>' +
+      '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>' +
+      '<div class="voice-status">Listening...</div>' +
+      '<div class="voice-transcript" id="voice-transcript" style="min-height:40px; color:var(--text-secondary); font-size:0.85rem; margin-top:12px;"></div>' +
+      '<button class="btn btn-ghost" style="margin-top:16px;" data-action="hideModal">Cancel</button>' +
+    '</div>'
+  );
+
+  var finalTranscript = '';
+
+  recognition.onresult = function(event) {
+    var interim = '';
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    var el = document.getElementById('voice-transcript');
+    if (el) el.textContent = finalTranscript + (interim ? ' ' + interim : '');
+  };
+
+  recognition.onend = function() {
+    if (micBtn) micBtn.classList.remove('voice-active');
+    if (finalTranscript.trim()) {
+      hideModal();
+      processVoiceTranscript(finalTranscript.trim());
+    } else {
+      hideModal();
+      showToast('No speech detected. Try again or use text input.', 'warning');
+    }
+  };
+
+  recognition.onerror = function(e) {
+    if (micBtn) micBtn.classList.remove('voice-active');
+    hideModal();
+    if (e.error === 'not-allowed') {
+      showToast('Microphone access denied. Check browser permissions.', 'error');
+    } else {
+      showVoiceTextFallback();
+    }
+  };
+
+  recognition.start();
+}
+
+function showVoiceTextFallback() {
+  showModal(
+    '<div style="max-width:460px;">' +
+      '<div class="card-title" style="margin-bottom:12px;">' + ICONS.bolt + ' Voice-to-Estimate</div>' +
+      '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Speech recognition unavailable. Describe your project below and AI will extract estimate parameters.</div>' +
+      '<textarea id="voice-text-input" class="form-input" rows="4" placeholder="e.g. 5-story mass timber office building, 45000 sqft, post-and-beam, Vancouver BC" style="width:100%; resize:vertical;"></textarea>' +
+      '<div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">' +
+        '<button class="btn btn-ghost" data-action="hideModal">Cancel</button>' +
+        '<button class="btn btn-accent" data-action="submitVoiceText">Extract Parameters</button>' +
+      '</div>' +
+    '</div>'
+  );
+  setTimeout(function() { var ta = document.getElementById('voice-text-input'); if (ta) ta.focus(); }, 100);
+}
+
+function submitVoiceText() {
+  var ta = document.getElementById('voice-text-input');
+  if (!ta || !ta.value.trim()) return;
+  hideModal();
+  processVoiceTranscript(ta.value.trim());
+}
+
+function processVoiceTranscript(transcript) {
+  showToast('Parsing project description...', 'info');
+
+  var apiKey = localStorage.getItem('sc-anthropic-key');
+  var proxyUrl = typeof CLAUDE_PROXY_URL !== 'undefined' ? CLAUDE_PROXY_URL : null;
+
+  if (!apiKey && !proxyUrl) {
+    showToast('No API key configured. Go to Settings to add your Anthropic API key.', 'error');
+    return;
+  }
+
+  var systemPrompt = 'You are a structural cost estimation assistant. Extract building parameters from the user description. Return ONLY valid JSON with these fields (use null for unknowns): {"name": string, "projectType": "commercial"|"residential"|"institutional"|"mixed-use", "buildingArea": number (sqft), "stories": number, "primaryMaterial": "timber"|"steel"|"concrete"|"hybrid", "structuralSystem": string or null, "region": string matching a city-state slug or null, "notes": string summary}';
+
+  var payload = {
+    model: localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-20250514',
+    max_tokens: 500,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: transcript }]
+  };
+
+  var headers = { 'Content-Type': 'application/json' };
+  var url;
+
+  if (apiKey) {
+    url = 'https://api.anthropic.com/v1/messages';
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  } else {
+    url = proxyUrl;
+  }
+
+  fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var text = '';
+      if (data.content && data.content[0]) text = data.content[0].text;
+      else if (data.error) { showToast('API error: ' + (data.error.message || 'Unknown'), 'error'); return; }
+      try {
+        var jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON found');
+        var params = JSON.parse(jsonMatch[0]);
+        applyVoiceParams(params, transcript);
+      } catch (e) {
+        showToast('Could not parse AI response. Try rephrasing.', 'error');
+      }
+    })
+    .catch(function(err) {
+      showToast('Voice parsing failed: ' + err.message, 'error');
+    });
+}
+
+function applyVoiceParams(params, transcript) {
+  var est = STATE.currentEstimate;
+  if (!est) { STATE.currentEstimate = createNewEstimate(); est = STATE.currentEstimate; }
+  if (params.name) est.name = params.name;
+  if (params.projectType) est.projectType = params.projectType;
+  if (params.buildingArea) est.buildingArea = params.buildingArea;
+  if (params.stories) est.numStories = params.stories;
+  if (params.primaryMaterial) {
+    est.primaryMaterial = params.primaryMaterial;
+    if (typeof setPrimaryMaterial === 'function') setPrimaryMaterial(params.primaryMaterial);
+  }
+  if (params.structuralSystem) est.structuralSystem = params.structuralSystem;
+  if (params.region) est.region = params.region;
+  if (params.notes) est.notes = (est.notes ? est.notes + '\n' : '') + '[Voice] ' + params.notes;
+  saveState();
+  navigateTo('input');
+  showToast('Project parameters extracted from voice input!', 'success');
 }
 
 // ---- V2.0 ICON ADDITIONS ----
@@ -6905,9 +8039,12 @@ ICONS.benchmarks = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" 
 // These are called during initApp to set up new nav items and features
 
 function initV2Features() {
-  // Set dashboard nav icon
+  // Set nav icons for v2 features
   var dashNav = document.getElementById('nav-icon-dashboard');
   if (dashNav) dashNav.innerHTML = ICONS.dashboard;
+  // Home icon (if present)
+  var homeNavV2 = document.getElementById('nav-icon-home');
+  if (homeNavV2 && !homeNavV2.innerHTML.trim()) homeNavV2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
   var bmNav = document.getElementById('nav-icon-benchmarks');
   if (bmNav) bmNav.innerHTML = ICONS.benchmarks;
   var scNav = document.getElementById('nav-icon-scenarios');
@@ -6930,15 +8067,21 @@ function initV2Features() {
     });
   }
 
+  // Voice input button
+  var voiceBtn = document.getElementById('btn-voice-input');
+  if (voiceBtn) {
+    voiceBtn.addEventListener('click', startVoiceInput);
+  }
+
   // Client mode toggle
   var clientBtn = document.getElementById('btn-client-mode');
   if (clientBtn) {
     clientBtn.addEventListener('click', toggleClientMode);
   }
 
-  // Default to dashboard on first visit
-  if (!window.location.hash && STATE.currentPage === 'input') {
-    STATE.currentPage = 'dashboard';
+  // Default to home on first visit
+  if (!window.location.hash && (STATE.currentPage === 'input' || STATE.currentPage === 'dashboard')) {
+    STATE.currentPage = 'home';
   }
 }
 

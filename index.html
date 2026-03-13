@@ -59,28 +59,32 @@
 
       <div class="sidebar-nav">
         <ul class="nav-items" id="home-nav">
-          <li class="nav-item" data-page="dashboard">
-            <span class="nav-icon" id="nav-icon-dashboard"></span>
-            <span class="nav-label">Dashboard</span>
+          <li class="nav-item" data-page="home">
+            <span class="nav-icon" id="nav-icon-home"></span>
+            <span class="nav-label">Home</span>
           </li>
         </ul>
 
-        <div class="nav-section-label">Estimate</div>
+        <div class="nav-section-label">Estimator</div>
         <ul class="nav-items" id="main-nav">
-          <li class="nav-item active" data-page="input">
+          <li class="nav-item" data-page="input">
             <span class="nav-icon" id="nav-icon-input"></span>
-            <span class="nav-label">Estimate Input</span>
+            <span class="nav-label">New Estimate</span>
             <span class="nav-badge" id="badge-input"></span>
           </li>
           <li class="nav-item" data-page="queue">
             <span class="nav-icon" id="nav-icon-queue"></span>
-            <span class="nav-label">Estimate Queue</span>
+            <span class="nav-label">Queue</span>
             <span class="nav-badge" id="badge-queue"></span>
           </li>
           <li class="nav-item" data-page="output">
             <span class="nav-icon" id="nav-icon-output"></span>
-            <span class="nav-label">Estimate Output</span>
+            <span class="nav-label">Output</span>
           </li>
+        </ul>
+
+        <div class="nav-section-label">Specialty</div>
+        <ul class="nav-items" id="specialty-nav">
           <li class="nav-item" data-page="footbridge">
             <span class="nav-icon" id="nav-icon-footbridge"></span>
             <span class="nav-label">Footbridge</span>
@@ -94,21 +98,13 @@
             <span class="nav-label">Past Estimates</span>
             <span class="nav-badge" id="badge-past"></span>
           </li>
-          <li class="nav-item" data-page="benchmarks">
-            <span class="nav-icon" id="nav-icon-benchmarks"></span>
-            <span class="nav-label">Benchmarks</span>
-          </li>
           <li class="nav-item" data-page="pricing-library">
             <span class="nav-icon" id="nav-icon-pricing"></span>
             <span class="nav-label">Pricing Library</span>
           </li>
-        </ul>
-
-        <div class="nav-section-label">Tools</div>
-        <ul class="nav-items" id="tools-nav">
-          <li class="nav-item" data-page="scenarios">
-            <span class="nav-icon" id="nav-icon-scenarios"></span>
-            <span class="nav-label">What-If Scenarios</span>
+          <li class="nav-item" data-page="benchmarks">
+            <span class="nav-icon" id="nav-icon-benchmarks"></span>
+            <span class="nav-label">Benchmarks</span>
           </li>
         </ul>
 
@@ -122,10 +118,6 @@
       </div>
 
       <div class="sidebar-footer">
-        <button id="btn-faq" class="sidebar-faq-btn" title="FAQ & Help">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          <span>FAQ & Help</span>
-        </button>
         <div class="theme-quick-switch">
           <button id="theme-cycle" class="icon-btn" title="Cycle theme">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
@@ -155,9 +147,15 @@
             <input type="text" id="global-search" placeholder="Search..." autocomplete="off">
             <kbd>&#8984;K</kbd>
           </div>
+          <button id="btn-voice-input" class="icon-btn" title="Voice-to-Estimate">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
           <button id="btn-new-estimate" class="btn btn-accent">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
             New Estimate
+          </button>
+          <button id="btn-help" class="icon-btn" title="Help & FAQ" onclick="showHelpModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
           <button id="btn-notifications" class="icon-btn" title="Notifications">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
@@ -221,6 +219,22 @@
       </div>
       <div class="scott-bubble-text" id="scott-text"></div>
     </div>
+    <div id="scott-chat" class="scott-chat collapsed">
+      <div class="scott-chat-header">
+        <span class="scott-chat-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          StructureScott
+        </span>
+        <button class="scott-chat-close" onclick="scottMinimize()" title="Minimize">&times;</button>
+      </div>
+      <div class="scott-messages" id="scott-messages"></div>
+      <div class="scott-chat-input-row">
+        <input type="text" id="scott-input" class="scott-chat-input" placeholder="Ask about your estimate..." autocomplete="off">
+        <button class="scott-chat-send" onclick="scottSendMessage()" title="Send">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
     <button id="scott-avatar" class="scott-avatar" onclick="scottToggle()" title="StructureScott — your estimating buddy">
       <svg class="scott-face" viewBox="0 0 48 48" fill="none">
         <!-- Hardhat -->
@@ -250,6 +264,7 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="app.js?v=21"></script>
 </body>
 </html>
