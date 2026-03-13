@@ -1,5 +1,5 @@
 // ============================================
-// STRUCTURECRAFT ESTIMATOR v1.0
+// STRUCTURECRAFT ESTIMATOR v2.0
 // AI-powered structural cost estimation
 // ============================================
 
@@ -292,7 +292,6 @@ registerAction('stopQueueItem', function(p) { stopQueueItem(p.id); });
 registerAction('clearAllQueue', function() { if(confirm('Clear entire queue?')) clearAllQueue(); });
 registerAction('clearCompletedQueue', function() { clearCompletedQueue(); });
 registerAction('setTheme', function(p) { setTheme(p.id); });
-registerAction('toggleGuide', function() { toggleGuide(); });
 registerAction('togglePricingCategory', function(p, target) { togglePricingCategory(target.closest('.pricing-category-header') || target); });
 registerAction('toggleQA', function(p) { toggleQA(p.idx); });
 registerAction('editAssumption', function(p, target) { editAssumption(p.key, target); });
@@ -1488,6 +1487,7 @@ function renderInputPage() {
       '<div id="building-viz-container" style="width:100%; height:260px; border-radius:8px; overflow:hidden; background:var(--bg-tertiary); position:relative;">' +
         '<div id="building-viz-fallback" style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:0.78rem;">Loading 3D view...</div>' +
       '</div>' +
+      '<div id="building-viz-label" style="text-align:center; padding:6px 0; font-size:0.78rem; color:var(--text-muted); font-family:JetBrains Mono, monospace;"></div>' +
     '</div>' +
 
     '<!-- Material Selections -->' +
@@ -1698,7 +1698,10 @@ function setPrimaryMaterial(category) {
   }
   est.updatedAt = new Date().toISOString();
   saveState();
-  renderPage();
+  setTimeout(function() { renderPage(); }, 50);
+  if (typeof _vizScene !== 'undefined' && _vizScene) {
+    setTimeout(updateBuildingModel, 100);
+  }
 }
 
 function updateMaterial(elementType, value) {
@@ -1706,7 +1709,7 @@ function updateMaterial(elementType, value) {
   STATE.currentEstimate.materials[elementType] = value;
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
-  renderPage();
+  setTimeout(function() { renderPage(); }, 50);
 }
 
 function formatFileSize(bytes) {
@@ -2707,83 +2710,6 @@ function renderPricingLibraryPage() {
 }
 
 
-// --- ANALYTICS PAGE ---
-function renderAnalyticsPage() {
-  var estimates = STATE.estimates;
-  var wonEstimates = estimates.filter(function(e) { return e.status === 'won'; });
-  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
-  var avgEstimate = estimates.length > 0 ? totalPipeline / estimates.length : 0;
-
-  var byModel = {};
-  estimates.forEach(function(e) {
-    var m = e.deliveryModel || 'unknown';
-    if (!byModel[m]) byModel[m] = { count: 0, total: 0 };
-    byModel[m].count++;
-    byModel[m].total += (e.totalCost || 0);
-  });
-
-  var byStatus = {};
-  estimates.forEach(function(e) {
-    var s = e.status || 'draft';
-    if (!byStatus[s]) byStatus[s] = { count: 0, total: 0 };
-    byStatus[s].count++;
-    byStatus[s].total += (e.totalCost || 0);
-  });
-
-  var phaseAvgs = {};
-  estimates.forEach(function(est) {
-    if (est.phases) {
-      Object.entries(est.phases).forEach(function(entry) {
-        var pk = entry[0], phase = entry[1];
-        var cost = calcPhaseTotal(phase);
-        if (cost > 0) {
-          if (!phaseAvgs[pk]) phaseAvgs[pk] = { total: 0, count: 0 };
-          phaseAvgs[pk].total += cost;
-          phaseAvgs[pk].count++;
-        }
-      });
-    }
-  });
-
-  var maxPhaseAvg = Math.max.apply(null, Object.values(phaseAvgs).map(function(p) { return p.total / p.count; }).concat([1]));
-  var decidedEstimates = estimates.filter(function(e) { return ['won','lost'].includes(e.status); });
-  var winRate = decidedEstimates.length > 0 ? Math.round(wonEstimates.length / decidedEstimates.length * 100) : 0;
-
-  return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Analytics & Insights</div><div class="section-desc">Historical trends, benchmarks, and cost intelligence from your estimating library</div></div></div>' +
-    '<div class="kpi-grid mb-20">' +
-      '<div class="kpi-card"><div class="kpi-label">Total Pipeline</div><div class="kpi-value">' + fmt(totalPipeline) + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Average Estimate</div><div class="kpi-value">' + fmt(avgEstimate) + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">' + winRate + '%</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Largest Estimate</div><div class="kpi-value">' + fmt(Math.max.apply(null, estimates.map(function(e) { return e.totalCost || 0; }).concat([0]))) + '</div></div>' +
-    '</div>' +
-    '<div class="grid-2 mb-20">' +
-      '<div class="chart-container"><div class="chart-header"><div class="chart-title">By Delivery Model</div></div>' +
-        Object.entries(byModel).map(function(entry) {
-          var key = entry[0], data = entry[1];
-          var pct = totalPipeline > 0 ? (data.total / totalPipeline * 100) : 0;
-          return '<div class="bar-chart-row"><div class="bar-chart-label">' + (DELIVERY_MODELS[key] ? DELIVERY_MODELS[key].name : key) + '</div><div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + Math.max(pct,3) + '%">' + (pct > 15 ? '<span class="bar-chart-value">' + data.count + '</span>' : '') + '</div></div><div class="bar-chart-amount">' + fmt(data.total) + '</div></div>';
-        }).join('') +
-      '</div>' +
-      '<div class="chart-container"><div class="chart-header"><div class="chart-title">By Status</div></div>' +
-        Object.entries(byStatus).map(function(entry) {
-          var status = entry[0], data = entry[1];
-          var pct = estimates.length > 0 ? (data.count / estimates.length * 100) : 0;
-          return '<div class="bar-chart-row"><div class="bar-chart-label"><span class="badge badge-' + status + '">' + status + '</span></div><div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + Math.max(pct,5) + '%">' + (pct > 15 ? '<span class="bar-chart-value">' + data.count + '</span>' : '') + '</div></div><div class="bar-chart-amount">' + fmt(data.total) + '</div></div>';
-        }).join('') +
-      '</div>' +
-    '</div>' +
-    '<div class="chart-container mb-20"><div class="chart-header"><div class="chart-title">Average Phase Costs (Across All Estimates)</div></div>' +
-      Object.entries(phaseAvgs).sort(function(a,b) { return (b[1].total/b[1].count) - (a[1].total/a[1].count); }).map(function(entry) {
-        var pk = entry[0], data = entry[1];
-        var avg = data.total / data.count;
-        var pct = (avg / maxPhaseAvg * 100);
-        return '<div class="bar-chart-row"><div class="bar-chart-label">' + (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) + '</div><div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + Math.max(pct,3) + '%">' + (pct > 20 ? '<span class="bar-chart-value">' + data.count + ' est.</span>' : '') + '</div></div><div class="bar-chart-amount">' + fmt(avg) + '</div></div>';
-      }).join('') +
-    '</div>' +
-  '</div>';
-}
-
 // --- Q&A PAGE ---
 function renderQAPage() {
   var faqs = [
@@ -3255,7 +3181,7 @@ function renderFootbridgePage() {
     var fbCostPerDeckSF = fbDeckArea > 0 ? (fbGrand / fbDeckArea) : 0;
     var fbCostPerLF = fbSpanLF > 0 ? (fbGrand / fbSpanLF) : 0;
     outputHtml = '<div class="section-divider mt-24">Estimate Generated</div>' +
-      '<div class="card mb-16 fb-estimate-output" style="border-left: 4px solid var(--accent);">' +
+      '<div class="card mb-16 fb-estimate-output" style="border-left: 4px solid var(--accent); opacity:0;">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:12px;">' +
           '<div>' +
             '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
@@ -3994,6 +3920,11 @@ function updateEstimate(field, value) {
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
   scottNotifyChange();
+  // Live-update 3D building visualizer
+  if (typeof _vizScene !== 'undefined' && _vizScene &&
+      ['numStories', 'buildingArea', 'primaryMaterial', 'structuralSystem', 'projectType'].indexOf(field) >= 0) {
+    updateBuildingModel();
+  }
 }
 
 function updateAssumption(key, value) {
@@ -5797,7 +5728,6 @@ function showNotificationsPanel() {
 
 var PAGE_MAP = {
   'home': { title: 'Home', render: renderHomePage, breadcrumb: 'Home' },
-  'dashboard': { title: 'Dashboard', render: renderDashboardPage, breadcrumb: 'Home > Dashboard' },
   'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Estimate > Input' },
   'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Estimate > Queue' },
   'output': { title: 'Estimate Output', render: renderOutputPage, breadcrumb: 'Estimate > Output' },
@@ -5805,9 +5735,6 @@ var PAGE_MAP = {
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Library > Past Estimates' },
   'benchmarks': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Library > Pricing Library' },
-  'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Library > Analytics' },
-  'scenarios': { title: 'What-If Scenarios', render: renderScenariosPage, breadcrumb: 'Tools > What-If Scenarios' },
-  'qa': { title: 'FAQ', render: renderQAPage, breadcrumb: 'System > FAQ' },
   'settings': { title: 'Settings', render: renderSettingsPage, breadcrumb: 'System > Settings' },
 };
 
@@ -5846,8 +5773,6 @@ function renderPage(forceFullRender) {
   updateBreadcrumb(page.breadcrumb);
   // Phase 1D: Initialize custom dropdown selects after render
   setTimeout(initCustomSelects, 0);
-  // Phase 3A: Run rule engine after render
-  setTimeout(runRuleEngine, 0);
   // Phase 7C: Initialize 3D building visualizer on input page
   if (STATE.currentPage === 'input') {
     setTimeout(initBuildingVisualizer, 50);
@@ -5955,42 +5880,6 @@ function updateNavigation() {
   });
 }
 
-// ---- SECTION 12: USER GUIDE CONTENT ----
-function renderUserGuide() {
-  var guideContent = document.getElementById('guide-content');
-  if (!guideContent) return;
-  guideContent.innerHTML = '<h4>Getting Started</h4>' +
-    '<p>StructureCraft Estimator helps you generate structural cost estimates quickly and accurately using AI-powered document analysis.</p>' +
-
-    '<div class="guide-steps">' +
-      '<div class="guide-step"><div class="guide-step-num">1</div><h5>Project Setup</h5><p>Open Estimate Input. Fill in project details, select your delivery model, and describe the scope.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">2</div><h5>Upload Documents</h5><p>Drag and drop RFPs, drawings, and narratives into the upload zones. Up to 40 MB each.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">3</div><h5>Generate</h5><p>Click Generate Estimate. Claude analyzes your documents, extracts structural data, and produces a detailed cost estimate.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">4</div><h5>Review & Adjust</h5><p>Edit line items, tweak assumptions, and fine-tune on the Estimate Output page.</p></div>' +
-      '<div class="guide-step"><div class="guide-step-num">5</div><h5>Compare</h5><p>Pull past estimates and benchmark against historical data.</p></div>' +
-    '</div>' +
-
-    '<h4>Delivery Models</h4>' +
-    '<ul>' +
-      '<li><strong>EOR Build</strong> -- Full scope: structural engineering, design, fabrication, shipping, installation</li>' +
-      '<li><strong>Delegated Design Build</strong> -- Same as EOR without consulting engineering</li>' +
-      '<li><strong>DLT Supply Only</strong> -- Material supply, fabrication, and shipping of DLT</li>' +
-      '<li><strong>Engineer + Supervise</strong> -- Structural engineering and site supervision only</li>' +
-    '</ul>' +
-
-    '<h4>Footbridge Estimator</h4>' +
-    '<p>Navigate to the <strong>Footbridges</strong> tab to configure and estimate pedestrian bridge projects. Select from 8 structural types, adjust span and width parameters with the visual SVG diagram, and generate detailed cost breakdowns.</p>' +
-
-    '<h4>Tips</h4>' +
-    '<ul>' +
-      '<li>Press <code>Cmd+K</code> to open the command palette for quick navigation</li>' +
-      '<li>Click any assumption value in the Output tab to edit it inline</li>' +
-      '<li>Use the Connector to drag costs from past estimates into your current workspace</li>' +
-      '<li>Export estimates as XLSX for professional spreadsheet output</li>' +
-      '<li>All data saves automatically to your browser local storage</li>' +
-    '</ul>';
-}
-
 // ---- SECTION 13: COMMAND PALETTE ----
 function initCommandPalette() {
   var commands = [
@@ -6000,9 +5889,7 @@ function initCommandPalette() {
     { label: 'Browse Past Estimates', action: function() { navigateTo('past-estimates'); }, icon: ICONS.past },
     { label: 'Open Benchmarks', action: function() { navigateTo('benchmarks'); }, icon: ICONS.analytics },
     { label: 'Open Pricing Library', action: function() { navigateTo('pricing-library'); }, icon: ICONS.pricing },
-    { label: 'Open Analytics', action: function() { navigateTo('analytics'); }, icon: ICONS.analytics },
     { label: 'View Estimate Queue', action: function() { navigateTo('queue'); }, icon: ICONS.bolt },
-    { label: 'FAQ', action: function() { navigateTo('qa'); }, icon: ICONS.qa },
     { label: 'Settings', action: function() { navigateTo('settings'); }, icon: ICONS.settings },
     { label: 'New Estimate', action: function() { clearCurrentEstimate(); navigateTo('input'); }, icon: ICONS.plus },
     { label: 'Generate Estimate', action: generateEstimate, icon: ICONS.check },
@@ -6011,7 +5898,7 @@ function initCommandPalette() {
     { label: 'Export as CSV', action: exportEstimate, icon: ICONS.download },
     { label: 'Ship Everything (XLSX)', action: exportAllDataXLSX, icon: ICONS.download },
     { label: 'Ship Everything (CSV)', action: exportAllData, icon: ICONS.download },
-    { label: 'First-Timer Guide', action: toggleGuide, icon: ICONS.info },
+    { label: 'FAQ & Help', action: showFAQModal, icon: ICONS.info },
     { label: 'Cycle Ambience', action: cycleTheme, icon: ICONS.palette },
     { label: 'Ask StructureScott', action: scottToggle, icon: ICONS.bolt },
     { label: 'Hide StructureScott', action: scottHide, icon: ICONS.bolt },
@@ -6060,12 +5947,6 @@ function executePaletteCommand(idx) {
   }
 }
 
-function toggleGuide() {
-  var guide = document.getElementById('user-guide');
-  guide.classList.toggle('collapsed');
-  STATE.guideOpen = !guide.classList.contains('collapsed');
-}
-
 // ---- SECTION 13B: STRUCTURESCOTT AI BOT ----
 // ---- STRUCTURESCOTT RULE ENGINE ----
 
@@ -6112,6 +5993,12 @@ var SCOTT_RULES = [
   { test: function(s) { return s.bondInsurancePercent > 5; },
     msg: function(s) { return 'Bond & insurance at ' + s.bondInsurancePercent + '% is high. Typical SC range is 1.5-3%.'; },
     priority: 1 },
+  { test: function(s) { return s.fileCount === 0 && s.page === 'input'; },
+    msg: function(s) { return 'No documents uploaded — uploading drawings and RFPs enables AI-powered quantity takeoff.'; },
+    priority: 2 },
+  { test: function(s) { return s.escalationPercent < 2 && s.escalationPercent > 0; },
+    msg: function(s) { return 'Escalation at ' + s.escalationPercent + '% — current market suggests 3-4% for 2025-2026.'; },
+    priority: 1 },
 ];
 
 function getScottSnapshot() {
@@ -6141,8 +6028,10 @@ function getScottSnapshot() {
     overheadPercent: assumptions.overheadPercent || 0,
     contingencyPercent: assumptions.contingencyPercent || 0,
     bondInsurancePercent: assumptions.bondInsurancePercent || 0,
+    escalationPercent: assumptions.escalationPercent || 0,
     scopeDescription: est.scopeDescription || '',
     lineItemCount: lineItems,
+    fileCount: (function() { var f = est.files || {}, c = 0; Object.keys(f).forEach(function(k) { c += (f[k] || []).length; }); return c; })(),
     spanLength: cfg.spanLength || 0,
     clearWidth: cfg.clearWidth || 0,
     bridgeType: cfg.bridgeType || '',
@@ -6314,7 +6203,7 @@ function scottSendMessage() {
     'Speak in short, direct, practical sentences. Never hedge. Reference specific numbers. ' +
     'Keep responses under 100 words unless asked for detail.';
 
-  var model = localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-5-20250929';
+  var model = localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-6';
 
   var messages = _scottState.chatHistory.slice(-10);
 
@@ -6435,7 +6324,6 @@ function initKeyboardShortcuts() {
     if (e.key === 't' || e.key === 'T') { cycleTheme(); return; }
     if (e.key === 'n' || e.key === 'N') { clearCurrentEstimate(); navigateTo('input'); return; }
     if (e.key === 's' || e.key === 'S') { saveCurrentEstimate(); return; }
-    if (e.key === 'g' || e.key === 'G') { toggleGuide(); return; }
   });
 }
 
@@ -6456,19 +6344,26 @@ function initApp() {
   // Load saved state
   loadState();
 
-  // Set nav icons
-  var homeNav = document.getElementById('nav-icon-home');
-  if (homeNav) homeNav.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
-  document.getElementById('nav-icon-input').innerHTML = ICONS.input;
-  var queueNav = document.getElementById('nav-icon-queue');
-  if (queueNav) queueNav.innerHTML = ICONS.bolt;
-  document.getElementById('nav-icon-output').innerHTML = ICONS.output;
-  document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
-  document.getElementById('nav-icon-past').innerHTML = ICONS.past;
-  document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
-  var bmNav2 = document.getElementById('nav-icon-benchmarks');
-  if (bmNav2) bmNav2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>';
-  document.getElementById('nav-icon-settings').innerHTML = ICONS.settings;
+  // Set nav icons (guarded for missing DOM)
+  var el;
+  el = document.getElementById('nav-icon-home');
+  if (el) el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+  el = document.getElementById('nav-icon-input');
+  if (el) el.innerHTML = ICONS.input;
+  el = document.getElementById('nav-icon-queue');
+  if (el) el.innerHTML = ICONS.bolt;
+  el = document.getElementById('nav-icon-output');
+  if (el) el.innerHTML = ICONS.output;
+  el = document.getElementById('nav-icon-footbridge');
+  if (el) el.innerHTML = ICONS.footbridge;
+  el = document.getElementById('nav-icon-past');
+  if (el) el.innerHTML = ICONS.past;
+  el = document.getElementById('nav-icon-pricing');
+  if (el) el.innerHTML = ICONS.pricing;
+  el = document.getElementById('nav-icon-benchmarks');
+  if (el) el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>';
+  el = document.getElementById('nav-icon-settings');
+  if (el) el.innerHTML = ICONS.settings;
 
   // Badge counts
   var pastBadge = document.getElementById('badge-past');
@@ -6522,9 +6417,6 @@ function initApp() {
   var themeCycle = document.getElementById('theme-cycle');
   if (themeCycle) themeCycle.addEventListener('click', cycleTheme);
 
-  // User guide toggle
-  var guideToggle = document.getElementById('guide-toggle');
-  if (guideToggle) guideToggle.addEventListener('click', toggleGuide);
 
   // New estimate button
   var btnNew = document.getElementById('btn-new-estimate');
@@ -6557,9 +6449,6 @@ function initApp() {
 
   // Keyboard shortcuts
   initKeyboardShortcuts();
-
-  // Render user guide
-  renderUserGuide();
 
   // Hash-based routing: parse initial hash before first render
   var initHash = window.location.hash.replace('#', '');
@@ -6618,8 +6507,9 @@ function initApp() {
 
 // ---- PHASE 1D: CUSTOM DROPDOWN COMPONENT ----
 function initCustomSelects() {
-  document.querySelectorAll('select.form-select').forEach(function(sel) {
-    if (sel.parentElement.classList.contains('cs-wrapper')) return;
+  document.querySelectorAll('#page-content select.form-select').forEach(function(sel) {
+    if (sel.getAttribute('data-cs-init')) return;
+    sel.setAttribute('data-cs-init', '1');
     buildCustomSelect(sel);
   });
 }
@@ -6710,82 +6600,10 @@ function closeCustomSelect(wrapper) { wrapper.classList.remove('open'); }
 function closeAllCustomSelects() { document.querySelectorAll('.cs-wrapper.open').forEach(function(w) { w.classList.remove('open'); }); }
 document.addEventListener('click', closeAllCustomSelects);
 
-// ---- PHASE 3A: LIVE RULE ENGINE ----
-var ESTIMATE_RULES = [
-  {
-    id: 'missing-area',
-    level: 'warning',
-    check: function(est) { return !est.buildingArea || est.buildingArea <= 0; },
-    message: 'Building area not set — $/SF metrics unavailable. Add area in Output page metrics.'
-  },
-  {
-    id: 'high-contingency',
-    level: 'info',
-    check: function(est) { return est.assumptions && est.assumptions.contingencyPercent > 12; },
-    message: 'Contingency above 12% — typical for early-stage budgets, consider reducing for DD/CD.'
-  },
-  {
-    id: 'no-scope',
-    level: 'warning',
-    check: function(est) { return !est.scopeDescription || est.scopeDescription.length < 20; },
-    message: 'Project scope is thin — AI estimates improve significantly with detailed scope descriptions.'
-  },
-  {
-    id: 'no-files',
-    level: 'info',
-    check: function(est) {
-      var files = est.files || {};
-      var total = 0;
-      Object.keys(files).forEach(function(k) { total += (files[k] || []).length; });
-      return total === 0;
-    },
-    message: 'No documents uploaded — uploading drawings and RFPs enables AI-powered quantity takeoff.'
-  },
-  {
-    id: 'high-margin',
-    level: 'warning',
-    check: function(est) { return est.assumptions && est.assumptions.marginPercent > 20; },
-    message: 'Margin above 20% — verify this is intentional for competitive bid scenarios.'
-  },
-  {
-    id: 'low-escalation',
-    level: 'info',
-    check: function(est) { return est.assumptions && est.assumptions.escalationPercent < 2; },
-    message: 'Escalation below 2%/yr — current market trends suggest 3-4% for 2025-2026.'
-  }
-];
-
-function runRuleEngine() {
-  var est = STATE.currentEstimate;
-  if (!est) return;
-  var bar = document.getElementById('rule-alerts');
-  if (!bar) return;
-
-  var alerts = [];
-  ESTIMATE_RULES.forEach(function(rule) {
-    try {
-      if (rule.check(est)) {
-        alerts.push({ level: rule.level, message: rule.message, id: rule.id });
-      }
-    } catch(e) { /* skip broken rules */ }
-  });
-
-  if (alerts.length === 0) {
-    bar.style.display = 'none';
-    return;
-  }
-
-  bar.style.display = 'block';
-  bar.innerHTML = alerts.map(function(a) {
-    var icon = a.level === 'warning' ? ICONS.warning : ICONS.info;
-    return '<div class="rule-alert-item ' + a.level + '">' + icon + ' <span>' + a.message + '</span></div>';
-  }).join('');
-}
-
 // ---- PHASE 5A: HOME PAGE ----
 function renderHomePage() {
   var estimates = STATE.estimates;
-  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
+  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || calcEstimateTotal(e) || 0); }, 0);
   var estimatesWithArea = estimates.filter(function(e) { return e.buildingArea > 0; });
   var avgPerSF = estimatesWithArea.length > 0
     ? estimatesWithArea.reduce(function(s, e) { return s + (e.totalCost || 0) / e.buildingArea; }, 0) / estimatesWithArea.length
@@ -6842,7 +6660,10 @@ function renderHomePage() {
           '</div>';
         }).join('') +
       '</div>'
-      : ''
+      : '<div class="card" style="padding:40px; text-align:center;">' +
+          '<div style="color:var(--text-muted); font-size:0.88rem;">No estimates yet.</div>' +
+          '<div style="color:var(--text-muted); font-size:0.78rem; margin-top:6px;">Create your first one to start building your cost library.</div>' +
+        '</div>'
     ) +
 
     // New Estimate button
@@ -6883,81 +6704,6 @@ function timeAgo(dateStr) {
   var days = Math.floor(hrs / 24);
   if (days < 30) return days + 'd ago';
   return Math.floor(days / 30) + 'mo ago';
-}
-
-// ---- PHASE 5A (LEGACY): DASHBOARD PAGE ----
-function renderDashboardPage() {
-  var estimates = STATE.estimates;
-  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
-  var avgEstimate = estimates.length > 0 ? totalPipeline / estimates.length : 0;
-  var recentEstimates = estimates.slice(-5).reverse();
-  var wonCount = estimates.filter(function(e) { return e.status === 'won'; }).length;
-  var decidedCount = estimates.filter(function(e) { return ['won', 'lost'].indexOf(e.status) >= 0; }).length;
-  var winRate = decidedCount > 0 ? Math.round(wonCount / decidedCount * 100) : 0;
-
-  // Recent activity from activity log
-  var recentActivity = (typeof ACTIVITY_LOG !== 'undefined' ? ACTIVITY_LOG : []).slice(-8).reverse();
-
-  return '<div class="fade-in">' +
-    '<div class="dashboard-hero">' +
-      '<div class="dashboard-welcome">' +
-        '<h2>Welcome to StructureCraft Estimator</h2>' +
-        '<p>AI-powered structural cost estimation for mass timber and hybrid building projects. Upload drawings, generate estimates, and benchmark with confidence.</p>' +
-        '<div class="dashboard-quick-actions">' +
-          '<button class="btn btn-accent" data-action="navigateTo" data-params=\'{"page":"input"}\'>' + ICONS.plus + ' New Estimate</button>' +
-          '<button class="btn" data-action="navigateTo" data-params=\'{"page":"footbridge"}\'>' + ICONS.footbridge + ' Footbridge</button>' +
-          '<button class="btn" data-action="navigateTo" data-params=\'{"page":"benchmarks"}\'>' + ICONS.analytics + ' Benchmarks</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="dashboard-activity">' +
-        '<h3>Recent Activity</h3>' +
-        (recentActivity.length > 0 ?
-          recentActivity.map(function(a) {
-            return '<div class="activity-item">' +
-              '<div class="activity-dot"></div>' +
-              '<div class="activity-time">' + (a.ts || '') + '</div>' +
-              '<div style="color:var(--text-secondary);">' + (a.message || '') + '</div>' +
-            '</div>';
-          }).join('')
-          : '<div style="color:var(--text-muted); font-size:0.82rem;">No recent activity. Create your first estimate to get started.</div>'
-        ) +
-      '</div>' +
-    '</div>' +
-
-    '<div class="kpi-grid mb-20">' +
-      '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(totalPipeline) + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">' + winRate + '%</div><div class="kpi-change up">' + ICONS.arrowUp + ' ' + wonCount + ' won</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Avg Estimate</div><div class="kpi-value">' + fmt(avgEstimate) + '</div></div>' +
-    '</div>' +
-
-    (recentEstimates.length > 0 ?
-      '<div class="section-divider">Recent Estimates</div>' +
-      '<div class="dashboard-grid">' +
-        recentEstimates.map(function(est) {
-          var total = est.totalCost || calcEstimateTotal(est);
-          var model = DELIVERY_MODELS[est.deliveryModel];
-          return '<div class="card" style="cursor:pointer;" data-action="viewEstimateDetail" data-params=\'{"id":"' + est.id + '"}\'>' +
-            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">' +
-              '<div>' +
-                '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
-                '<div style="font-size:0.75rem; color:var(--text-muted);">' + esc(est.client) + ' &mdash; ' + (model ? model.name : '') + '</div>' +
-              '</div>' +
-              '<div class="badge badge-' + (est.status || 'draft') + '">' + (est.status || 'draft') + '</div>' +
-            '</div>' +
-            '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(total) + '</div>' +
-            (est.buildingArea > 0 ? '<div style="font-size:0.72rem; color:var(--text-muted);">$' + (total / est.buildingArea).toFixed(2) + '/SF</div>' : '') +
-          '</div>';
-        }).join('') +
-      '</div>'
-      : '<div class="card" style="text-align:center; padding:40px;">' +
-          '<div style="color:var(--text-muted); margin-bottom:16px;">' + ICONS.building + '</div>' +
-          '<h3 style="color:var(--text-primary); margin-bottom:8px;">No estimates yet</h3>' +
-          '<p style="color:var(--text-secondary); margin-bottom:16px;">Create your first estimate to see it here.</p>' +
-          '<button class="btn btn-accent" data-action="navigateTo" data-params=\'{"page":"input"}\'>' + ICONS.plus + ' Create First Estimate</button>' +
-        '</div>'
-    ) +
-  '</div>';
 }
 
 // ---- PHASE 2B: BENCHMARKS PAGE ----
@@ -7247,130 +6993,6 @@ function renderWaterfallChart(est, phaseKeys) {
   '</div>';
 }
 
-// ---- PHASE 6B: WHAT-IF SCENARIOS ----
-STATE.scenarios = STATE.scenarios || [];
-STATE.activeScenarioIdx = STATE.activeScenarioIdx || 0;
-
-function renderScenariosPage() {
-  var est = STATE.currentEstimate;
-  var scenarios = STATE.scenarios;
-
-  // Create base scenario from current estimate if none exist
-  if (scenarios.length === 0 && est) {
-    scenarios.push({
-      name: 'Base Case',
-      isBase: true,
-      margin: est.assumptions.marginPercent,
-      contingency: est.assumptions.contingencyPercent,
-      overhead: est.assumptions.overheadPercent,
-      escalation: est.assumptions.escalationPercent,
-      materialFactor: 1.0,
-      laborFactor: 1.0
-    });
-    STATE.scenarios = scenarios;
-  }
-
-  // Calculate scenario results
-  var modelKey = est.deliveryModel || 'eor-build';
-  var model = DELIVERY_MODELS[modelKey];
-  var phaseKeys = model ? model.phases : [];
-  var baseSubtotal = 0;
-  phaseKeys.forEach(function(pk) {
-    if (est.phases && est.phases[pk]) baseSubtotal += calcPhaseTotal(est.phases[pk]);
-  });
-
-  var results = scenarios.map(function(sc) {
-    var adjusted = baseSubtotal * (sc.materialFactor || 1) * (sc.laborFactor || 1);
-    var total = adjusted * (1 + (sc.margin || 0) / 100 + (sc.overhead || 0) / 100 + (sc.contingency || 0) / 100);
-    return { scenario: sc, subtotal: adjusted, total: total };
-  });
-
-  var baseTotal = results.length > 0 ? results[0].total : 0;
-  var maxTotal = Math.max.apply(null, results.map(function(r) { return r.total; }).concat([1]));
-
-  return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' What-If Scenarios</div><div class="section-desc">Compare cost impacts of different assumptions on ' + esc(est.name || 'current estimate') + '</div></div>' +
-      '<div class="section-actions"><button class="btn btn-accent" data-action="addScenario">' + ICONS.plus + ' Add Scenario</button></div>' +
-    '</div>' +
-
-    // Comparison chart
-    (results.length > 1 ?
-      '<div class="card mb-20">' +
-        '<div class="card-header"><div class="card-title">Scenario Comparison</div></div>' +
-        '<div class="scenario-comparison-chart">' +
-          results.map(function(r) {
-            var pct = maxTotal > 0 ? (r.total / maxTotal * 100) : 0;
-            var diff = baseTotal > 0 ? ((r.total - baseTotal) / baseTotal * 100) : 0;
-            return '<div class="scenario-chart-bar">' +
-              '<div class="scenario-chart-fill' + (r.scenario.isBase ? ' base' : '') + '" style="height:' + Math.max(pct, 5) + '%;"></div>' +
-              '<div class="scenario-chart-label">' + esc(r.scenario.name) + '</div>' +
-              '<div class="scenario-chart-value">' + fmt(r.total) + '</div>' +
-              (!r.scenario.isBase && diff !== 0 ? '<div class="scenario-diff ' + (diff > 0 ? 'up' : 'down') + '">' + (diff > 0 ? '+' : '') + diff.toFixed(1) + '%</div>' : '') +
-            '</div>';
-          }).join('') +
-        '</div>' +
-      '</div>' : ''
-    ) +
-
-    // Scenario cards
-    scenarios.map(function(sc, idx) {
-      var r = results[idx];
-      var diff = baseTotal > 0 ? ((r.total - baseTotal) / baseTotal * 100) : 0;
-      return '<div class="scenario-card' + (idx === STATE.activeScenarioIdx ? ' active' : '') + '">' +
-        '<div class="scenario-header">' +
-          '<div class="scenario-name">' + esc(sc.name) + '</div>' +
-          '<span class="scenario-badge ' + (sc.isBase ? 'base' : 'variant') + '">' + (sc.isBase ? 'Base' : 'Variant') + '</span>' +
-        '</div>' +
-        '<div class="scenario-params">' +
-          '<div class="scenario-param"><label>Margin %</label><input type="number" step="0.5" value="' + sc.margin + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"margin"}\'></div>' +
-          '<div class="scenario-param"><label>Contingency %</label><input type="number" step="0.5" value="' + sc.contingency + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"contingency"}\'></div>' +
-          '<div class="scenario-param"><label>Overhead %</label><input type="number" step="0.5" value="' + sc.overhead + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"overhead"}\'></div>' +
-          '<div class="scenario-param"><label>Material Factor</label><input type="number" step="0.05" value="' + (sc.materialFactor || 1) + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"materialFactor"}\'></div>' +
-          '<div class="scenario-param"><label>Labor Factor</label><input type="number" step="0.05" value="' + (sc.laborFactor || 1) + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"laborFactor"}\'></div>' +
-        '</div>' +
-        '<div class="scenario-results">' +
-          '<div class="scenario-result-cell"><div class="value">' + fmt(r.total) + '</div><div class="label">Total</div></div>' +
-          '<div class="scenario-result-cell"><div class="value">' + (est.buildingArea > 0 ? '$' + (r.total / est.buildingArea).toFixed(2) : '—') + '</div><div class="label">$/SF</div></div>' +
-          '<div class="scenario-result-cell">' +
-            (sc.isBase ? '<div class="value">—</div><div class="label">vs Base</div>' :
-              '<div class="value scenario-diff ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral') + '">' + (diff > 0 ? '+' : '') + diff.toFixed(1) + '%</div><div class="label">vs Base</div>') +
-          '</div>' +
-        '</div>' +
-        (!sc.isBase ? '<div style="margin-top:8px; text-align:right;"><button class="btn btn-sm" data-action="removeScenario" data-params=\'{"idx":' + idx + '}\'>' + ICONS.trash + ' Remove</button></div>' : '') +
-      '</div>';
-    }).join('') +
-  '</div>';
-}
-
-// Register scenario actions
-registerAction('addScenario', function() {
-  var est = STATE.currentEstimate;
-  STATE.scenarios.push({
-    name: 'Scenario ' + (STATE.scenarios.length + 1),
-    isBase: false,
-    margin: est.assumptions.marginPercent,
-    contingency: est.assumptions.contingencyPercent,
-    overhead: est.assumptions.overheadPercent,
-    escalation: est.assumptions.escalationPercent,
-    materialFactor: 1.0,
-    laborFactor: 1.0
-  });
-  renderPage(true);
-});
-
-registerAction('removeScenario', function(p) {
-  STATE.scenarios.splice(parseInt(p.idx), 1);
-  renderPage(true);
-});
-
-registerAction('updateScenario', function(p) {
-  var idx = parseInt(p.idx);
-  if (STATE.scenarios[idx]) {
-    STATE.scenarios[idx][p.field] = parseFloat(p._value) || 0;
-    renderPage(true);
-  }
-});
-
 // ---- PHASE 6B: SCENARIOS TAB (OUTPUT PAGE) ----
 function renderScenariosTab(est, phaseKeys, baseSubtotal, baseGrandTotal) {
   if (!est.scenarios) est.scenarios = [];
@@ -7572,7 +7194,6 @@ registerAction('saveScenarioEdit', function(p) {
 });
 
 // ---- PHASE 6C: CLIENT-FACING VIEW TOGGLE ----
-STATE.clientMode = false;
 if (typeof STATE.clientViewEnabled === 'undefined') STATE.clientViewEnabled = false;
 
 var CLIENT_PHASE_NAMES = {
@@ -7595,29 +7216,11 @@ var CLIENT_PHASE_NAMES = {
 
 registerAction('toggleClientView', function() {
   STATE.clientViewEnabled = !STATE.clientViewEnabled;
+  document.body.classList.toggle('client-mode', STATE.clientViewEnabled);
+  var btn = document.getElementById('btn-client-mode');
+  if (btn) btn.classList.toggle('active', STATE.clientViewEnabled);
   renderPage(true);
 });
-
-function toggleClientMode() {
-  STATE.clientMode = !STATE.clientMode;
-  document.body.classList.toggle('client-mode', STATE.clientMode);
-  var btn = document.getElementById('btn-client-mode');
-  if (btn) btn.classList.toggle('active', STATE.clientMode);
-
-  // Add/remove banner
-  var existing = document.querySelector('.client-mode-banner');
-  if (STATE.clientMode) {
-    if (!existing) {
-      var banner = document.createElement('div');
-      banner.className = 'client-mode-banner';
-      banner.textContent = 'CLIENT VIEW — Internal details hidden';
-      document.getElementById('main-content').prepend(banner);
-    }
-  } else {
-    if (existing) existing.remove();
-  }
-  renderPage(true);
-}
 
 // ---- PHASE 5B: FAQ MODAL ----
 function showHelpModal() {
@@ -7666,13 +7269,12 @@ function initBuildingVisualizer() {
 
   var w = container.clientWidth, h = container.clientHeight;
   _vizScene = new THREE.Scene();
-  _vizScene.background = new THREE.Color(0x1a1e2e);
 
   _vizCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 500);
   _vizCamera.position.set(30, 20, 30);
   _vizCamera.lookAt(0, 5, 0);
 
-  _vizRenderer = new THREE.WebGLRenderer({ antialias: true });
+  _vizRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   _vizRenderer.setSize(w, h);
   _vizRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(_vizRenderer.domElement);
@@ -7687,7 +7289,7 @@ function initBuildingVisualizer() {
   // Ground plane
   var ground = new THREE.Mesh(
     new THREE.PlaneGeometry(80, 80),
-    new THREE.MeshStandardMaterial({ color: 0x2a2e3e, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, transparent: true, opacity: 0.15 })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.05;
@@ -7812,6 +7414,13 @@ function updateBuildingModel() {
 
   // Center the building
   group.position.y = 0.05;
+
+  // Update viz label
+  var label = document.getElementById('building-viz-label');
+  if (label) {
+    var floorSF = Math.round(area / stories);
+    label.textContent = stories + ' stories \u00D7 ' + floorSF.toLocaleString() + ' SF/floor = ' + Math.round(area).toLocaleString() + ' SF | ' + mat;
+  }
 
   _vizScene.add(group);
 }
@@ -7973,7 +7582,7 @@ function processVoiceTranscript(transcript) {
   var systemPrompt = 'You are a structural cost estimation assistant. Extract building parameters from the user description. Return ONLY valid JSON with these fields (use null for unknowns): {"name": string, "projectType": "commercial"|"residential"|"institutional"|"mixed-use", "buildingArea": number (sqft), "stories": number, "primaryMaterial": "timber"|"steel"|"concrete"|"hybrid", "structuralSystem": string or null, "region": string matching a city-state slug or null, "notes": string summary}';
 
   var payload = {
-    model: localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-20250514',
+    model: localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-6',
     max_tokens: 500,
     system: systemPrompt,
     messages: [{ role: 'user', content: transcript }]
@@ -8039,22 +7648,14 @@ ICONS.benchmarks = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" 
 // These are called during initApp to set up new nav items and features
 
 function initV2Features() {
-  // Set nav icons for v2 features
-  var dashNav = document.getElementById('nav-icon-dashboard');
-  if (dashNav) dashNav.innerHTML = ICONS.dashboard;
-  // Home icon (if present)
-  var homeNavV2 = document.getElementById('nav-icon-home');
-  if (homeNavV2 && !homeNavV2.innerHTML.trim()) homeNavV2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
-  var bmNav = document.getElementById('nav-icon-benchmarks');
-  if (bmNav) bmNav.innerHTML = ICONS.benchmarks;
-  var scNav = document.getElementById('nav-icon-scenarios');
-  if (scNav) scNav.innerHTML = ICONS.scenario;
-
-  // FAQ modal button
-  var faqBtn = document.getElementById('btn-faq');
-  if (faqBtn) {
-    faqBtn.addEventListener('click', showFAQModal);
+  // Backdrop click closes modals
+  var modalOverlay = document.getElementById('modal-overlay');
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) {
+      if (e.target === modalOverlay) hideModal();
+    });
   }
+
   var closeFaq = document.getElementById('close-faq');
   if (closeFaq) {
     closeFaq.addEventListener('click', closeFAQModal);
@@ -8073,14 +7674,14 @@ function initV2Features() {
     voiceBtn.addEventListener('click', startVoiceInput);
   }
 
-  // Client mode toggle
+  // Client mode toggle — wired to unified toggleClientView action
   var clientBtn = document.getElementById('btn-client-mode');
   if (clientBtn) {
-    clientBtn.addEventListener('click', toggleClientMode);
+    clientBtn.addEventListener('click', function() { ACTION_HANDLERS['toggleClientView'](); });
   }
 
   // Default to home on first visit
-  if (!window.location.hash && (STATE.currentPage === 'input' || STATE.currentPage === 'dashboard')) {
+  if (!window.location.hash && STATE.currentPage === 'input') {
     STATE.currentPage = 'home';
   }
 }
