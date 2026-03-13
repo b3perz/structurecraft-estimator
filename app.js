@@ -1708,19 +1708,27 @@ function renderOutputPage() {
   var grandTotal = subtotal + margin + overhead + contingency + bondIns;
   var bldgArea = est.buildingArea || 0;
 
+  var isClient = STATE.clientViewEnabled;
+  var projectFee = isClient ? margin + overhead + bondIns : 0;
+
   return '<div class="fade-in">' +
     '<div class="section-header">' +
       '<div>' +
-        '<div class="section-title">' + ICONS.output + ' Estimate Output</div>' +
+        '<div class="section-title">' + (isClient ? 'StructureCraft &mdash; Cost Estimate' : ICONS.output + ' Estimate Output') + '</div>' +
         '<div class="section-desc">' + esc(est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
       '</div>' +
       '<div class="section-actions">' +
-        '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
+        '<button class="btn btn-sm' + (isClient ? ' btn-accent' : '') + '" data-action="toggleClientView">' +
+          (isClient ? '&larr; Internal View' : 'Client View &rarr;') +
+        '</button>' +
+        (isClient ? '<button class="btn btn-sm no-hide" onclick="window.print()">' + ICONS.download + ' Export PDF</button>' : '') +
+        (!isClient ? '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
           ICONS.share + ' Share' +
         '</button>' +
         '<button class="btn btn-sm' + (STATE.showUnitRateComparison ? ' btn-accent' : '') + '" data-action="toggleUnitRatePanel" title="Compare $/SF with past estimates">' +
           ICONS.analytics + ' $/SF Compare' +
-        '</button>' +
+        '</button>' : '') +
+        (!isClient ?
         '<button class="btn btn-sm" data-action="exportEstimateXLSX">' +
           ICONS.download + ' Ship as XLSX' +
         '</button>' +
@@ -1729,10 +1737,39 @@ function renderOutputPage() {
         '</button>' +
         '<button class="btn btn-sm btn-accent" data-action="saveCurrentEstimate">' +
           ICONS.check + ' Stash' +
-        '</button>' +
+        '</button>' : '') +
       '</div>' +
     '</div>' +
 
+    // Client view: Executive Summary
+    (isClient ?
+      '<div class="card mb-20" style="border-left:4px solid var(--accent); padding:20px;">' +
+        '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700; margin-bottom:10px;">Executive Summary</div>' +
+        '<p style="color:var(--text-primary); line-height:1.7; margin:0;">' +
+          'This estimate covers <strong>' + (model ? model.name : '') + '</strong> services for <strong>' + esc(est.name || 'Untitled Project') + '</strong>' +
+          (est.numStories ? ', a ' + est.numStories + '-story' : '') +
+          (est.projectType ? ' ' + est.projectType : '') +
+          ' structure' +
+          (bldgArea > 0 ? ' totaling <strong>' + fmtNum(bldgArea) + ' SF</strong>' : '') +
+          (est.location ? ' in ' + esc(est.location) : '') + '.' +
+          ' Total project cost is <strong>' + fmt(grandTotal) + '</strong>' +
+          (bldgArea > 0 ? ' (<strong>$' + (grandTotal / bldgArea).toFixed(2) + '</strong>/SF)' : '') + '.' +
+          (est.client ? ' Prepared for: <strong>' + esc(est.client) + '</strong>.' : '') +
+          ' Date: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '.' +
+        '</p>' +
+      '</div>' : ''
+    ) +
+
+    // Client view: collapsed fee summary instead of assumptions
+    (isClient ?
+      '<div class="card mb-20">' +
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; text-align:center;">' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Direct Costs</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(subtotal) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Project Fee</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(projectFee) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Contingency</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(contingency) + '</div></div>' +
+        '</div>' +
+      '</div>'
+    :
     '<!-- Assumptions Box -->' +
     '<div class="assumptions-box mb-20">' +
       '<div class="assumptions-header">' +
@@ -1753,8 +1790,10 @@ function renderOutputPage() {
         '<div class="assumption-item"><div class="assumption-label">Site Carpenter (per hr)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"siteCarpentrHourlyRate"}\'>' + fmtDec(est.assumptions.siteCarpentrHourlyRate) + '</div></div>' +
         '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"craneDailyRate"}\'>' + fmt(est.assumptions.craneDailyRate) + '</div></div>' +
       '</div>' +
-    '</div>' +
+    '</div>') +
 
+    // Hide live building metrics and second metrics dashboard in client view
+    (!isClient ?
     '<!-- Live Building Metrics -->' +
     '<div class="card mb-20" style="border-left: 3px solid var(--accent);">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
@@ -1822,22 +1861,25 @@ function renderOutputPage() {
           (est.installDays > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.installDays)) + ' SF/day</div>' : '') +
         '</div>' +
       '</div>' +
-    '</div>' +
+    '</div>' : '') +
 
     '<!-- Phase Tabs -->' +
     '<div class="tabs">' +
       '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
       phaseKeys.map(function(pk) {
+        var phaseName = isClient ? (CLIENT_PHASE_NAMES[pk] || (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk)) : (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk);
         return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' +
-          (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) +
+          phaseName +
         '</div>';
       }).join('') +
-      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\' style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (!isClient && est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\' style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (!isClient ? '<div class="tab ' + (activeTab === 'scenarios' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"scenarios"}\'>' + ICONS.scenario + ' Scenarios</div>' : '') +
     '</div>' +
 
     '<!-- Tab Content -->' +
     (activeTab === 'summary' ? renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) : '') +
     (activeTab === 'ai-notes' ? renderAINotesTab(est) : '') +
+    (activeTab === 'scenarios' ? renderScenariosTab(est, phaseKeys, subtotal, grandTotal) : '') +
     phaseKeys.map(function(pk) { return activeTab === pk ? renderPhaseTab(est, pk) : ''; }).join('') +
   '</div>';
 }
@@ -7151,44 +7193,47 @@ function renderBenchmarksPage() {
 // ---- PHASE 6A: WATERFALL CHART ----
 function renderWaterfallChart(est, phaseKeys) {
   if (!est || !est.phases) return '';
-  var phases = [];
-  var runningTotal = 0;
+  var bldgArea = est.buildingArea || 0;
+  var bars = [];
   phaseKeys.forEach(function(pk) {
     if (est.phases[pk]) {
       var cost = calcPhaseTotal(est.phases[pk]);
       if (cost > 0) {
-        phases.push({ key: pk, name: PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk, cost: cost, start: runningTotal });
-        runningTotal += cost;
+        bars.push({ key: pk, name: PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk, cost: cost, isPhase: true });
       }
     }
   });
-  var subtotal = runningTotal;
-  var margin = subtotal * ((est.assumptions.marginPercent || 0) / 100);
-  var overhead = subtotal * ((est.assumptions.overheadPercent || 0) / 100);
-  var contingency = subtotal * ((est.assumptions.contingencyPercent || 0) / 100);
-  var bondIns = subtotal * ((est.assumptions.bondInsurancePercent || 0) / 100);
-
-  phases.push({ key: 'subtotal', name: 'Subtotal', cost: subtotal, start: 0, isSubtotal: true });
-  if (margin > 0) { phases.push({ key: 'margin', name: 'Margin', cost: margin, start: subtotal }); runningTotal += margin; }
-  if (overhead > 0) { phases.push({ key: 'overhead', name: 'Overhead', cost: overhead, start: runningTotal - overhead }); }
-  if (contingency > 0) { phases.push({ key: 'contingency', name: 'Contingency', cost: contingency, start: runningTotal }); runningTotal += contingency; }
-  if (bondIns > 0) { phases.push({ key: 'bond', name: 'Bond/Ins', cost: bondIns, start: runningTotal }); runningTotal += bondIns; }
+  var subtotal = bars.reduce(function(s, b) { return s + b.cost; }, 0);
+  var a = est.assumptions || {};
+  var margin = subtotal * ((a.marginPercent || 0) / 100);
+  var overhead = subtotal * ((a.overheadPercent || 0) / 100);
+  var contingency = subtotal * ((a.contingencyPercent || 0) / 100);
+  var bondIns = subtotal * ((a.bondInsurancePercent || 0) / 100);
+  if (margin > 0) bars.push({ key: 'margin', name: 'Margin (' + fmtPct(a.marginPercent) + ')', cost: margin, isMuted: true });
+  if (overhead > 0) bars.push({ key: 'overhead', name: 'Overhead (' + fmtPct(a.overheadPercent) + ')', cost: overhead, isMuted: true });
+  if (contingency > 0) bars.push({ key: 'contingency', name: 'Contingency (' + fmtPct(a.contingencyPercent) + ')', cost: contingency, isMuted: true });
+  if (bondIns > 0) bars.push({ key: 'bond', name: 'Bond & Ins (' + fmtPct(a.bondInsurancePercent) + ')', cost: bondIns, isMuted: true });
   var grandTotal = subtotal + margin + overhead + contingency + bondIns;
-  phases.push({ key: 'total', name: 'Total', cost: grandTotal, start: 0, isTotal: true });
+  bars.push({ key: 'total', name: 'Grand Total', cost: grandTotal, isTotal: true });
 
   var maxVal = grandTotal;
+  var perSFStr = bldgArea > 0 ? ' ($' + (grandTotal / bldgArea).toFixed(2) + '/SF)' : '';
+
   return '<div class="card mb-20">' +
     '<div class="card-header"><div class="card-title">' + ICONS.analytics + ' Cost Waterfall</div></div>' +
-    '<div class="waterfall-chart">' +
-      phases.map(function(p) {
-        var heightPct = maxVal > 0 ? (p.cost / maxVal * 100) : 0;
-        var barClass = p.isTotal ? 'total' : p.isSubtotal ? 'subtotal' : 'positive';
-        return '<div class="waterfall-bar-group">' +
-          '<div class="waterfall-bar ' + barClass + '" style="height:' + Math.max(heightPct, 3) + '%;">' +
-            '<div class="waterfall-bar-tooltip">' + fmt(p.cost) + '</div>' +
-          '</div>' +
-          '<div class="waterfall-label">' + p.name + '</div>' +
-          '<div class="waterfall-value">' + fmt(p.cost) + '</div>' +
+    '<div class="wf-chart">' +
+      bars.map(function(b, i) {
+        var pct = maxVal > 0 ? (b.cost / maxVal * 100) : 0;
+        var barPct = Math.max(pct, 2);
+        var cls = b.isTotal ? 'wf-bar-total' : (b.isMuted ? 'wf-bar-muted' : 'wf-bar-accent');
+        var sfStr = bldgArea > 0 ? ' · $' + (b.cost / bldgArea).toFixed(2) + '/SF' : '';
+        var pctOfTotal = grandTotal > 0 ? ' · ' + (b.cost / grandTotal * 100).toFixed(1) + '%' : '';
+        var tooltip = b.name + ': ' + fmt(b.cost) + sfStr + pctOfTotal;
+        var clickAttr = b.isPhase ? ' data-action="switchOutputTab" data-params=\'{"tab":"' + b.key + '"}\' style="cursor:pointer;"' : '';
+        return '<div class="wf-row wf-fade-in" style="animation-delay:' + (i * 0.12) + 's;"' + clickAttr + ' title="' + esc(tooltip) + '">' +
+          '<div class="wf-label">' + b.name + '</div>' +
+          '<div class="wf-bar-track"><div class="' + cls + '" style="width:' + barPct + '%;"></div></div>' +
+          '<div class="wf-amount">' + fmt(b.cost) + (b.isTotal ? perSFStr : '') + '</div>' +
         '</div>';
       }).join('') +
     '</div>' +
@@ -7319,8 +7364,227 @@ registerAction('updateScenario', function(p) {
   }
 });
 
+// ---- PHASE 6B: SCENARIOS TAB (OUTPUT PAGE) ----
+function renderScenariosTab(est, phaseKeys, baseSubtotal, baseGrandTotal) {
+  if (!est.scenarios) est.scenarios = [];
+  var scenarios = est.scenarios;
+  var bldgArea = est.buildingArea || 0;
+  var basePerSF = bldgArea > 0 ? '$' + (baseGrandTotal / bldgArea).toFixed(2) + '/SF' : '—';
+  var model = DELIVERY_MODELS[est.deliveryModel || 'eor-build'];
+
+  var html = '<div class="fade-in">' +
+    // Base Case card
+    '<div class="card mb-16" style="border-left:4px solid var(--accent);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<div>' +
+          '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700; margin-bottom:4px;">Base Case</div>' +
+          '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + (model ? model.name : '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:1.3rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(baseGrandTotal) + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + basePerSF + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Scenario cards
+  scenarios.forEach(function(sc, idx) {
+    var scTotal = sc.snapshot ? (sc.snapshot.totalCost || 0) : 0;
+    var scPerSF = bldgArea > 0 && scTotal > 0 ? '$' + (scTotal / bldgArea).toFixed(2) + '/SF' : '—';
+    var delta = baseGrandTotal > 0 ? ((scTotal - baseGrandTotal) / baseGrandTotal * 100) : 0;
+    var deltaClass = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+    var deltaStr = (delta > 0 ? '+' : '') + delta.toFixed(1) + '%';
+
+    html += '<div class="card mb-16">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">' +
+        '<div>' +
+          '<div style="font-weight:600; color:var(--text-primary);">' + esc(sc.name) + '</div>' +
+          '<div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">' +
+            (sc.changes || []).map(function(c) { return c.label; }).join(' · ') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(scTotal) + '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' + scPerSF + '</div>' +
+          '<div class="scenario-diff ' + deltaClass + '" style="font-size:0.78rem; font-weight:600;">' + deltaStr + ' vs base</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end;">' +
+        '<button class="btn btn-sm" data-action="editScenarioModal" data-params=\'{"idx":' + idx + '}\'>' + ICONS.edit + ' Edit</button>' +
+        '<button class="btn btn-sm" data-action="mergeScenario" data-params=\'{"idx":' + idx + '}\'>Merge to Base</button>' +
+        '<button class="btn btn-sm" data-action="deleteScenario" data-params=\'{"idx":' + idx + '}\'>' + ICONS.trash + ' Delete</button>' +
+      '</div>' +
+    '</div>';
+  });
+
+  // New Scenario button (max 3)
+  if (scenarios.length < 3) {
+    html += '<div style="text-align:center; margin:16px 0;">' +
+      '<button class="btn btn-accent" data-action="createScenario">' + ICONS.plus + ' New Scenario</button>' +
+    '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function hideModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+registerAction('createScenario', function() {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios) est.scenarios = [];
+  if (est.scenarios.length >= 3) { showToast('Maximum 3 scenarios allowed.', 'warning'); return; }
+  var snapshot = JSON.parse(JSON.stringify(est));
+  // Reduce margin by 5% as starting point
+  snapshot.assumptions.marginPercent = Math.max(0, (snapshot.assumptions.marginPercent || 0) - 5);
+  // Recalculate total
+  var modelKey = snapshot.deliveryModel || 'eor-build';
+  var model = DELIVERY_MODELS[modelKey];
+  var phaseKeys = model ? model.phases : [];
+  var sub = 0;
+  phaseKeys.forEach(function(pk) {
+    if (snapshot.phases && snapshot.phases[pk]) sub += calcPhaseTotal(snapshot.phases[pk]);
+  });
+  var a = snapshot.assumptions;
+  snapshot.totalCost = sub + sub * ((a.marginPercent + a.overheadPercent + a.contingencyPercent + a.bondInsurancePercent) / 100);
+
+  est.scenarios.push({
+    id: generateId(),
+    name: 'Scenario ' + (est.scenarios.length + 1),
+    changes: [{ label: 'Margin -5%' }],
+    snapshot: snapshot
+  });
+  saveState();
+  renderPage(true);
+});
+
+registerAction('deleteScenario', function(p) {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios) return;
+  est.scenarios.splice(parseInt(p.idx), 1);
+  saveState();
+  renderPage(true);
+});
+
+registerAction('mergeScenario', function(p) {
+  var est = STATE.currentEstimate;
+  if (!est.scenarios || !est.scenarios[parseInt(p.idx)]) return;
+  if (!confirm('Merge this scenario\'s assumptions into the base estimate? This will update margin, overhead, contingency, and bond/insurance.')) return;
+  var sc = est.scenarios[parseInt(p.idx)];
+  if (sc.snapshot && sc.snapshot.assumptions) {
+    est.assumptions.marginPercent = sc.snapshot.assumptions.marginPercent;
+    est.assumptions.overheadPercent = sc.snapshot.assumptions.overheadPercent;
+    est.assumptions.contingencyPercent = sc.snapshot.assumptions.contingencyPercent;
+    est.assumptions.bondInsurancePercent = sc.snapshot.assumptions.bondInsurancePercent;
+    if (sc.snapshot.buildingArea) est.buildingArea = sc.snapshot.buildingArea;
+    if (sc.snapshot.numStories) est.numStories = sc.snapshot.numStories;
+  }
+  est.scenarios.splice(parseInt(p.idx), 1);
+  saveState();
+  renderPage(true);
+  showToast('Scenario merged into base estimate.', 'success');
+});
+
+registerAction('editScenarioModal', function(p) {
+  var est = STATE.currentEstimate;
+  var idx = parseInt(p.idx);
+  if (!est.scenarios || !est.scenarios[idx]) return;
+  var sc = est.scenarios[idx];
+  var snap = sc.snapshot || {};
+  var a = snap.assumptions || est.assumptions;
+  var modal = document.getElementById('modal-container');
+  modal.innerHTML =
+    '<div style="padding:24px; max-width:440px;">' +
+      '<h3 style="margin:0 0 16px;">Edit Scenario</h3>' +
+      '<div style="display:flex; flex-direction:column; gap:12px;">' +
+        '<div><label class="form-label">Name</label><input class="form-input" id="sc-edit-name" value="' + esc(sc.name) + '"></div>' +
+        '<div><label class="form-label">Margin %</label><input type="number" class="form-input" id="sc-edit-margin" step="0.5" value="' + a.marginPercent + '"></div>' +
+        '<div><label class="form-label">Overhead %</label><input type="number" class="form-input" id="sc-edit-overhead" step="0.5" value="' + a.overheadPercent + '"></div>' +
+        '<div><label class="form-label">Contingency %</label><input type="number" class="form-input" id="sc-edit-contingency" step="0.5" value="' + a.contingencyPercent + '"></div>' +
+        '<div><label class="form-label">Building Area (SF)</label><input type="number" class="form-input" id="sc-edit-area" value="' + (snap.buildingArea || est.buildingArea || '') + '"></div>' +
+        '<div><label class="form-label">Stories</label><input type="number" class="form-input" id="sc-edit-stories" value="' + (snap.numStories || est.numStories || '') + '"></div>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">' +
+        '<button class="btn" onclick="hideModal()">Cancel</button>' +
+        '<button class="btn btn-accent" data-action="saveScenarioEdit" data-params=\'{"idx":' + idx + '}\'>Save</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+});
+
+registerAction('saveScenarioEdit', function(p) {
+  var est = STATE.currentEstimate;
+  var idx = parseInt(p.idx);
+  if (!est.scenarios || !est.scenarios[idx]) return;
+  var sc = est.scenarios[idx];
+  sc.name = document.getElementById('sc-edit-name').value || sc.name;
+  var newMargin = parseFloat(document.getElementById('sc-edit-margin').value) || 0;
+  var newOverhead = parseFloat(document.getElementById('sc-edit-overhead').value) || 0;
+  var newContingency = parseFloat(document.getElementById('sc-edit-contingency').value) || 0;
+  var newArea = parseFloat(document.getElementById('sc-edit-area').value) || 0;
+  var newStories = parseInt(document.getElementById('sc-edit-stories').value) || 0;
+
+  if (!sc.snapshot) sc.snapshot = JSON.parse(JSON.stringify(est));
+  sc.snapshot.assumptions.marginPercent = newMargin;
+  sc.snapshot.assumptions.overheadPercent = newOverhead;
+  sc.snapshot.assumptions.contingencyPercent = newContingency;
+  if (newArea) sc.snapshot.buildingArea = newArea;
+  if (newStories) sc.snapshot.numStories = newStories;
+
+  // Rebuild change labels
+  var changes = [];
+  if (newMargin !== est.assumptions.marginPercent) changes.push({ label: 'Margin ' + newMargin + '%' });
+  if (newOverhead !== est.assumptions.overheadPercent) changes.push({ label: 'Overhead ' + newOverhead + '%' });
+  if (newContingency !== est.assumptions.contingencyPercent) changes.push({ label: 'Contingency ' + newContingency + '%' });
+  if (newArea && newArea !== est.buildingArea) changes.push({ label: 'Area ' + fmtNum(newArea) + ' SF' });
+  if (newStories && newStories !== est.numStories) changes.push({ label: newStories + ' stories' });
+  sc.changes = changes.length > 0 ? changes : [{ label: 'Custom' }];
+
+  // Recalculate snapshot total
+  var modelKey = sc.snapshot.deliveryModel || 'eor-build';
+  var model = DELIVERY_MODELS[modelKey];
+  var phaseKeys = model ? model.phases : [];
+  var sub = 0;
+  phaseKeys.forEach(function(pk) {
+    if (sc.snapshot.phases && sc.snapshot.phases[pk]) sub += calcPhaseTotal(sc.snapshot.phases[pk]);
+  });
+  var sa = sc.snapshot.assumptions;
+  sc.snapshot.totalCost = sub + sub * ((sa.marginPercent + sa.overheadPercent + sa.contingencyPercent + sa.bondInsurancePercent) / 100);
+
+  hideModal();
+  saveState();
+  renderPage(true);
+});
+
 // ---- PHASE 6C: CLIENT-FACING VIEW TOGGLE ----
 STATE.clientMode = false;
+if (typeof STATE.clientViewEnabled === 'undefined') STATE.clientViewEnabled = false;
+
+var CLIENT_PHASE_NAMES = {
+  'consulting': 'Consulting Engineering Services',
+  'structural-engineering': 'Structural Engineering Services',
+  'timber-engineering': 'Timber Engineering & Shop Drawings',
+  'construction-engineering': 'Construction Engineering Services',
+  'fabrication': 'Material Supply & Fabrication',
+  'shipping': 'Delivery & Logistics',
+  'installation': 'Site Installation',
+  'general-conditions': 'Project Management & General Conditions',
+  'fb-engineering': 'Engineering Services',
+  'fb-fabrication': 'Material Supply & Fabrication',
+  'fb-shipping': 'Delivery & Logistics',
+  'fb-foundations': 'Foundation Work',
+  'fb-installation': 'Site Installation & Erection',
+  'fb-railing-finishes': 'Railing & Finish Work',
+  'fb-general-conditions': 'Project Management & General Conditions',
+};
+
+registerAction('toggleClientView', function() {
+  STATE.clientViewEnabled = !STATE.clientViewEnabled;
+  renderPage(true);
+});
 
 function toggleClientMode() {
   STATE.clientMode = !STATE.clientMode;
