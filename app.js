@@ -3284,11 +3284,13 @@ function updateFootbridgeConfig(key, value) {
         else labelEl.textContent = value;
       }
     });
+    scottNotifyChange();
     return;
   }
 
   // Full re-render for bridge type changes
   renderPage();
+  scottNotifyChange();
 }
 
 function renderFootbridgeOutput(fbEst) {
@@ -3753,12 +3755,14 @@ function updateEstimate(field, value) {
   STATE.currentEstimate[field] = value;
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
+  scottNotifyChange();
 }
 
 function updateAssumption(key, value) {
   STATE.currentEstimate.assumptions[key] = value;
   saveState();
   renderPage();
+  scottNotifyChange();
 }
 
 function shareEstimateLink() {
@@ -3795,6 +3799,7 @@ function updateBuildingMetric(key, value) {
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
   renderPage();
+  scottNotifyChange();
 }
 
 function setDeliveryModel(model) {
@@ -5820,93 +5825,116 @@ function toggleGuide() {
 }
 
 // ---- SECTION 13B: STRUCTURESCOTT AI BOT ----
-var SCOTT_TIPS = {
-  input: [
-    "Tip: the more detail you put in the <strong>Project Scope</strong> box, the better my estimates get. Paste in RFP excerpts, RFIs, even email threads!",
-    "Did you know? Uploading actual drawings lets me extract quantities automatically. PDFs and images both work.",
-    "Pro move: pick your <strong>Delivery Model</strong> before generating — it completely changes which phases show up in your estimate.",
-    "Material choice matters! Glulam beams vs. steel W-shapes can swing your $/SF by 30% or more on a typical 4-story.",
-    "If you're unsure about the structural system, <strong>Post & Beam</strong> is a safe default for most mass timber commercial projects.",
-    "Quick tip: use <strong>Stash It</strong> to save your current inputs before experimenting with different configurations.",
-    "The element material dropdowns filter based on your primary material. Switch from Timber to Steel to see the full steel catalog.",
-  ],
-  queue: [
-    "I'm crunching numbers! Each step — takeoff, pricing, labor — builds on the last. The whole thing usually takes under 2 minutes.",
-    "You can queue up multiple estimates and I'll process them one at a time. Go grab a coffee!",
-    "If an estimate gets stuck, hit Stop and re-generate. Sometimes the AI just needs a fresh start.",
-    "Fun fact: the 7-step pipeline mirrors how a real estimating team works — takeoff, material pricing, connections, labor, logistics, overhead, then summary.",
-    "While I'm working, feel free to browse the <strong>Pricing Library</strong> or <strong>Analytics</strong> — I'll keep crunching in the background.",
-  ],
-  output: [
-    "Click any <strong>blue assumption value</strong> to edit it inline. The entire estimate recalculates instantly!",
-    "Try adjusting the <strong>Contingency %</strong> — 5% is typical for DDs, but early-stage budgets often use 10-15%.",
-    "The <strong>AI Notes</strong> tab has my reasoning and flagged risks. Always worth a read before sending to a client.",
-    "Use <strong>Export XLSX</strong> to get a formatted spreadsheet ready for your proposal. It includes all phases and assumptions.",
-    "Pro tip: open the <strong>Connector</strong> panel to drag unit rates from a past estimate into this one for comparison.",
-    "Building metrics like <strong>$/SF</strong> and <strong>BF/SF</strong> are editable too — change the building area and watch everything recalculate.",
-  ],
-  footbridge: [
-    "Try dragging the <strong>Span Length</strong> slider — the SVG diagram updates in real-time so you can visualize the structure!",
-    "Parabolic arches are the most common pedestrian bridge type, but check out <strong>Warren Truss</strong> for longer spans.",
-    "The <strong>Arch Rise</strong> ratio affects both aesthetics and structural efficiency. 0.15-0.25 is the sweet spot for most sites.",
-    "Footbridge estimates include fabrication, shipping, and install. Don't forget to factor in site access conditions!",
-    "For multi-span bridges, each span adds roughly 60-70% of the first span's cost (shared abutments save money).",
-  ],
-  'past-estimates': [
-    "Your estimate library grows over time. Use it as a benchmarking database — filter by project type to find comparable jobs.",
-    "Click any past estimate to load it back into the workspace for review or re-pricing with updated rates.",
-    "Tip: historical estimates are gold for proposals. Reference similar completed projects to build client confidence.",
-  ],
-  connector: [
-    "The Connector lets you view a reference estimate side-by-side with your current workspace. Great for sanity-checking unit rates!",
-    "Try comparing your current estimate's $/SF against a completed project of similar scope. If they're way off, dig into why.",
-  ],
-  'pricing-library': [
-    "These are baseline material and labor rates. Your estimate assumptions can override them on a per-project basis.",
-    "Glulam prices vary by species — Douglas Fir is the most common, but Spruce can save 15-20% on material for non-exposed applications.",
-    "Connection hardware is often the sneaky cost driver. Steel connections can run $4,000-6,000 per ton fully installed.",
-  ],
-  analytics: [
-    "The analytics dashboard shows trends across your estimate history. The more estimates you generate, the smarter these benchmarks get!",
-    "Look for outliers in your $/SF chart — they might flag scope issues or assumption errors worth investigating.",
-  ],
-  qa: [
-    "Can't find your answer here? The <strong>Project Scope</strong> field in Estimate Input is a great place to add context and special conditions.",
-    "Most FAQ answers come from real estimating questions our team gets. If you think of a new one, it probably belongs here!",
-  ],
-  settings: [
-    "Try the <strong>Blueprint</strong> theme if you want that old-school engineering drawing vibe. Or <strong>Timber</strong> for warm wood tones.",
-    "All your data lives in browser local storage. Use <strong>Ship Everything</strong> from the command palette to export a full backup.",
-    "Keyboard shortcut fan? Press <kbd>Cmd+K</kbd> to see all available commands, or <kbd>T</kbd> to cycle themes.",
-  ],
-};
+// ---- STRUCTURESCOTT RULE ENGINE ----
 
-// Greetings Scott shows on first load or when toggled with no active tip
-var SCOTT_GREETINGS = [
-  "Hey there! I'm <strong>StructureScott</strong>, your estimating buddy. Click me anytime for tips!",
-  "Howdy! Need a hand with your estimate? I've got tips for every page. Just click!",
-  "Welcome back! Ready to crunch some numbers? I'll be right here if you need pointers.",
-  "StructureScott reporting for duty! I know a thing or two about mass timber estimating.",
-  "Hard hat's on, calculator's ready. Let's build something!",
+var SCOTT_RULES = [
+  { test: function(s) { return s.marginPercent > 40; },
+    msg: function(s) { return 'Margin at ' + s.marginPercent + '% is way above typical SC range (15-30%). Intentional?'; },
+    priority: 0 },
+  { test: function(s) { return s.marginPercent > 0 && s.marginPercent < 10; },
+    msg: function(s) { return 'Margin at ' + s.marginPercent + '% is tight. Make sure overhead is covered separately.'; },
+    priority: 0 },
+  { test: function(s) { return s.contingencyPercent > 15; },
+    msg: function(s) { return 'Contingency at ' + s.contingencyPercent + '% — concept/SD level. DDs are typically 5-8%.'; },
+    priority: 1 },
+  { test: function(s) { return s.contingencyPercent > 0 && s.contingencyPercent < 3; },
+    msg: function(s) { return 'Under 3% contingency is risky unless this is a repeat project with locked pricing.'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 200 && s.primaryMaterial === 'timber'; },
+    msg: function(s) { return '$' + Math.round(s.costPerSF) + '/SF for SC timber scope is high. Double-check member sizing.'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 0 && s.costPerSF < 25 && s.deliveryModel === 'eor-build'; },
+    msg: function(s) { return '$' + Math.round(s.costPerSF) + '/SF for EOR Build seems very low. All phases included?'; },
+    priority: 0 },
+  { test: function(s) { return s.costPerSF > 0 && s.targetPerSF > 0 && s.costPerSF > s.targetPerSF * 1.15; },
+    msg: function(s) { return 'You\'re ' + Math.round((s.costPerSF / s.targetPerSF - 1) * 100) + '% over budget target. Fabrication and installation are usually where you find savings.'; },
+    priority: 0 },
+  { test: function(s) { return s.overheadPercent > 20; },
+    msg: function(s) { return 'Overhead at ' + s.overheadPercent + '% is above typical (8-15%). Should some of this be in general conditions?'; },
+    priority: 1 },
+  { test: function(s) { return s.page === 'footbridge' && s.spanLength > 60 && s.bridgeType === 'clear-span-beam'; },
+    msg: function(s) { return s.spanLength + 'm clear span beam is pushing limits for timber. Consider arch or cable-stayed.'; },
+    priority: 0 },
+  { test: function(s) { return s.page === 'footbridge' && s.clearWidth && s.clearWidth < 2.5; },
+    msg: function(s) { return 'Clear width under 2.5m may not meet AASHTO/CSA pedestrian bridge minimums.'; },
+    priority: 1 },
+  { test: function(s) { return s.page === 'output' && !s.buildingArea; },
+    msg: function(s) { return 'No building area set — can\'t calculate $/SF. Add it in the Input page or metrics section.'; },
+    priority: 2 },
+  { test: function(s) { return s.page === 'input' && s.deliveryModel && !s.scopeDescription; },
+    msg: function(s) { return 'More scope detail = better Claude estimate. Paste in RFP excerpts, drawing notes, anything.'; },
+    priority: 2 },
+  { test: function(s) { return s.page === 'output' && s.lineItemCount === 0; },
+    msg: function(s) { return 'No line items yet. Generate an estimate from the Input page, or add items manually in the phase tabs.'; },
+    priority: 2 },
+  { test: function(s) { return s.bondInsurancePercent > 5; },
+    msg: function(s) { return 'Bond & insurance at ' + s.bondInsurancePercent + '% is high. Typical SC range is 1.5-3%.'; },
+    priority: 1 },
 ];
+
+function getScottSnapshot() {
+  var est = STATE.currentEstimate || {};
+  var assumptions = est.assumptions || getDefaultAssumptions();
+  var total = est.totalCost || calcEstimateTotal(est);
+  var area = est.buildingArea || 0;
+  var cfg = STATE.footbridgeConfig || {};
+  var lineItems = 0;
+  if (est.phases) {
+    Object.values(est.phases).forEach(function(p) {
+      if (p.items) lineItems += p.items.length;
+    });
+  }
+  return {
+    page: STATE.currentPage,
+    projectName: est.name || '',
+    projectType: est.projectType || 'commercial',
+    deliveryModel: est.deliveryModel || '',
+    primaryMaterial: est.primaryMaterial || 'timber',
+    buildingArea: area,
+    numStories: est.numStories || 0,
+    totalCost: total,
+    costPerSF: area > 0 ? total / area : 0,
+    targetPerSF: est.targetCostPerSF || 0,
+    marginPercent: assumptions.marginPercent || 0,
+    overheadPercent: assumptions.overheadPercent || 0,
+    contingencyPercent: assumptions.contingencyPercent || 0,
+    bondInsurancePercent: assumptions.bondInsurancePercent || 0,
+    scopeDescription: est.scopeDescription || '',
+    lineItemCount: lineItems,
+    spanLength: cfg.spanLength || 0,
+    clearWidth: cfg.clearWidth || 0,
+    bridgeType: cfg.bridgeType || '',
+    estimateCount: STATE.estimates ? STATE.estimates.length : 0,
+  };
+}
 
 var _scottState = {
   bubbleVisible: false,
   lastPage: null,
-  tipIndex: {},       // per-page tip index to cycle through
   autoDismissTimer: null,
-  greetingShown: false,
+  chatOpen: false,
+  chatHistory: [],
   dismissed: localStorage.getItem('sc-scott-dismissed') === 'true',
 };
 
-function scottGetTip(page) {
-  var tips = SCOTT_TIPS[page];
-  if (!tips || tips.length === 0) return null;
-  if (!_scottState.tipIndex[page]) _scottState.tipIndex[page] = 0;
-  var idx = _scottState.tipIndex[page];
-  var tip = tips[idx % tips.length];
-  _scottState.tipIndex[page] = (idx + 1) % tips.length;
-  return tip;
+var _scottEvalTimer = null;
+var _scottLastRule = null;
+
+function scottEvaluateRules() {
+  var snap = getScottSnapshot();
+  var triggered = SCOTT_RULES.filter(function(r) { try { return r.test(snap); } catch(e) { return false; } });
+  if (!triggered.length) return;
+  triggered.sort(function(a, b) { return a.priority - b.priority; });
+  var msgText = triggered[0].msg(snap);
+  if (msgText === _scottLastRule) return;
+  _scottLastRule = msgText;
+  scottShow(msgText, true);
+}
+
+function scottNotifyChange() {
+  if (_scottState.dismissed) return;
+  if (_scottEvalTimer) clearTimeout(_scottEvalTimer);
+  _scottEvalTimer = setTimeout(scottEvaluateRules, 800);
 }
 
 function scottShow(text, autoDismiss) {
@@ -5918,7 +5946,6 @@ function scottShow(text, autoDismiss) {
   bubble.classList.add('visible');
   _scottState.bubbleVisible = true;
   if (dot) dot.classList.remove('active');
-  // Clear previous timer
   if (_scottState.autoDismissTimer) clearTimeout(_scottState.autoDismissTimer);
   if (autoDismiss !== false) {
     _scottState.autoDismissTimer = setTimeout(scottDismiss, 12000);
@@ -5936,17 +5963,11 @@ function scottDismiss() {
 }
 
 function scottToggle() {
-  if (_scottState.bubbleVisible) {
-    scottDismiss();
+  if (_scottState.chatOpen) {
+    scottMinimize();
     return;
   }
-  var tip = scottGetTip(STATE.currentPage);
-  if (tip) {
-    scottShow(tip);
-  } else {
-    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
-    scottShow(g);
-  }
+  scottExpand();
 }
 
 function scottHide() {
@@ -5955,6 +5976,7 @@ function scottHide() {
   var widget = document.getElementById('scott-widget');
   if (widget) widget.classList.add('hidden');
   scottDismiss();
+  scottMinimize();
 }
 
 function scottReveal() {
@@ -5964,16 +5986,123 @@ function scottReveal() {
   if (widget) widget.classList.remove('hidden');
 }
 
-// Show a contextual tip when the user navigates to a new page
 function scottOnPageChange(page) {
   if (_scottState.dismissed) return;
   if (page === _scottState.lastPage) return;
   _scottState.lastPage = page;
-  // Show a little dot to hint there's a new tip (don't auto-popup on every nav)
   var dot = document.getElementById('scott-dot');
-  if (dot && SCOTT_TIPS[page]) {
-    dot.classList.add('active');
+  if (dot) dot.classList.add('active');
+  // Run rule engine on page change
+  scottNotifyChange();
+}
+
+// ---- SCOTT CHAT PANEL ----
+
+function scottExpand() {
+  var chat = document.getElementById('scott-chat');
+  var bubble = document.getElementById('scott-bubble');
+  var avatar = document.getElementById('scott-avatar');
+  if (!chat) return;
+  chat.classList.remove('collapsed');
+  chat.classList.add('open');
+  if (bubble) bubble.classList.remove('visible');
+  _scottState.chatOpen = true;
+  _scottState.bubbleVisible = false;
+  // Add greeting if first open
+  var msgs = document.getElementById('scott-messages');
+  if (msgs && msgs.children.length === 0) {
+    var snap = getScottSnapshot();
+    var greeting = snap.projectName
+      ? 'Hey! I\'m looking at <strong>' + esc(snap.projectName) + '</strong>' + (snap.totalCost > 0 ? ' — ' + fmt(snap.totalCost) + ' total' : '') + '. What do you want to know?'
+      : 'Hey! I\'m StructureScott, your estimating copilot. Ask me anything about your estimate.';
+    scottAddChatMessage('scott', greeting);
   }
+  var input = document.getElementById('scott-input');
+  if (input) setTimeout(function() { input.focus(); }, 100);
+}
+
+function scottMinimize() {
+  var chat = document.getElementById('scott-chat');
+  if (!chat) return;
+  chat.classList.remove('open');
+  chat.classList.add('collapsed');
+  _scottState.chatOpen = false;
+}
+
+function scottAddChatMessage(role, html) {
+  var msgs = document.getElementById('scott-messages');
+  if (!msgs) return;
+  var div = document.createElement('div');
+  div.className = 'scott-msg scott-msg-' + role;
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function scottReplaceLast(html) {
+  var msgs = document.getElementById('scott-messages');
+  if (!msgs || !msgs.lastElementChild) return;
+  msgs.lastElementChild.innerHTML = html;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function scottSendMessage() {
+  var input = document.getElementById('scott-input');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  scottAddChatMessage('user', esc(text));
+
+  var apiKey = localStorage.getItem('sc-anthropic-key');
+  if (!apiKey) {
+    scottAddChatMessage('scott', 'I need an API key to chat. Add your Anthropic key in <strong>Settings</strong> under "AI Configuration".');
+    return;
+  }
+
+  var thinkingEl = scottAddChatMessage('scott', '<em>Thinking...</em>');
+
+  _scottState.chatHistory.push({ role: 'user', content: text });
+
+  var snap = getScottSnapshot();
+  var systemPrompt = 'You are StructureScott, a senior mass timber estimator at StructureCraft. ' +
+    'Current estimate state: ' + JSON.stringify(snap) + '. ' +
+    'Speak in short, direct, practical sentences. Never hedge. Reference specific numbers. ' +
+    'Keep responses under 100 words unless asked for detail.';
+
+  var model = localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-5-20250929';
+
+  var messages = _scottState.chatHistory.slice(-10);
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: model,
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: messages,
+    }),
+  })
+  .then(function(res) {
+    if (!res.ok) throw new Error('API error ' + res.status);
+    return res.json();
+  })
+  .then(function(data) {
+    var reply = data.content && data.content[0] ? data.content[0].text : 'No response.';
+    _scottState.chatHistory.push({ role: 'assistant', content: reply });
+    scottReplaceLast(reply.replace(/\n/g, '<br>'));
+  })
+  .catch(function(err) {
+    scottReplaceLast('<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>');
+  });
 }
 
 function initScott() {
@@ -5982,12 +6111,21 @@ function initScott() {
     if (widget) widget.classList.add('hidden');
     return;
   }
-  // Show greeting after app loads with a slight delay
+  // Enter key sends message in chat
+  var chatInput = document.getElementById('scott-input');
+  if (chatInput) {
+    chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); scottSendMessage(); }
+    });
+  }
+  // Show greeting after app loads
   setTimeout(function() {
     if (_scottState.dismissed) return;
-    var g = SCOTT_GREETINGS[Math.floor(Math.random() * SCOTT_GREETINGS.length)];
-    scottShow(g, true);
-    _scottState.greetingShown = true;
+    var snap = getScottSnapshot();
+    var greeting = snap.projectName
+      ? 'Working on <strong>' + esc(snap.projectName) + '</strong>? Click me to chat!'
+      : 'Hey! I\'m <strong>StructureScott</strong>, your estimating copilot. Click to chat!';
+    scottShow(greeting, true);
   }, 2800);
 }
 
