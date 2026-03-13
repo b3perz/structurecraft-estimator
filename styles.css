@@ -1889,6 +1889,36 @@ tbody tr:last-child td { border-bottom: none; }
 .vol-table .vol-total .unit-rate-cell { color: var(--accent) !important; }
 .vol-table .vol-grand-total .unit-rate-cell { color: var(--accent) !important; font-size: 0.88rem; }
 
+/* --- FOOTBRIDGE METRICS BAR --- */
+.fb-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.fb-metric {
+  background: var(--bg-card);
+  padding: 12px 8px;
+  text-align: center;
+}
+.fb-metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+.fb-metric-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
 /* --- STRUCTURESCOTT AI BOT --- */
 .scott-widget {
   position: fixed;

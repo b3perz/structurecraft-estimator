@@ -90,6 +90,13 @@ const STATE = {
   footbridgeOutputTab: 'summary',
 };
 
+// Footbridge extended input defaults
+if (!STATE.fbSeismic) STATE.fbSeismic = 'zone-1';
+if (!STATE.fbDesignCode) STATE.fbDesignCode = 'aashto';
+if (!STATE.fbRamps) STATE.fbRamps = 'none';
+if (!STATE.fbLighting) STATE.fbLighting = 'none';
+if (!STATE.fbEnvironmental) STATE.fbEnvironmental = [];
+
 function createNewEstimate() {
   return {
     id: generateId(),
@@ -297,7 +304,16 @@ registerAction('removeFile', function(p) { removeFile(p.category, parseInt(p.idx
 registerAction('filterPricing', function(p) { filterPricing(p._value); });
 registerAction('handleFileSelect', function(p, t, e) { handleFileSelect(e, p.category); });
 registerAction('fbViewOutput', function() { STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab = 'summary'; navigateTo('output'); });
+registerAction('navigateToOutputFromFB', function() { STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab = 'summary'; navigateTo('output'); });
 registerAction('setFbState', function(p) { STATE[p.key] = p._value; });
+registerAction('updateFbState', function(p) { STATE[p.key] = p._value; saveState(); });
+registerAction('toggleFbEnv', function(p, target) {
+  if (!STATE.fbEnvironmental) STATE.fbEnvironmental = [];
+  var idx = STATE.fbEnvironmental.indexOf(p.env);
+  if (target.checked && idx === -1) STATE.fbEnvironmental.push(p.env);
+  else if (!target.checked && idx >= 0) STATE.fbEnvironmental.splice(idx, 1);
+  saveState();
+});
 registerAction('closeNotifPanel', function() { var el = document.getElementById('notif-panel'); if(el) el.remove(); });
 registerAction('viewQueue', function() { navigateTo('queue'); var el = document.getElementById('notif-panel'); if(el) el.remove(); });
 registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.removeItem('sc-activity-log'); var el = document.getElementById('notif-panel'); if(el) el.remove(); showToast('Activity log cleared.', 'info'); });
@@ -3067,6 +3083,72 @@ var BRIDGE_COST_HEURISTICS = {
   'king-post-truss': { low: 240, high: 400 },
 };
 
+function generatePlanSVG(cfg) {
+  var spanM = cfg.spanLength || 30;
+  var widthM = cfg.clearWidth || 3.5;
+  var svgW = 800, svgH = 200, pad = 50;
+  var drawW = svgW - pad * 2;
+  var drawH = svgH - pad * 2;
+  var scaleX = drawW / spanM;
+  var scaleY = drawH / Math.max(widthM, 2);
+  var scale = Math.min(scaleX, scaleY, 22);
+  var deckW = spanM * scale;
+  var deckH = widthM * scale;
+  var x0 = (svgW - deckW) / 2;
+  var y0 = (svgH - deckH) / 2;
+
+  var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">';
+  // Background
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="var(--bg-primary)" rx="4"/>';
+  // Deck rectangle
+  svg += '<rect x="' + x0 + '" y="' + y0 + '" width="' + deckW + '" height="' + deckH + '" fill="none" stroke="var(--accent)" stroke-width="2" rx="2"/>';
+  // Fill
+  svg += '<rect x="' + x0 + '" y="' + y0 + '" width="' + deckW + '" height="' + deckH + '" fill="var(--accent)" opacity="0.08" rx="2"/>';
+  // Railing lines (both sides)
+  var railOff = 3;
+  svg += '<line x1="' + x0 + '" y1="' + (y0 - railOff) + '" x2="' + (x0 + deckW) + '" y2="' + (y0 - railOff) + '" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6,3"/>';
+  svg += '<line x1="' + x0 + '" y1="' + (y0 + deckH + railOff) + '" x2="' + (x0 + deckW) + '" y2="' + (y0 + deckH + railOff) + '" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6,3"/>';
+  // Floor beam lines at ~2.4m spacing
+  var beamSpacing = 2.4 * scale;
+  var numBeams = Math.max(1, Math.floor(deckW / beamSpacing));
+  var actualSpacing = deckW / (numBeams + 1);
+  for (var i = 1; i <= numBeams; i++) {
+    var bx = x0 + i * actualSpacing;
+    svg += '<line x1="' + bx + '" y1="' + y0 + '" x2="' + bx + '" y2="' + (y0 + deckH) + '" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.5"/>';
+  }
+  // Dimension: Clear Width (right side)
+  var dimX = x0 + deckW + 18;
+  svg += '<line x1="' + dimX + '" y1="' + y0 + '" x2="' + dimX + '" y2="' + (y0 + deckH) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (dimX - 4) + '" y1="' + y0 + '" x2="' + (dimX + 4) + '" y2="' + y0 + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (dimX - 4) + '" y1="' + (y0 + deckH) + '" x2="' + (dimX + 4) + '" y2="' + (y0 + deckH) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<text x="' + (dimX + 6) + '" y="' + (y0 + deckH / 2) + '" fill="var(--text-secondary)" font-size="11" dominant-baseline="middle">' + widthM.toFixed(1) + 'm</text>';
+  // Dimension: Span length (bottom)
+  var dimY = y0 + deckH + 25;
+  svg += '<line x1="' + x0 + '" y1="' + dimY + '" x2="' + (x0 + deckW) + '" y2="' + dimY + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + x0 + '" y1="' + (dimY - 4) + '" x2="' + x0 + '" y2="' + (dimY + 4) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<line x1="' + (x0 + deckW) + '" y1="' + (dimY - 4) + '" x2="' + (x0 + deckW) + '" y2="' + (dimY + 4) + '" stroke="var(--text-secondary)" stroke-width="1"/>';
+  svg += '<text x="' + (x0 + deckW / 2) + '" y="' + (dimY + 14) + '" fill="var(--text-secondary)" font-size="11" text-anchor="middle">' + spanM + 'm span</text>';
+  // Label
+  svg += '<text x="' + (svgW / 2) + '" y="18" fill="var(--text-muted)" font-size="10" text-anchor="middle" text-transform="uppercase" letter-spacing="0.08em">PLAN VIEW</text>';
+  svg += '</svg>';
+  return svg;
+}
+
+function generateFbMetrics(cfg) {
+  var spanFt = cfg.spanLength * 3.281;
+  var widthFt = cfg.clearWidth * 3.281;
+  var deckSF = Math.round(spanFt * widthFt);
+  var glulamBF = Math.round(deckSF * 0.6);
+  var weightTons = Math.round(glulamBF * 0.23 / 2000 * 10) / 10;
+  var designLoad = 85 + 15 + 12;
+  return '<div class="fb-metrics-bar">' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + fmtNum(deckSF) + '</div><div class="fb-metric-label">Deck SF</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + fmtNum(glulamBF) + '</div><div class="fb-metric-label">Est. Glulam BF</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + weightTons + 't</div><div class="fb-metric-label">Est. Weight</div></div>' +
+    '<div class="fb-metric"><div class="fb-metric-value">' + designLoad + '</div><div class="fb-metric-label">Design Load (psf)</div></div>' +
+  '</div>';
+}
+
 function renderFootbridgePage() {
   var cfg = STATE.footbridgeConfig;
   var fbEst = STATE.footbridgeEstimate;
@@ -3086,14 +3168,14 @@ function renderFootbridgePage() {
     var fbCostPerDeckSF = fbDeckArea > 0 ? (fbGrand / fbDeckArea) : 0;
     var fbCostPerLF = fbSpanLF > 0 ? (fbGrand / fbSpanLF) : 0;
     outputHtml = '<div class="section-divider mt-24">Estimate Generated</div>' +
-      '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
+      '<div class="card mb-16 fb-estimate-output" style="border-left: 4px solid var(--accent);">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:12px;">' +
           '<div>' +
             '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
-            '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
+            '<div id="fb-animated-total" style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
             '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
           '</div>' +
-          '<button class="btn btn-accent" data-action="fbViewOutput">' +
+          '<button class="btn btn-accent" data-action="navigateToOutputFromFB">' +
             ICONS.output + ' View Full Output &rarr;' +
           '</button>' +
         '</div>' +
@@ -3139,6 +3221,10 @@ function renderFootbridgePage() {
           '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"clearWidth"}\'>' +
         '</div>' +
       '</div>' +
+      '<div id="fb-plan-container" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">' +
+        generatePlanSVG(cfg) +
+      '</div>' +
+      '<div id="fb-metrics-container">' + generateFbMetrics(cfg) + '</div>' +
     '</div>' +
 
     '<!-- Scope & Parameters -->' +
@@ -3229,6 +3315,57 @@ function renderFootbridgePage() {
       '</div>' +
     '</div>' +
 
+    '<!-- Design Constraints & Add-ons -->' +
+    '<div class="card mb-16">' +
+      '<div class="card-header"><div class="card-title">' + ICONS.warning + ' Design Constraints & Add-ons</div></div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Seismic Zone</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbSeismic"}\'>' +
+            '<option value="zone-1"' + (STATE.fbSeismic==='zone-1'?' selected':'') + '>Zone 1 (Low)</option>' +
+            '<option value="zone-2"' + (STATE.fbSeismic==='zone-2'?' selected':'') + '>Zone 2 (Moderate)</option>' +
+            '<option value="zone-3"' + (STATE.fbSeismic==='zone-3'?' selected':'') + '>Zone 3 (High)</option>' +
+            '<option value="zone-4"' + (STATE.fbSeismic==='zone-4'?' selected':'') + '>Zone 4 (Very High)</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Design Code</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbDesignCode"}\'>' +
+            '<option value="aashto"' + (STATE.fbDesignCode==='aashto'?' selected':'') + '>AASHTO LRFD</option>' +
+            '<option value="csa-s6"' + (STATE.fbDesignCode==='csa-s6'?' selected':'') + '>CAN/CSA S6</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Approach Ramps</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbRamps"}\'>' +
+            '<option value="none"' + (STATE.fbRamps==='none'?' selected':'') + '>None</option>' +
+            '<option value="one-side"' + (STATE.fbRamps==='one-side'?' selected':'') + '>One Side</option>' +
+            '<option value="both-sides"' + (STATE.fbRamps==='both-sides'?' selected':'') + '>Both Sides</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Lighting</label>' +
+          '<select class="form-select" data-change="updateFbState" data-params=\'{"key":"fbLighting"}\'>' +
+            '<option value="none"' + (STATE.fbLighting==='none'?' selected':'') + '>None</option>' +
+            '<option value="bollard"' + (STATE.fbLighting==='bollard'?' selected':'') + '>Bollard ($15K)</option>' +
+            '<option value="integrated"' + (STATE.fbLighting==='integrated'?' selected':'') + '>Integrated ($35K+)</option>' +
+            '<option value="overhead"' + (STATE.fbLighting==='overhead'?' selected':'') + '>Overhead ($55K+)</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<label class="form-label">Environmental Constraints</label>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:4px;">' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"fish-bearing"}\'' + ((STATE.fbEnvironmental||[]).indexOf('fish-bearing')>=0?' checked':'') + '> Fish-bearing waterway (+$25K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"nesting-season"}\'' + ((STATE.fbEnvironmental||[]).indexOf('nesting-season')>=0?' checked':'') + '> Nesting season (+$15K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"contaminated-soil"}\'' + ((STATE.fbEnvironmental||[]).indexOf('contaminated-soil')>=0?' checked':'') + '> Contaminated soil (+$40K)</label>' +
+          '<label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;"><input type="checkbox" data-action="toggleFbEnv" data-params=\'{"env":"wetland"}\'' + ((STATE.fbEnvironmental||[]).indexOf('wetland')>=0?' checked':'') + '> Wetland (+$30K)</label>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
     '<!-- Heuristic Range + Generate Button -->' +
     (function() {
       var heuristic = BRIDGE_COST_HEURISTICS[cfg.bridgeType];
@@ -3265,10 +3402,19 @@ function updateFootbridgeConfig(key, value) {
     if (_fbRafId) cancelAnimationFrame(_fbRafId);
     _fbRafId = requestAnimationFrame(function() {
       _fbRafId = null;
-      // Update SVG
+      // Update SVGs
       var svgContainer = document.getElementById('fb-svg-container');
       if (svgContainer) {
         svgContainer.innerHTML = generateBridgeSVG(STATE.footbridgeConfig);
+      }
+      var planContainer = document.getElementById('fb-plan-container');
+      if (planContainer) {
+        planContainer.innerHTML = generatePlanSVG(STATE.footbridgeConfig);
+      }
+      // Update metrics bar
+      var metricsContainer = document.getElementById('fb-metrics-container');
+      if (metricsContainer) {
+        metricsContainer.innerHTML = generateFbMetrics(STATE.footbridgeConfig);
       }
       // Update slider labels
       var labelMap = {
@@ -3545,6 +3691,14 @@ function generateFootbridgeEstimate() {
     foundationCostPer = 75000; geoInvestCost = 28000;
     extraFoundItems.push({ name: 'Cofferdam / Dewatering', qty: 1, unit: 'LS', rate: 35000, total: 35000 });
   }
+  // Seismic zone multiplier on foundation cost
+  var seismic = STATE.fbSeismic || 'zone-1';
+  var seismicMult = 1.0;
+  if (seismic === 'zone-2') seismicMult = 1.15;
+  else if (seismic === 'zone-3') seismicMult = 1.35;
+  else if (seismic === 'zone-4') seismicMult = 1.6;
+  foundationCostPer = Math.round(foundationCostPer * seismicMult);
+
   var numAbutments = 2;
   var numPiers = (bType === 'multi-span-beam') ? nSpans - 1 : 0;
 
@@ -3661,6 +3815,25 @@ function generateFootbridgeEstimate() {
   }
   installItems.push({ name: 'Site Mobilization & Demobilization', qty: 1, unit: 'LS', rate: Math.round(5000 * accessMult), total: Math.round(5000 * accessMult) });
 
+  // Approach ramps
+  var ramps = STATE.fbRamps || 'none';
+  var numRamps = ramps === 'both-sides' ? 2 : (ramps === 'one-side' ? 1 : 0);
+  if (numRamps > 0) {
+    var rampLen = Math.round(width * 3.281 * 12); // ADA 1:12 slope, length in LF
+    installItems.push({ name: 'Ramp Structure (' + numRamps + ' side' + (numRamps > 1 ? 's' : '') + ')', qty: numRamps, unit: 'each', rate: Math.round(rampLen * 320), total: numRamps * Math.round(rampLen * 320) });
+    installItems.push({ name: 'Ramp Railing', qty: Math.round(rampLen * numRamps * 2), unit: 'LF', rate: 85, total: Math.round(rampLen * numRamps * 2) * 85 });
+  }
+
+  // Lighting
+  var lighting = STATE.fbLighting || 'none';
+  if (lighting === 'bollard') {
+    railItems.push({ name: 'Bollard Lighting', qty: 1, unit: 'LS', rate: 15000, total: 15000 });
+  } else if (lighting === 'integrated') {
+    railItems.push({ name: 'Integrated LED Lighting', qty: 1, unit: 'LS', rate: 35000, total: 35000 });
+  } else if (lighting === 'overhead') {
+    railItems.push({ name: 'Overhead Lighting System', qty: 1, unit: 'LS', rate: 55000, total: 55000 });
+  }
+
   // Engineering
   var engItems = [
     { name: 'Structural Design & Analysis', qty: engDesignHrs, unit: 'hr', rate: a.engHourlyRate, total: engDesignHrs * a.engHourlyRate },
@@ -3708,6 +3881,14 @@ function generateFootbridgeEstimate() {
     { name: 'Testing & Inspection', qty: 1, unit: 'LS', rate: testingInspection, total: testingInspection },
     { name: 'Contingency (' + a.contingencyPercent + '%)', qty: 1, unit: 'LS', rate: contingencyAmt, total: contingencyAmt },
   ];
+
+  // Environmental constraints
+  var envItems = STATE.fbEnvironmental || [];
+  if (envItems.indexOf('fish-bearing') >= 0) gcItems.push({ name: 'Fish-Bearing Waterway Mitigation', qty: 1, unit: 'LS', rate: 25000, total: 25000 });
+  if (envItems.indexOf('nesting-season') >= 0) gcItems.push({ name: 'Nesting Season Restrictions', qty: 1, unit: 'LS', rate: 15000, total: 15000 });
+  if (envItems.indexOf('contaminated-soil') >= 0) gcItems.push({ name: 'Contaminated Soil Remediation', qty: 1, unit: 'LS', rate: 40000, total: 40000 });
+  if (envItems.indexOf('wetland') >= 0) gcItems.push({ name: 'Wetland Protection & Restoration', qty: 1, unit: 'LS', rate: 30000, total: 30000 });
+
   var gcSub = gcItems.reduce(function(s, i) { return s + i.total; }, 0);
   phases['fb-general-conditions'] = { items: gcItems, subtotal: gcSub };
 
@@ -3727,7 +3908,8 @@ function generateFootbridgeEstimate() {
       memberSize: memberWidthIn + '"×' + Math.round(memberDepthIn) + '"',
       primaryBF: primaryBF, trussWebBF: trussWebBF, floorBeamBF: floorBeamBF, deckBeamBF: deckBeamBF,
       totalGlulamBF: totalGlulamBF + deckBeamBF, steelTons: steelTons + tensionSteelTons,
-      totalPieces: totalPieces, designBasis: 'AASHTO LRFD Pedestrian + CAN/CSA O86',
+      totalPieces: totalPieces, seismicZone: seismic, ramps: ramps, lighting: lighting,
+      designBasis: (STATE.fbDesignCode === 'csa-s6' ? 'CAN/CSA S6' : 'AASHTO LRFD') + ' + CAN/CSA O86',
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -3743,8 +3925,44 @@ function generateFootbridgeEstimate() {
   STATE.outputActiveTab = 'summary';
   STATE.footbridgeOutputTab = 'summary';
   saveState();
-  navigateTo('output');
-  showToast('Bridge estimate complete — view full output.', 'success');
+
+  // Stay on footbridge page with animated reveal
+  renderPage(true);
+  showToast('Bridge estimate complete!', 'success');
+
+  // Animate the output card
+  setTimeout(function() {
+    var outputCard = document.querySelector('.fb-estimate-output');
+    if (outputCard) {
+      outputCard.style.opacity = '0';
+      outputCard.style.transform = 'translateY(16px)';
+      outputCard.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+      // Force reflow
+      outputCard.offsetHeight;
+      outputCard.style.opacity = '1';
+      outputCard.style.transform = 'translateY(0)';
+      // Scroll into view
+      outputCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Animate total counting up
+    var totalEl = document.getElementById('fb-animated-total');
+    if (totalEl) {
+      var finalVal = STATE.footbridgeEstimate.totalCost || 0;
+      var startTime = null;
+      var duration = 1200;
+      function animateCount(ts) {
+        if (!startTime) startTime = ts;
+        var progress = Math.min((ts - startTime) / duration, 1);
+        // ease-out cubic
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var current = Math.round(finalVal * eased);
+        totalEl.textContent = fmt(current);
+        if (progress < 1) requestAnimationFrame(animateCount);
+      }
+      totalEl.textContent = fmt(0);
+      requestAnimationFrame(animateCount);
+    }
+  }, 50);
 }
 
 
