@@ -1142,44 +1142,6 @@ tbody tr:last-child td { border-bottom: none; }
 .summary-divider { border-top: 1px solid var(--border); margin: 8px 0; }
 
 /* --- CONNECTOR PANEL --- */
-.connector-panel {
-  width: 380px;
-  min-width: 380px;
-  height: 100vh;
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-  z-index: 90;
-}
-.connector-panel.hidden { display: none; }
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.panel-header h3 { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
-.panel-content { flex: 1; overflow-y: auto; padding: 16px; }
-.connector-item {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 8px;
-  cursor: grab;
-  transition: all 0.15s ease;
-  font-size: 0.82rem;
-}
-.connector-item:hover { border-color: var(--accent); }
-.connector-item:active { cursor: grabbing; opacity: 0.8; }
-.connector-item-title { font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
-.connector-item-meta { font-size: 0.72rem; color: var(--text-muted); }
-.connector-item-cost { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 600; }
-.drag-handle { color: var(--text-muted); margin-right: 8px; cursor: grab; }
-
 /* --- MODAL --- */
 .modal-overlay {
   position: fixed;
@@ -1676,7 +1638,6 @@ tbody tr:last-child td { border-bottom: none; }
   .delivery-model-grid { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .upload-grid { grid-template-columns: 1fr; }
-  .connector-panel { width: 100%; min-width: 100%; }
 }
 
 /* --- ANIMATIONS --- */
@@ -2046,7 +2007,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* --- PRINT --- */
 @media print {
-  #sidebar, #topbar, .user-guide, .connector-panel, #toast-container, #command-palette, #modal-overlay, .scott-widget { display: none !important; }
+  #sidebar, #topbar, .user-guide, #toast-container, #command-palette, #modal-overlay, .scott-widget { display: none !important; }
   #main-content { margin: 0; }
   body { background: white; color: black; }
   .card { box-shadow: none; border: 1px solid #ddd; }

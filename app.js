@@ -71,8 +71,7 @@ const STATE = {
   currentTheme: localStorage.getItem('sc-theme') || 'midnight',
   sidebarCollapsed: false,
   guideOpen: false,
-  connectorOpen: false,
-  connectedEstimateId: null,
+  benchmarkComps: [],
   currentEstimate: createNewEstimate(),
   estimates: [],
   searchQuery: '',
@@ -232,14 +231,6 @@ function initDelegation() {
     var raw = t.getAttribute('data-params');
     var params = raw ? JSON.parse(raw) : {};
     if (action === 'handleDrop') handleDrop(e, params.category);
-    else if (action === 'dropConnectorItem') dropConnectorItem(e);
-  });
-  main.addEventListener('dragstart', function(e) {
-    var t = e.target.closest('[data-dragstart]');
-    if (!t) return;
-    var raw = t.getAttribute('data-params');
-    var params = raw ? JSON.parse(raw) : {};
-    dragConnectorItem(e, params.phaseKey, params.idx);
   });
 }
 
@@ -265,13 +256,12 @@ registerAction('shareEstimateLink', function() { shareEstimateLink(); });
 registerAction('toggleUnitRatePanel', function() { toggleUnitRatePanel(); });
 registerAction('exportEstimateXLSX', function() { exportEstimateXLSX(); });
 registerAction('exportEstimate', function() { exportEstimate(); });
-registerAction('connectEstimate', function(p) { connectEstimate(p.id || p._value); });
+registerAction('connectEstimate', function(p) { navigateTo('benchmarks'); });
 registerAction('viewQueueEstimate', function(p) { viewQueueEstimate(p.id); });
 registerAction('removeFromQueue', function(p) { removeFromQueue(p.id); });
 registerAction('stopQueueItem', function(p) { stopQueueItem(p.id); });
 registerAction('clearAllQueue', function() { if(confirm('Clear entire queue?')) clearAllQueue(); });
 registerAction('clearCompletedQueue', function() { clearCompletedQueue(); });
-registerAction('quickAddFromConnector', function(p) { quickAddFromConnector(p.phaseKey, parseInt(p.idx)); });
 registerAction('setTheme', function(p) { setTheme(p.id); });
 registerAction('toggleGuide', function() { toggleGuide(); });
 registerAction('togglePricingCategory', function(p, target) { togglePricingCategory(target.closest('.pricing-category-header') || target); });
@@ -288,10 +278,11 @@ registerAction('toggleVolRationale', function(p, target) { toggleVolRationale(ta
 registerAction('viewEstimateDetail', function(p) { viewEstimateDetail(p.id); });
 registerAction('duplicateEstimate', function(p, t, e) { e.stopPropagation(); duplicateEstimate(p.id); });
 registerAction('loadEstimateToWorkspace', function(p, t, e) { e.stopPropagation(); loadEstimateToWorkspace(p.id); });
-registerAction('connectEstimateFromCard', function(p, t, e) { e.stopPropagation(); connectEstimate(p.id); });
+registerAction('connectEstimateFromCard', function(p, t, e) { e.stopPropagation(); navigateTo('benchmarks'); });
 registerAction('toggleComparisonMode', function() { toggleComparisonMode(); });
 registerAction('pastFilterModel', function(p) { STATE.pastFilterModel = p._value; renderPage(); });
 registerAction('pastFilterStatus', function(p) { STATE.pastFilterStatus = p._value; renderPage(); });
+registerAction('setBenchmarkFilter', function(p) { STATE.benchmarkFilterType = p._value; renderPage(true); });
 registerAction('resetAssumptions', function() { resetAssumptions(); });
 registerAction('exportAllDataXLSX', function() { exportAllDataXLSX(); });
 registerAction('exportAllData', function() { exportAllData(); });
@@ -1390,6 +1381,21 @@ function renderInputPage() {
           '</select>' +
         '</div>' +
       '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Building Area (SF)</label>' +
+          '<input class="form-input" type="number" placeholder="e.g., 30000" value="' + (est.buildingArea || '') + '" data-change="updateEstimate" data-params=\'{"field":"buildingArea"}\'>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Stories</label>' +
+          '<input class="form-input" type="number" placeholder="e.g., 4" value="' + (est.numStories || '') + '" data-change="updateEstimate" data-params=\'{"field":"numStories"}\'>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Target $/SF</label>' +
+          '<input class="form-input" type="number" step="0.01" placeholder="e.g., 85.00" value="' + (est.targetCostPerSF || '') + '" data-change="updateEstimate" data-params=\'{"field":"targetCostPerSF"}\'>' +
+          '<div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">Optional — sets benchmark on Output page</div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
 
     '<!-- Primary Material & Structural System -->' +
@@ -1406,7 +1412,7 @@ function renderInputPage() {
           '<div class="material-toggle-group">' +
             Object.entries(PRIMARY_MATERIALS).map(function(entry) {
               var key = entry[0], mat = entry[1];
-              return '<button class="material-toggle-btn ' + ((est.primaryMaterial || 'timber') === key ? 'active' : '') + '" data-action="setPrimaryMaterial" data-params=\'{"category":"' + key + '"}\'}\'  "' + mat.description + '">' + mat.name + '</button>';
+              return '<button class="material-toggle-btn ' + ((est.primaryMaterial || 'timber') === key ? 'active' : '') + '" data-action="setPrimaryMaterial" data-params=\'{"category":"' + key + '"}\' title="' + esc(mat.description) + '">' + mat.name + '</button>';
             }).join('') +
           '</div>' +
         '</div>' +
@@ -1506,7 +1512,7 @@ function renderInputPage() {
     '<div class="section-divider">Document Uploads</div>' +
     '<div class="upload-grid mb-16">' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-params=\'{"category":"rfp"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
+        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-params=\'{"category":"rfp"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">RFP / Bid Documents</div>' +
           '<div class="upload-subtitle">Drop files here or click to browse</div>' +
@@ -1516,7 +1522,7 @@ function renderInputPage() {
         renderFileList(est.files.rfp, 'rfp') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-params=\'{"category":"drawings"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
+        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-params=\'{"category":"drawings"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Architectural Drawings</div>' +
           '<div class="upload-subtitle">SD or DD drawing sets</div>' +
@@ -1526,7 +1532,7 @@ function renderInputPage() {
         renderFileList(est.files.drawings, 'drawings') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-params=\'{"category":"structural"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
+        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-params=\'{"category":"structural"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Structural Drawings</div>' +
           '<div class="upload-subtitle">Structural engineering docs</div>' +
@@ -1536,7 +1542,7 @@ function renderInputPage() {
         renderFileList(est.files.structural, 'structural') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-params=\'{"category":"narratives"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
+        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-params=\'{"category":"narratives"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Narratives & Specs</div>' +
           '<div class="upload-subtitle">Structural narratives, specs</div>' +
@@ -1798,7 +1804,7 @@ function renderOutputPage() {
           (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) +
         '</div>';
       }).join('') +
-      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\'}\'  "color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\' style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
     '</div>' +
 
     '<!-- Tab Content -->' +
@@ -1885,9 +1891,42 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
     '</div>';
   }
 
+  // $/SF hero + target indicator
+  var costPerSFAllIn = bldgArea > 0 ? (grandTotal / bldgArea) : 0;
+  var costPerSFDirect = bldgArea > 0 ? (subtotal / bldgArea) : 0;
+  var costPerFloor = est.numStories > 0 ? (grandTotal / est.numStories) : 0;
+  var targetSF = est.targetCostPerSF || 0;
+  var targetIndicator = '';
+  if (targetSF > 0 && costPerSFAllIn > 0) {
+    var pctOff = ((costPerSFAllIn - targetSF) / targetSF) * 100;
+    var tColor = Math.abs(pctOff) <= 5 ? 'var(--success)' : (Math.abs(pctOff) <= 15 ? 'var(--warning)' : 'var(--danger)');
+    var tLabel = pctOff <= 0 ? (Math.abs(pctOff).toFixed(1) + '% under target') : (pctOff.toFixed(1) + '% over target');
+    targetIndicator = '<div style="font-size:0.78rem; font-weight:600; color:' + tColor + '; margin-top:4px;">' + ICONS.info + ' ' + tLabel + ' ($' + targetSF.toFixed(2) + '/SF target)</div>';
+  }
+
   return '<div class="slide-up">' +
     atAGlance +
     benchmarkCard +
+
+    // $/SF Hero Card
+    (bldgArea > 0 ?
+      '<div class="card mb-16" style="border-left: 4px solid var(--accent); text-align:center; padding:24px;">' +
+        '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:6px;">All-In Cost Per Square Foot</div>' +
+        '<div style="font-size:2rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">$' + costPerSFAllIn.toFixed(2) + '/SF</div>' +
+        targetIndicator +
+        '<div style="font-size:0.82rem; color:var(--text-secondary); margin-top:6px;">' + fmt(grandTotal) + ' total &middot; ' + fmtNum(bldgArea) + ' SF</div>' +
+        '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">$/SF All-In</div><div style="font-size:1.1rem; font-weight:700; color:var(--accent); font-family:JetBrains Mono, monospace;">$' + costPerSFAllIn.toFixed(2) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">$/SF Direct</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">$' + costPerSFDirect.toFixed(2) + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">$/Floor</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + (costPerFloor > 0 ? fmt(Math.round(costPerFloor)) : '—') + '</div></div>' +
+          '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Grand Total</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(grandTotal) + '</div></div>' +
+        '</div>' +
+      '</div>'
+    : '<div class="card mb-16" style="border-left: 4px solid var(--border); text-align:center; padding:20px; color:var(--text-muted);">' +
+        ICONS.info + ' Set building area on the Input page to see $/SF metrics' +
+      '</div>'
+    ) +
+
     // Cost Summary: At-Cost → Adjustments → Grand Total
     '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
       '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:end;">' +
@@ -1983,7 +2022,7 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
                     (pct > 15 ? '<span class="bar-chart-value">' + fmtPct(pct) + '</span>' : '') +
                   '</div>' +
                 '</div>' +
-                '<div class="bar-chart-amount">' + fmt(phaseTotal) + '</div>' +
+                '<div class="bar-chart-amount">' + fmt(phaseTotal) + (bldgArea > 0 ? ' <span style="font-size:0.72rem; color:var(--accent); font-family:JetBrains Mono, monospace;">($' + (phaseTotal / bldgArea).toFixed(2) + '/SF)</span>' : '') + '</div>' +
               '</div>';
             }).join('') +
           '</div>' +
@@ -2315,7 +2354,7 @@ function renderPhaseTab(est, phaseKey) {
         var confClass = item.confidence === 'high' ? 'confidence-high' : item.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
         return '<div class="line-item-wrapper" id="rationale-' + phaseKey + '-' + idx + '">' +
           '<div class="line-item-row" draggable="true">' +
-            '<div class="line-item-info" data-action="toggleItemRationale" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'}\'  "Show derivation">' + ICONS.chevDown + '</div>' +
+            '<div class="line-item-info" data-action="toggleItemRationale" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\' title="Show derivation">' + ICONS.chevDown + '</div>' +
             '<div class="line-item-grip">' + ICONS.grip + '</div>' +
             '<div><input class="line-item-input" value="' + esc(item.name) + '" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"name"}\'></div>' +
             '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"qty","type":"number"}\'></div>' +
@@ -2433,12 +2472,16 @@ function renderPastEstimatesPage() {
     '</div>' +
 
     '<!-- KPI Summary -->' +
-    '<div class="kpi-grid mb-20">' +
-      '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(estimates.reduce(function(s,e) { return s + (e.totalCost || calcEstimateTotal(e)); }, 0)) + '</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">' + (estimates.filter(function(e){return e.status==='won';}).length > 0 ? Math.round(estimates.filter(function(e){return e.status==='won';}).length / estimates.filter(function(e){return ['won','lost'].includes(e.status);}).length * 100) : 0) + '%</div><div class="kpi-change up">' + ICONS.arrowUp + ' ' + estimates.filter(function(e){return e.status==='won';}).length + ' won</div></div>' +
-      '<div class="kpi-card"><div class="kpi-label">Avg Estimate</div><div class="kpi-value">' + fmt(estimates.length > 0 ? estimates.reduce(function(s,e) { return s + (e.totalCost || 0); }, 0) / estimates.length : 0) + '</div></div>' +
-    '</div>' +
+    (function() {
+      var withArea = estimates.filter(function(e) { return e.buildingArea > 0; });
+      var avgCostPerSF = withArea.length > 0 ? withArea.reduce(function(s, e) { return s + ((e.totalCost || calcEstimateTotal(e)) / e.buildingArea); }, 0) / withArea.length : 0;
+      return '<div class="kpi-grid mb-20">' +
+        '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(estimates.reduce(function(s,e) { return s + (e.totalCost || calcEstimateTotal(e)); }, 0)) + '</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">' + (estimates.filter(function(e){return e.status==='won';}).length > 0 ? Math.round(estimates.filter(function(e){return e.status==='won';}).length / estimates.filter(function(e){return ['won','lost'].includes(e.status);}).length * 100) : 0) + '%</div><div class="kpi-change up">' + ICONS.arrowUp + ' ' + estimates.filter(function(e){return e.status==='won';}).length + ' won</div></div>' +
+        '<div class="kpi-card"><div class="kpi-label">Avg $/SF</div><div class="kpi-value" style="font-family:JetBrains Mono, monospace;">' + (avgCostPerSF > 0 ? '$' + avgCostPerSF.toFixed(2) : '—') + '</div>' + (withArea.length > 0 ? '<div class="kpi-change">' + withArea.length + ' with area</div>' : '') + '</div>' +
+      '</div>';
+    })() +
 
     (STATE.comparisonMode ? renderComparisonView(filtered) : '') +
 
@@ -2475,6 +2518,7 @@ function renderEstimateCard(est) {
       '<div style="text-align:right;">' +
         '<div class="badge badge-' + statusClass + '">' + statusClass + '</div>' +
         '<div class="text-mono" style="font-size:1.1rem; font-weight:700; margin-top:6px; color:var(--text-primary);">' + fmt(total) + '</div>' +
+        (est.buildingArea > 0 ? '<div style="font-size:0.78rem; font-weight:600; color:var(--accent); font-family:JetBrains Mono, monospace;">$' + (total / est.buildingArea).toFixed(2) + '/SF</div>' : '') +
       '</div>' +
     '</div>' +
     '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:8px;">' + esc(est.scopeDescription ? est.scopeDescription.substring(0, 150) + '...' : 'No description') + '</p>' +
@@ -2487,7 +2531,7 @@ function renderEstimateCard(est) {
       }).join('') +
     '</div>' +
     '<div style="margin-top:10px; display:flex; gap:6px;">' +
-      '<button class="btn btn-sm btn-ghost" data-action="connectEstimateFromCard" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.link + ' Connect</button>' +
+      '<button class="btn btn-sm btn-ghost" data-action="navigateTo" data-params=\'{"page":"benchmarks"}\'>' + ICONS.analytics + ' Benchmark</button>' +
       '<button class="btn btn-sm btn-ghost" data-action="duplicateEstimate" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.copy + ' Duplicate</button>' +
       '<button class="btn btn-sm btn-ghost" data-action="loadEstimateToWorkspace" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.edit + ' Load to Workspace</button>' +
     '</div>' +
@@ -2539,119 +2583,6 @@ function renderComparisonView(estimates) {
 }
 
 
-// --- CONNECTOR PAGE ---
-function renderConnectorPage() {
-  var connectedId = STATE.connectedEstimateId;
-  var connected = connectedId ? STATE.estimates.find(function(e) { return e.id === connectedId; }) : null;
-  var currentEst = STATE.currentEstimate;
-
-  var connectedHtml = '';
-  if (connected) {
-    var phasesList = '';
-    if (connected.phases) {
-      Object.entries(connected.phases).forEach(function(entry) {
-        var phaseKey = entry[0], phase = entry[1];
-        var itemsHtml = '';
-        if (phase.items) {
-          phase.items.forEach(function(item, idx) {
-            itemsHtml += '<div class="connector-item" draggable="true" data-dragstart="true" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'}\'  dblclick="quickAddFromConnector" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'>' +
-              '<div class="flex items-center gap-8" style="width:100%;">' +
-                '<span class="drag-handle">' + ICONS.grip + '</span>' +
-                '<div style="flex:1; min-width:0;">' +
-                  '<div class="connector-item-title">' + esc(item.name) + '</div>' +
-                  '<div class="connector-item-meta">' + fmtNum(item.qty) + ' ' + item.unit + ' x ' + fmtDec(item.rate) + '</div>' +
-                '</div>' +
-                '<div class="connector-item-cost">' + fmt(item.total) + '</div>' +
-              '</div>' +
-            '</div>';
-          });
-        }
-        phasesList += '<div style="margin-bottom: 12px;">' +
-          '<div style="font-size:0.75rem; font-weight:600; color:var(--accent); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.06em;">' +
-            (PHASE_DEFS[phaseKey] ? PHASE_DEFS[phaseKey].name : phaseKey) +
-          '</div>' + itemsHtml +
-        '</div>';
-      });
-    }
-    if (!phasesList) phasesList = '<p style="color:var(--text-muted); font-size:0.82rem;">No phase data available.</p>';
-
-    connectedHtml = '<div class="card mb-16">' +
-      '<div class="card-header">' +
-        '<div><div class="card-title">' + esc(connected.name) + '</div>' +
-        '<div class="card-subtitle">' + esc(connected.client) + ' - ' + esc(connected.location) + ' - ' + (DELIVERY_MODELS[connected.deliveryModel] ? DELIVERY_MODELS[connected.deliveryModel].name : '') + '</div></div>' +
-        '<div class="badge badge-' + connected.status + '">' + connected.status + '</div>' +
-      '</div>' +
-      '<p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">' + esc(connected.scopeDescription || '') + '</p>' +
-      '<div class="section-divider">Drag Items Into Your Current Estimate</div>' +
-      phasesList +
-    '</div>';
-  } else {
-    connectedHtml = '<div class="empty-state">' + ICONS.connector + '<h3>No estimate connected</h3><p>Select a past estimate above to browse and drag costs into your current workspace.</p></div>';
-  }
-
-  var currentPhasesHtml = '';
-  if (currentEst.phases && Object.keys(currentEst.phases).length > 0) {
-    Object.entries(currentEst.phases).forEach(function(entry) {
-      var phaseKey = entry[0], phase = entry[1];
-      var itemLines = '';
-      if (phase.items) {
-        phase.items.forEach(function(item) {
-          itemLines += '<div style="padding:4px 8px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between;"><span>' + esc(item.name) + '</span><span class="text-mono">' + fmt(item.total) + '</span></div>';
-        });
-      }
-      currentPhasesHtml += '<div style="margin-bottom:12px;"><div style="font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">' + (PHASE_DEFS[phaseKey] ? PHASE_DEFS[phaseKey].name : phaseKey) + ' -- ' + fmt(calcPhaseTotal(phase)) + '</div>' + itemLines + '</div>';
-    });
-  } else {
-    currentPhasesHtml = '<div class="empty-state" style="padding:40px 20px;"><p>Drop items here to build your estimate.<br>Go to Output tab to see the full breakdown.</p></div>';
-  }
-
-  // Phase-by-phase comparison table
-  var comparisonHtml = '';
-  if (connected && currentEst.phases && Object.keys(currentEst.phases).length > 0) {
-    var currentTotal = calcEstimateTotal(currentEst);
-    var refTotal = calcEstimateTotal(connected);
-    var allPhaseKeys = {};
-    Object.keys(currentEst.phases || {}).forEach(function(k) { allPhaseKeys[k] = true; });
-    Object.keys(connected.phases || {}).forEach(function(k) { allPhaseKeys[k] = true; });
-
-    comparisonHtml = '<div class="card mb-16">' +
-      '<div class="card-header"><div class="card-title">Phase-by-Phase Comparison</div></div>' +
-      '<table class="vol-table"><thead><tr><th>Phase</th><th class="cell-right">Current</th><th class="cell-right">Reference</th><th class="cell-right">Variance</th></tr></thead><tbody>' +
-      Object.keys(allPhaseKeys).map(function(pk) {
-        var curPhaseTotal = currentEst.phases && currentEst.phases[pk] ? calcPhaseTotal(currentEst.phases[pk]) : 0;
-        var refPhaseTotal = connected.phases && connected.phases[pk] ? calcPhaseTotal(connected.phases[pk]) : 0;
-        var variance = curPhaseTotal - refPhaseTotal;
-        var varianceColor = variance > 0 ? 'var(--danger)' : variance < 0 ? 'var(--success)' : 'var(--text-muted)';
-        var phaseName = PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk;
-        return '<tr><td>' + phaseName + '</td><td class="mono cell-right">' + fmt(curPhaseTotal) + '</td><td class="mono cell-right">' + fmt(refPhaseTotal) + '</td><td class="mono cell-right" style="color:' + varianceColor + ';">' + (variance > 0 ? '+' : '') + fmt(variance) + '</td></tr>';
-      }).join('') +
-      '<tr class="vol-grand-total"><td>Total</td><td class="mono cell-right">' + fmt(currentTotal) + '</td><td class="mono cell-right">' + fmt(refTotal) + '</td><td class="mono cell-right" style="color:' + (currentTotal - refTotal > 0 ? 'var(--danger)' : 'var(--success)') + ';">' + (currentTotal - refTotal > 0 ? '+' : '') + fmt(currentTotal - refTotal) + '</td></tr>' +
-      '</tbody></table></div>';
-  }
-
-  return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.connector + ' Reference & Compare</div><div class="section-desc">Compare your current estimate against a past project. Drag line items to reuse proven costs.</div></div></div>' +
-
-    '<div class="card mb-16"><div class="card-header"><div class="card-title">Select Reference Estimate</div></div>' +
-      '<div class="form-group"><select class="form-select" data-change="connectEstimate"><option value="">-- Choose a past estimate to compare --</option>' +
-        STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + esc(est.name) + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
-      '</select></div>' +
-    '</div>' +
-
-    comparisonHtml +
-
-    '<div class="grid-2">' +
-      '<div>' + connectedHtml + '</div>' +
-      '<div>' +
-        '<div class="card" style="min-height: 300px;" data-drop="dropConnectorItem" data-dragover="true" data-dragleave="true">' +
-          '<div class="card-header"><div class="card-title">Current: ' + (currentEst.name || 'Untitled') + '</div><div class="badge badge-draft">' + (currentEst.deliveryModel && DELIVERY_MODELS[currentEst.deliveryModel] ? DELIVERY_MODELS[currentEst.deliveryModel].name : 'No model') + '</div></div>' +
-          '<p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">Drag items from reference, or double-click to quick-add.</p>' +
-          currentPhasesHtml +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-  '</div>';
-}
 
 // --- PRICING LIBRARY PAGE ---
 function renderPricingLibraryPage() {
@@ -3125,6 +3056,17 @@ function generateBridgeSVG(config) {
 
 
 // ---- SECTION 9C: FOOTBRIDGE PAGE ----
+var BRIDGE_COST_HEURISTICS = {
+  'parabolic-arch': { low: 320, high: 520 },
+  'tied-arch': { low: 350, high: 560 },
+  'warren-truss': { low: 280, high: 450 },
+  'pratt-truss': { low: 290, high: 460 },
+  'cable-stayed': { low: 400, high: 650 },
+  'clear-span-beam': { low: 200, high: 380 },
+  'multi-span-beam': { low: 180, high: 340 },
+  'king-post-truss': { low: 240, high: 400 },
+};
+
 function renderFootbridgePage() {
   var cfg = STATE.footbridgeConfig;
   var fbEst = STATE.footbridgeEstimate;
@@ -3139,16 +3081,27 @@ function renderFootbridgePage() {
     Object.values(fbEst.phases).forEach(function(p) { fbTotal += calcPhaseTotal(p); });
     var fbA = fbEst.assumptions || getDefaultAssumptions();
     var fbGrand = fbTotal + fbTotal * ((fbA.marginPercent + fbA.overheadPercent + fbA.bondInsurancePercent) / 100);
+    var fbDeckArea = cfg.spanLength * 3.281 * cfg.clearWidth * 3.281; // m to ft conversion for deck SF
+    var fbSpanLF = cfg.spanLength * 3.281;
+    var fbCostPerDeckSF = fbDeckArea > 0 ? (fbGrand / fbDeckArea) : 0;
+    var fbCostPerLF = fbSpanLF > 0 ? (fbGrand / fbSpanLF) : 0;
     outputHtml = '<div class="section-divider mt-24">Estimate Generated</div>' +
-      '<div class="card" style="border-left: 4px solid var(--accent); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
-        '<div>' +
-          '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
-          '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
-          '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
+      '<div class="card mb-16" style="border-left: 4px solid var(--accent);">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:12px;">' +
+          '<div>' +
+            '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:4px;">Bridge Estimate Total</div>' +
+            '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
+            '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
+          '</div>' +
+          '<button class="btn btn-accent" data-action="fbViewOutput">' +
+            ICONS.output + ' View Full Output &rarr;' +
+          '</button>' +
         '</div>' +
-        '<button class="btn btn-accent" data-action="fbViewOutput">' +
-          ICONS.output + ' View Full Output &rarr;' +
-        '</button>' +
+        '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; padding-top:12px; border-top:1px solid var(--border);">' +
+          '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">$/Deck SF</div><div style="font-size:1.1rem; font-weight:700; color:var(--accent); font-family:JetBrains Mono, monospace;">$' + fbCostPerDeckSF.toFixed(2) + '</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">$/LF of Span</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">$' + fbCostPerLF.toFixed(2) + '</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:2px;">Deck Area</div><div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmtNum(Math.round(fbDeckArea)) + ' SF</div></div>' +
+        '</div>' +
       '</div>';
   }
 
@@ -3276,7 +3229,22 @@ function renderFootbridgePage() {
       '</div>' +
     '</div>' +
 
-    '<!-- Generate Button -->' +
+    '<!-- Heuristic Range + Generate Button -->' +
+    (function() {
+      var heuristic = BRIDGE_COST_HEURISTICS[cfg.bridgeType];
+      var deckAreaEst = cfg.spanLength * 3.281 * cfg.clearWidth * 3.281;
+      var heuristicHtml = '';
+      if (heuristic && deckAreaEst > 0) {
+        var lowTotal = heuristic.low * deckAreaEst;
+        var highTotal = heuristic.high * deckAreaEst;
+        heuristicHtml = '<div class="card mb-16" style="border-left: 3px solid var(--accent); padding:16px;">' +
+          '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent); font-weight:700; margin-bottom:6px;">' + ICONS.analytics + ' Estimated Range (' + (BRIDGE_TYPES[cfg.bridgeType] ? BRIDGE_TYPES[cfg.bridgeType].name : cfg.bridgeType) + ')</div>' +
+          '<div style="font-size:1.1rem; font-weight:700; color:var(--text-primary); font-family:JetBrains Mono, monospace;">' + fmt(Math.round(lowTotal)) + ' — ' + fmt(Math.round(highTotal)) + '</div>' +
+          '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">$' + heuristic.low + ' — $' + heuristic.high + ' /SF deck &middot; ' + fmtNum(Math.round(deckAreaEst)) + ' SF deck area</div>' +
+        '</div>';
+      }
+      return heuristicHtml;
+    })() +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
       '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Configure parameters above, then generate a detailed footbridge cost estimate.</p>' +
       '<button class="btn btn-lg btn-accent" data-action="generateFootbridgeEstimate" style="padding: 14px 40px; font-size: 1rem;">' +
@@ -3781,6 +3749,7 @@ function generateFootbridgeEstimate() {
 // ---- SECTION 10: ACTION FUNCTIONS ----
 
 function updateEstimate(field, value) {
+  if (field === 'buildingArea' || field === 'numStories' || field === 'targetCostPerSF') value = parseFloat(value) || 0;
   STATE.currentEstimate[field] = value;
   STATE.currentEstimate.updatedAt = new Date().toISOString();
   saveState();
@@ -4730,15 +4699,6 @@ function clearCurrentEstimate() {
   showToast('Estimate cleared. Ready for new input.', 'info');
 }
 
-function connectEstimate(id) {
-  STATE.connectedEstimateId = id;
-  if (STATE.currentPage !== 'connector') {
-    navigateTo('connector');
-  } else {
-    renderPage(true);
-  }
-}
-
 function duplicateEstimate(id) {
   var orig = STATE.estimates.find(function(e) { return e.id === id; });
   if (!orig) return;
@@ -5323,36 +5283,6 @@ function removeFile(category, index) {
   renderPage();
 }
 
-// Connector drag-drop
-function dragConnectorItem(event, phaseKey, idx) {
-  event.dataTransfer.setData('text/plain', JSON.stringify({ phaseKey: phaseKey, idx: idx }));
-}
-
-function dropConnectorItem(event) {
-  event.preventDefault();
-  event.currentTarget.classList.remove('drag-over', 'drop-target');
-  try {
-    var data = JSON.parse(event.dataTransfer.getData('text/plain'));
-    quickAddFromConnector(data.phaseKey, data.idx);
-  } catch(e) {}
-}
-
-function quickAddFromConnector(phaseKey, idx) {
-  var connected = STATE.estimates.find(function(e) { return e.id === STATE.connectedEstimateId; });
-  if (!connected || !connected.phases || !connected.phases[phaseKey]) return;
-  var item = connected.phases[phaseKey].items[idx];
-  if (!item) return;
-
-  if (!STATE.currentEstimate.phases) STATE.currentEstimate.phases = {};
-  if (!STATE.currentEstimate.phases[phaseKey]) {
-    STATE.currentEstimate.phases[phaseKey] = { items: [] };
-  }
-  STATE.currentEstimate.phases[phaseKey].items.push(Object.assign({}, item));
-  STATE.currentEstimate.phases[phaseKey].subtotal = calcPhaseTotal(STATE.currentEstimate.phases[phaseKey]);
-  saveState();
-  renderPage();
-  showToast('Added "' + item.name + '" to ' + (PHASE_DEFS[phaseKey] ? PHASE_DEFS[phaseKey].name : phaseKey), 'success');
-}
 
 
 // ---- SECTION 10C: ESTIMATE QUEUE PAGE ----
@@ -5421,7 +5351,7 @@ function renderQueuePage() {
               '</div>' +
               '<div style="display:flex; align-items:center; gap:8px;">' +
                 '<span class="queue-elapsed" style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</span>' +
-                '<button class="btn btn-sm" style="padding:3px 8px; font-size:0.7rem; color:var(--danger, #ef4444); border-color:var(--danger, #ef4444);" data-action="stopQueueItem" data-params=\'{"id":"' + q.id + '"}\'}\'  "Stop this estimate">' + ICONS.trash + ' Stop</button>' +
+                '<button class="btn btn-sm" style="padding:3px 8px; font-size:0.7rem; color:var(--danger, #ef4444); border-color:var(--danger, #ef4444);" data-action="stopQueueItem" data-params=\'{"id":"' + q.id + '"}\' title="Stop this estimate">' + ICONS.trash + ' Stop</button>' +
               '</div>' +
             '</div>' +
             '<div class="queue-step-text" style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
@@ -5630,7 +5560,7 @@ var PAGE_MAP = {
   'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Estimate > Footbridge' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Library > Past Estimates' },
   'benchmarks': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
-  'connector': { title: 'Reference & Compare', render: renderConnectorPage, breadcrumb: 'Tools > Reference & Compare' },
+  'connector': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Library > Pricing Library' },
   'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Library > Analytics' },
   'scenarios': { title: 'What-If Scenarios', render: renderScenariosPage, breadcrumb: 'Tools > What-If Scenarios' },
@@ -5821,7 +5751,7 @@ function initCommandPalette() {
     { label: 'View Estimate Output', action: function() { navigateTo('output'); }, icon: ICONS.output },
     { label: 'Footbridge Estimator', action: function() { navigateTo('footbridge'); }, icon: ICONS.footbridge },
     { label: 'Browse Past Estimates', action: function() { navigateTo('past-estimates'); }, icon: ICONS.past },
-    { label: 'Open Connector', action: function() { navigateTo('connector'); }, icon: ICONS.connector },
+    { label: 'Open Benchmarks', action: function() { navigateTo('benchmarks'); }, icon: ICONS.analytics },
     { label: 'Open Pricing Library', action: function() { navigateTo('pricing-library'); }, icon: ICONS.pricing },
     { label: 'Open Analytics', action: function() { navigateTo('analytics'); }, icon: ICONS.analytics },
     { label: 'View Estimate Queue', action: function() { navigateTo('queue'); }, icon: ICONS.bolt },
@@ -6153,7 +6083,6 @@ function initApp() {
   document.getElementById('nav-icon-output').innerHTML = ICONS.output;
   document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
-  document.getElementById('nav-icon-connector').innerHTML = ICONS.connector;
   document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
   var analyticsNav = document.getElementById('nav-icon-analytics');
   if (analyticsNav) analyticsNav.innerHTML = ICONS.analytics;
@@ -6558,24 +6487,146 @@ var INDUSTRY_BENCHMARKS = {
   'footbridge': { label: 'Pedestrian Footbridge', low: 2500, mid: 4500, high: 8000, unit: '$/LF' },
 };
 
+registerAction('setBenchmarkComp', function(p) {
+  if (!STATE.benchmarkComps) STATE.benchmarkComps = [];
+  STATE.benchmarkComps[parseInt(p.index)] = p._value || null;
+  renderPage(true);
+});
+
 function renderBenchmarksPage() {
   var estimates = STATE.estimates;
-  var withArea = estimates.filter(function(e) { return e.buildingArea > 0 && e.totalCost > 0; });
+  var currentEst = STATE.currentEstimate;
+  var withArea = estimates.filter(function(e) { return e.buildingArea > 0 && (e.totalCost > 0 || calcEstimateTotal(e) > 0); });
+  var filterType = STATE.benchmarkFilterType || 'all';
+  var filteredWithArea = filterType === 'all' ? withArea : withArea.filter(function(e) { return e.projectType === filterType; });
 
-  var byMaterial = {};
-  withArea.forEach(function(e) {
-    var mat = e.primaryMaterial || 'timber';
-    if (!byMaterial[mat]) byMaterial[mat] = [];
-    byMaterial[mat].push({ name: e.name, costPerSF: e.totalCost / e.buildingArea, total: e.totalCost, area: e.buildingArea });
-  });
+  // Current estimate $/SF
+  var currentTotal = currentEst ? (currentEst.totalCost || calcEstimateTotal(currentEst)) : 0;
+  var currentArea = currentEst ? (currentEst.buildingArea || 0) : 0;
+  var currentSF = currentArea > 0 ? (currentTotal / currentArea) : 0;
 
-  var maxSF = 0;
-  withArea.forEach(function(e) { var sf = e.totalCost / e.buildingArea; if (sf > maxSF) maxSF = sf; });
+  // Distribution chart SVG
+  var chartWidth = 700, chartHeight = 120, dotR = 6, padding = 40;
+  var allSF = filteredWithArea.map(function(e) { return (e.totalCost || calcEstimateTotal(e)) / e.buildingArea; });
+  if (currentSF > 0) allSF.push(currentSF);
+  var minSF = allSF.length > 0 ? Math.min.apply(null, allSF) : 0;
+  var maxSF = allSF.length > 0 ? Math.max.apply(null, allSF) : 100;
+  var range = maxSF - minSF || 1;
+  minSF = Math.max(0, minSF - range * 0.1);
+  maxSF = maxSF + range * 0.1;
+  range = maxSF - minSF;
 
-  return '<div class="fade-in">' +
-    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Benchmarks</div><div class="section-desc">$/SF benchmarks across your estimate library and industry data</div></div></div>' +
+  var svgDots = filteredWithArea.map(function(e) {
+    var sf = (e.totalCost || calcEstimateTotal(e)) / e.buildingArea;
+    var x = padding + ((sf - minSF) / range) * (chartWidth - padding * 2);
+    var isCurrent = currentEst && e.id === currentEst.id;
+    return '<circle cx="' + x + '" cy="' + (chartHeight / 2) + '" r="' + (isCurrent ? dotR + 3 : dotR) + '" fill="' + (isCurrent ? 'var(--accent)' : 'var(--text-muted)') + '" opacity="' + (isCurrent ? '1' : '0.5') + '" style="cursor:pointer;">' +
+      '<title>' + esc(e.name || 'Untitled') + ': $' + sf.toFixed(2) + '/SF</title></circle>';
+  }).join('');
 
-    '<div class="section-divider">Industry Benchmarks (2025-2026)</div>' +
+  // Add current estimate dot if not in saved list
+  if (currentSF > 0 && (!currentEst || !estimates.some(function(e) { return e.id === currentEst.id && e.buildingArea > 0; }))) {
+    var cx = padding + ((currentSF - minSF) / range) * (chartWidth - padding * 2);
+    svgDots += '<circle cx="' + cx + '" cy="' + (chartHeight / 2) + '" r="' + (dotR + 3) + '" fill="var(--accent)" opacity="1"><title>Current: $' + currentSF.toFixed(2) + '/SF</title></circle>';
+  }
+
+  // Axis labels
+  var axisLabels = '';
+  var steps = 5;
+  for (var s = 0; s <= steps; s++) {
+    var val = minSF + (range / steps) * s;
+    var ax = padding + (s / steps) * (chartWidth - padding * 2);
+    axisLabels += '<text x="' + ax + '" y="' + (chartHeight - 5) + '" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="JetBrains Mono, monospace">$' + val.toFixed(0) + '</text>';
+  }
+
+  var distributionSvg = '<svg viewBox="0 0 ' + chartWidth + ' ' + chartHeight + '" width="100%" style="max-height:140px;">' +
+    '<line x1="' + padding + '" y1="' + (chartHeight / 2) + '" x2="' + (chartWidth - padding) + '" y2="' + (chartHeight / 2) + '" stroke="var(--border)" stroke-width="2"/>' +
+    svgDots + axisLabels +
+  '</svg>';
+
+  // Comparison selector (3 dropdowns)
+  if (!STATE.benchmarkComps) STATE.benchmarkComps = [];
+  var compDropdowns = '';
+  for (var ci = 0; ci < 3; ci++) {
+    var selId = STATE.benchmarkComps[ci] || '';
+    compDropdowns += '<div class="form-group">' +
+      '<label class="form-label">Comparison ' + (ci + 1) + '</label>' +
+      '<select class="form-select" data-change="setBenchmarkComp" data-params=\'{"index":"' + ci + '"}\'>' +
+        '<option value="">-- Select --</option>' +
+        estimates.map(function(e) {
+          var eTotal = e.totalCost || calcEstimateTotal(e);
+          var disabled = !e.buildingArea || e.buildingArea <= 0;
+          return '<option value="' + e.id + '"' + (selId === e.id ? ' selected' : '') + (disabled ? ' disabled style="color:var(--text-muted);"' : '') + '>' + esc(e.name || 'Untitled') + (disabled ? ' (no area)' : ' — $' + (eTotal / e.buildingArea).toFixed(2) + '/SF') + '</option>';
+        }).join('') +
+      '</select>' +
+    '</div>';
+  }
+
+  // Comparison table
+  var compTable = '';
+  var compEstimates = STATE.benchmarkComps.map(function(id) {
+    return id ? estimates.find(function(e) { return e.id === id; }) : null;
+  }).filter(function(e) { return e && e.buildingArea > 0; });
+
+  if (compEstimates.length > 0 && currentEst) {
+    var allPhaseKeys = {};
+    if (currentEst.phases) Object.keys(currentEst.phases).forEach(function(k) { allPhaseKeys[k] = true; });
+    compEstimates.forEach(function(ce) {
+      if (ce.phases) Object.keys(ce.phases).forEach(function(k) { allPhaseKeys[k] = true; });
+    });
+
+    var compHeaders = '<th style="text-align:right;">Current $/SF</th>' +
+      compEstimates.map(function(ce, idx) { return '<th style="text-align:right;">' + esc(ce.name || 'Comp ' + (idx + 1)) + ' $/SF</th>'; }).join('') +
+      '<th style="text-align:right;">Variance</th>';
+
+    var compRows = Object.keys(allPhaseKeys).map(function(pk) {
+      var curPhaseTotal = currentEst.phases && currentEst.phases[pk] ? calcPhaseTotal(currentEst.phases[pk]) : 0;
+      var curPhaseSF = currentArea > 0 ? curPhaseTotal / currentArea : 0;
+      var phaseName = PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk;
+      var cells = '<td>' + phaseName + '</td><td class="mono" style="text-align:right;">$' + curPhaseSF.toFixed(2) + '</td>';
+      var totalVariance = 0;
+      var varCount = 0;
+      compEstimates.forEach(function(ce) {
+        var cePhaseTotal = ce.phases && ce.phases[pk] ? calcPhaseTotal(ce.phases[pk]) : 0;
+        var cePhaseSF = ce.buildingArea > 0 ? cePhaseTotal / ce.buildingArea : 0;
+        cells += '<td class="mono" style="text-align:right;">$' + cePhaseSF.toFixed(2) + '</td>';
+        if (cePhaseSF > 0 && curPhaseSF > 0) {
+          totalVariance += ((curPhaseSF - cePhaseSF) / cePhaseSF) * 100;
+          varCount++;
+        }
+      });
+      var avgVar = varCount > 0 ? totalVariance / varCount : 0;
+      var varColor = Math.abs(avgVar) <= 15 ? 'var(--success)' : (Math.abs(avgVar) <= 30 ? 'var(--warning)' : 'var(--danger)');
+      cells += '<td class="mono" style="text-align:right; color:' + varColor + ';">' + (avgVar > 0 ? '+' : '') + avgVar.toFixed(1) + '%</td>';
+      return '<tr>' + cells + '</tr>';
+    }).join('');
+
+    // Grand total row
+    var curGrandSF = currentSF;
+    var grandCells = '<td style="font-weight:700;">Grand Total</td><td class="mono" style="text-align:right; font-weight:700;">$' + curGrandSF.toFixed(2) + '</td>';
+    compEstimates.forEach(function(ce) {
+      var ceTotal = ce.totalCost || calcEstimateTotal(ce);
+      var ceSF = ce.buildingArea > 0 ? ceTotal / ce.buildingArea : 0;
+      grandCells += '<td class="mono" style="text-align:right; font-weight:700;">$' + ceSF.toFixed(2) + '</td>';
+    });
+    var avgGrandVar = compEstimates.reduce(function(s, ce) {
+      var ceSF = ce.buildingArea > 0 ? (ce.totalCost || calcEstimateTotal(ce)) / ce.buildingArea : 0;
+      return s + (ceSF > 0 && curGrandSF > 0 ? ((curGrandSF - ceSF) / ceSF) * 100 : 0);
+    }, 0) / (compEstimates.length || 1);
+    var gvColor = Math.abs(avgGrandVar) <= 15 ? 'var(--success)' : (Math.abs(avgGrandVar) <= 30 ? 'var(--warning)' : 'var(--danger)');
+    grandCells += '<td class="mono" style="text-align:right; font-weight:700; color:' + gvColor + ';">' + (avgGrandVar > 0 ? '+' : '') + avgGrandVar.toFixed(1) + '%</td>';
+
+    compTable = '<div class="section-divider">Phase-by-Phase $/SF Comparison</div>' +
+      '<div class="card mb-20">' +
+        '<table class="vol-table"><thead><tr><th>Phase</th>' + compHeaders + '</tr></thead><tbody>' +
+        compRows +
+        '<tr class="vol-grand-total">' + grandCells + '</tr>' +
+        '</tbody></table>' +
+      '</div>';
+  }
+
+  // Industry benchmarks
+  var industryHtml = '<div class="section-divider">Industry Benchmarks (2025-2026)</div>' +
     '<div class="benchmark-matrix">' +
       Object.keys(INDUSTRY_BENCHMARKS).map(function(key) {
         var bm = INDUSTRY_BENCHMARKS[key];
@@ -6586,49 +6637,42 @@ function renderBenchmarksPage() {
           '<div class="bm-range">Range: $' + bm.low + ' — $' + bm.high + '</div>' +
         '</div>';
       }).join('') +
+    '</div>';
+
+  return '<div class="fade-in">' +
+    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Benchmarks</div><div class="section-desc">$/SF benchmarks across your estimate library and industry data</div></div></div>' +
+
+    // Section 1: Distribution Chart
+    '<div class="section-divider">$/SF Distribution</div>' +
+    '<div class="card mb-20">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
+        '<div style="font-size:0.72rem; color:var(--text-muted);">' +
+          '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--accent); margin-right:4px; vertical-align:middle;"></span> Current estimate' +
+          '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text-muted); opacity:0.5; margin:0 4px 0 12px; vertical-align:middle;"></span> Saved estimates' +
+        '</div>' +
+        '<select class="form-select" style="width:auto; min-width:140px; padding:4px 24px 4px 8px; font-size:0.75rem;" data-change="setBenchmarkFilter">' +
+          '<option value="all"' + (filterType === 'all' ? ' selected' : '') + '>All Types</option>' +
+          '<option value="commercial"' + (filterType === 'commercial' ? ' selected' : '') + '>Commercial</option>' +
+          '<option value="residential"' + (filterType === 'residential' ? ' selected' : '') + '>Residential</option>' +
+          '<option value="institutional"' + (filterType === 'institutional' ? ' selected' : '') + '>Institutional</option>' +
+          '<option value="mixed-use"' + (filterType === 'mixed-use' ? ' selected' : '') + '>Mixed-Use</option>' +
+        '</select>' +
+      '</div>' +
+      (allSF.length > 0 ? distributionSvg : '<div style="text-align:center; padding:30px; color:var(--text-muted);">No estimates with building area. Set area on the Input page.</div>') +
     '</div>' +
 
-    (withArea.length > 0 ?
-      '<div class="section-divider">Your Estimates — $/SF Comparison</div>' +
-      '<div class="card mb-20">' +
-        '<div class="chart-container">' +
-          withArea.map(function(e) {
-            var sf = e.totalCost / e.buildingArea;
-            var pct = maxSF > 0 ? (sf / maxSF * 100) : 0;
-            return '<div class="bar-chart-row">' +
-              '<div class="bar-chart-label" title="' + esc(e.name) + '">' + esc(e.name || 'Untitled') + '</div>' +
-              '<div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + Math.max(pct, 5) + '%;">' +
-                (pct > 25 ? '<span class="bar-chart-value">$' + sf.toFixed(2) + '/SF</span>' : '') +
-              '</div></div>' +
-              '<div class="bar-chart-amount">$' + sf.toFixed(2) + '/SF</div>' +
-            '</div>';
-          }).join('') +
-        '</div>' +
-      '</div>'
-    : '<div class="card mb-20" style="text-align:center; padding:30px; color:var(--text-muted);">No estimates with building area set. Add building area on the Output page to see $/SF benchmarks.</div>'
-    ) +
+    // Section 2: Comparison Selector
+    '<div class="section-divider">Compare Estimates</div>' +
+    '<div class="card mb-20">' +
+      '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Select up to 3 past estimates to compare phase-by-phase $/SF against your current estimate.</div>' +
+      '<div class="form-row">' + compDropdowns + '</div>' +
+    '</div>' +
 
-    // By material breakdown
-    (Object.keys(byMaterial).length > 0 ?
-      '<div class="section-divider">$/SF by Primary Material</div>' +
-      '<div class="grid-2 mb-20">' +
-        Object.keys(byMaterial).map(function(mat) {
-          var entries = byMaterial[mat];
-          var avg = entries.reduce(function(s, e) { return s + e.costPerSF; }, 0) / entries.length;
-          var min = Math.min.apply(null, entries.map(function(e) { return e.costPerSF; }));
-          var max = Math.max.apply(null, entries.map(function(e) { return e.costPerSF; }));
-          return '<div class="card">' +
-            '<div style="font-weight:600; color:var(--accent); margin-bottom:8px; text-transform:capitalize;">' + mat + '</div>' +
-            '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">' +
-              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Low</div><div style="font-family:JetBrains Mono; font-weight:600;">$' + min.toFixed(2) + '</div></div>' +
-              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Avg</div><div style="font-family:JetBrains Mono; font-weight:700; color:var(--accent);">$' + avg.toFixed(2) + '</div></div>' +
-              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">High</div><div style="font-family:JetBrains Mono; font-weight:600;">$' + max.toFixed(2) + '</div></div>' +
-            '</div>' +
-            '<div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">' + entries.length + ' estimate' + (entries.length !== 1 ? 's' : '') + '</div>' +
-          '</div>';
-        }).join('') +
-      '</div>'
-    : '') +
+    // Section 3: Comparison Table
+    compTable +
+
+    // Industry Benchmarks
+    industryHtml +
   '</div>';
 }
 
