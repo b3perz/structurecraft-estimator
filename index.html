@@ -8,12 +8,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=20">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='15' y='30' width='70' height='8' rx='2' fill='%23c8956c'/><rect x='30' y='18' width='8' height='64' rx='2' fill='%23c8956c'/><rect x='62' y='18' width='8' height='64' rx='2' fill='%23c8956c'/><rect x='15' y='62' width='70' height='8' rx='2' fill='%23c8956c' opacity='0.7'/></svg>">
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
+  <!-- Custom Cursor -->
+  <div id="custom-cursor" class="custom-cursor"></div>
+  <div id="cursor-trail" class="cursor-trail"></div>
+
   <!-- Loading Screen -->
   <div id="loading-screen">
     <div class="loader-content">
@@ -54,7 +58,14 @@
       </div>
 
       <div class="sidebar-nav">
-        <div class="nav-section-label">Workspace</div>
+        <ul class="nav-items" id="home-nav">
+          <li class="nav-item" data-page="dashboard">
+            <span class="nav-icon" id="nav-icon-dashboard"></span>
+            <span class="nav-label">Dashboard</span>
+          </li>
+        </ul>
+
+        <div class="nav-section-label">Estimate</div>
         <ul class="nav-items" id="main-nav">
           <li class="nav-item active" data-page="input">
             <span class="nav-icon" id="nav-icon-input"></span>
@@ -74,30 +85,34 @@
             <span class="nav-icon" id="nav-icon-footbridge"></span>
             <span class="nav-label">Footbridge</span>
           </li>
+        </ul>
+
+        <div class="nav-section-label">Library</div>
+        <ul class="nav-items" id="lib-nav">
           <li class="nav-item" data-page="past-estimates">
             <span class="nav-icon" id="nav-icon-past"></span>
             <span class="nav-label">Past Estimates</span>
             <span class="nav-badge" id="badge-past"></span>
           </li>
-          <li class="nav-item" data-page="connector">
-            <span class="nav-icon" id="nav-icon-connector"></span>
-            <span class="nav-label">Reference & Compare</span>
+          <li class="nav-item" data-page="benchmarks">
+            <span class="nav-icon" id="nav-icon-benchmarks"></span>
+            <span class="nav-label">Benchmarks</span>
           </li>
-        </ul>
-
-        <div class="nav-section-label">Reference</div>
-        <ul class="nav-items" id="ref-nav">
           <li class="nav-item" data-page="pricing-library">
             <span class="nav-icon" id="nav-icon-pricing"></span>
             <span class="nav-label">Pricing Library</span>
           </li>
-          <li class="nav-item" data-page="analytics">
-            <span class="nav-icon" id="nav-icon-analytics"></span>
-            <span class="nav-label">Analytics</span>
+        </ul>
+
+        <div class="nav-section-label">Tools</div>
+        <ul class="nav-items" id="tools-nav">
+          <li class="nav-item" data-page="scenarios">
+            <span class="nav-icon" id="nav-icon-scenarios"></span>
+            <span class="nav-label">What-If Scenarios</span>
           </li>
-          <li class="nav-item" data-page="qa">
-            <span class="nav-icon" id="nav-icon-qa"></span>
-            <span class="nav-label">FAQ</span>
+          <li class="nav-item" data-page="connector">
+            <span class="nav-icon" id="nav-icon-connector"></span>
+            <span class="nav-label">Reference & Compare</span>
           </li>
         </ul>
 
@@ -111,13 +126,22 @@
       </div>
 
       <div class="sidebar-footer">
+        <button id="btn-faq" class="sidebar-faq-btn" title="FAQ & Help">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          <span>FAQ & Help</span>
+        </button>
         <div class="theme-quick-switch">
           <button id="theme-cycle" class="icon-btn" title="Cycle theme">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
           </button>
           <span class="theme-name" id="current-theme-name">Midnight</span>
         </div>
-        <div class="version-info">StructureCraft Estimator v1.0</div>
+        <div class="sidebar-footer-row">
+          <button id="btn-client-mode" class="icon-btn client-mode-btn" title="Toggle Client View">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <div class="version-info">StructureCraft Estimator v2.0</div>
+        </div>
       </div>
     </nav>
 
@@ -157,6 +181,9 @@
         <div class="guide-content" id="guide-content"></div>
       </div>
 
+      <!-- Rule Engine Alerts Banner -->
+      <div id="rule-alerts" class="rule-alerts-bar" style="display:none;"></div>
+
       <!-- Dynamic Page Content -->
       <div id="page-content"></div>
     </main>
@@ -176,6 +203,22 @@
   <!-- Modal Overlay -->
   <div id="modal-overlay" class="modal-overlay hidden">
     <div class="modal" id="modal-container"></div>
+  </div>
+
+  <!-- FAQ Modal -->
+  <div id="faq-modal" class="faq-modal-overlay hidden">
+    <div class="faq-modal">
+      <div class="faq-modal-header">
+        <div class="faq-modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          FAQ & Help
+        </div>
+        <button id="close-faq" class="icon-btn" title="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="faq-modal-body" id="faq-modal-body"></div>
+    </div>
   </div>
 
   <!-- Toast Container -->
@@ -220,6 +263,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

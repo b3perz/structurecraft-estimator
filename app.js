@@ -169,6 +169,149 @@ function esc(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
+// ---- SECTION 1C: EVENT DELEGATION SYSTEM ----
+var ACTION_HANDLERS = {};
+function registerAction(name, handler) { ACTION_HANDLERS[name] = handler; }
+
+function initDelegation() {
+  var main = document.getElementById('page-content');
+
+  main.addEventListener('click', function(e) {
+    var t = e.target.closest('[data-action]');
+    if (!t) return;
+    e.preventDefault();
+    var action = t.getAttribute('data-action');
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+  });
+
+  main.addEventListener('change', function(e) {
+    var t = e.target.closest('[data-change]');
+    if (!t) return;
+    var action = t.getAttribute('data-change');
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    params._value = t.value;
+    if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+  });
+
+  main.addEventListener('input', function(e) {
+    var t = e.target.closest('[data-oninput]');
+    if (!t) return;
+    var action = t.getAttribute('data-oninput');
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    params._value = t.type === 'range' ? parseFloat(t.value) : t.value;
+    if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+  });
+
+  main.addEventListener('dblclick', function(e) {
+    var t = e.target.closest('[data-dblclick]');
+    if (!t) return;
+    var action = t.getAttribute('data-dblclick');
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+  });
+
+  // Drag events
+  main.addEventListener('dragover', function(e) {
+    var t = e.target.closest('[data-dragover]');
+    if (t) { e.preventDefault(); handleDragOver(e); }
+  });
+  main.addEventListener('dragleave', function(e) {
+    var t = e.target.closest('[data-dragleave]');
+    if (t) handleDragLeave(e);
+  });
+  main.addEventListener('drop', function(e) {
+    var t = e.target.closest('[data-drop]');
+    if (!t) return;
+    e.preventDefault();
+    var action = t.getAttribute('data-drop');
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    if (action === 'handleDrop') handleDrop(e, params.category);
+    else if (action === 'dropConnectorItem') dropConnectorItem(e);
+  });
+  main.addEventListener('dragstart', function(e) {
+    var t = e.target.closest('[data-dragstart]');
+    if (!t) return;
+    var raw = t.getAttribute('data-params');
+    var params = raw ? JSON.parse(raw) : {};
+    dragConnectorItem(e, params.phaseKey, params.idx);
+  });
+}
+
+// Register all action handlers
+registerAction('generateEstimate', function() { generateEstimate(); });
+registerAction('generateFootbridgeEstimate', function() { generateFootbridgeEstimate(); });
+registerAction('navigateTo', function(p) { navigateTo(p.page); });
+registerAction('updateEstimate', function(p) { updateEstimate(p.field, p._value); });
+registerAction('updateAssumption', function(p) { updateAssumption(p.key, parseFloat(p._value)); });
+registerAction('setDeliveryModel', function(p) { setDeliveryModel(p.model); });
+registerAction('setPrimaryMaterial', function(p) { setPrimaryMaterial(p.category); });
+registerAction('updateMaterial', function(p) { updateMaterial(p.elementType, p._value); });
+registerAction('updateFootbridgeConfig', function(p) {
+  var val = p.type === 'string' ? p._value : (p.type === 'int' ? parseInt(p._value) : parseFloat(p._value));
+  updateFootbridgeConfig(p.key, val);
+});
+registerAction('clearCurrentEstimate', function() { clearCurrentEstimate(); });
+registerAction('saveCurrentEstimate', function() { saveCurrentEstimate(); });
+registerAction('updateBuildingMetric', function(p) { updateBuildingMetric(p.key, parseFloat(p._value) || 0); });
+registerAction('switchOutputTab', function(p) { switchOutputTab(p.tab); });
+registerAction('setFootbridgeOutputTab', function(p) { STATE.footbridgeOutputTab = p.tab; renderPage(); });
+registerAction('shareEstimateLink', function() { shareEstimateLink(); });
+registerAction('toggleUnitRatePanel', function() { toggleUnitRatePanel(); });
+registerAction('exportEstimateXLSX', function() { exportEstimateXLSX(); });
+registerAction('exportEstimate', function() { exportEstimate(); });
+registerAction('connectEstimate', function(p) { connectEstimate(p.id || p._value); });
+registerAction('viewQueueEstimate', function(p) { viewQueueEstimate(p.id); });
+registerAction('removeFromQueue', function(p) { removeFromQueue(p.id); });
+registerAction('stopQueueItem', function(p) { stopQueueItem(p.id); });
+registerAction('clearAllQueue', function() { if(confirm('Clear entire queue?')) clearAllQueue(); });
+registerAction('clearCompletedQueue', function() { clearCompletedQueue(); });
+registerAction('quickAddFromConnector', function(p) { quickAddFromConnector(p.phaseKey, parseInt(p.idx)); });
+registerAction('setTheme', function(p) { setTheme(p.id); });
+registerAction('toggleGuide', function() { toggleGuide(); });
+registerAction('togglePricingCategory', function(p, target) { togglePricingCategory(target.closest('.pricing-category-header') || target); });
+registerAction('toggleQA', function(p) { toggleQA(p.idx); });
+registerAction('editAssumption', function(p, target) { editAssumption(p.key, target); });
+registerAction('addLineItem', function(p) { addLineItem(p.phaseKey); });
+registerAction('removeLineItem', function(p) { removeLineItem(p.phaseKey, parseInt(p.idx)); });
+registerAction('toggleItemRationale', function(p) { toggleItemRationale(p.phaseKey, parseInt(p.idx)); });
+registerAction('updateLineItem', function(p) {
+  var val = p.type === 'number' ? parseFloat(p._value) : p._value;
+  updateLineItem(p.phaseKey, parseInt(p.idx), p.field, val);
+});
+registerAction('toggleVolRationale', function(p, target) { toggleVolRationale(target.closest('tr') || target); });
+registerAction('viewEstimateDetail', function(p) { viewEstimateDetail(p.id); });
+registerAction('duplicateEstimate', function(p, t, e) { e.stopPropagation(); duplicateEstimate(p.id); });
+registerAction('loadEstimateToWorkspace', function(p, t, e) { e.stopPropagation(); loadEstimateToWorkspace(p.id); });
+registerAction('connectEstimateFromCard', function(p, t, e) { e.stopPropagation(); connectEstimate(p.id); });
+registerAction('toggleComparisonMode', function() { toggleComparisonMode(); });
+registerAction('pastFilterModel', function(p) { STATE.pastFilterModel = p._value; renderPage(); });
+registerAction('pastFilterStatus', function(p) { STATE.pastFilterStatus = p._value; renderPage(); });
+registerAction('resetAssumptions', function() { resetAssumptions(); });
+registerAction('exportAllDataXLSX', function() { exportAllDataXLSX(); });
+registerAction('exportAllData', function() { exportAllData(); });
+registerAction('confirmClearData', function() { confirmClearData(); });
+registerAction('testAPIKey', function() { testAPIKey(); });
+registerAction('saveAPIKey', function(p) { saveAPIKey(p._value); });
+registerAction('setAIModel', function(p) { localStorage.setItem('sc-anthropic-model', p._value); });
+registerAction('importDataTrigger', function() { document.getElementById('import-file').click(); });
+registerAction('importData', function(p, t, e) { importData(e); });
+registerAction('triggerUpload', function(p) { triggerUpload(p.category); });
+registerAction('removeFile', function(p) { removeFile(p.category, parseInt(p.idx)); });
+registerAction('filterPricing', function(p) { filterPricing(p._value); });
+registerAction('handleFileSelect', function(p, t, e) { handleFileSelect(e, p.category); });
+registerAction('fbViewOutput', function() { STATE.currentEstimate = JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab = 'summary'; navigateTo('output'); });
+registerAction('setFbState', function(p) { STATE[p.key] = p._value; });
+registerAction('closeNotifPanel', function() { var el = document.getElementById('notif-panel'); if(el) el.remove(); });
+registerAction('viewQueue', function() { navigateTo('queue'); var el = document.getElementById('notif-panel'); if(el) el.remove(); });
+registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.removeItem('sc-activity-log'); var el = document.getElementById('notif-panel'); if(el) el.remove(); showToast('Activity log cleared.', 'info'); });
+registerAction('executePaletteCommand', function(p) { executePaletteCommand(parseInt(p.idx)); });
+
 // ---- SECTION 3B: REGIONAL COST FACTORS ----
 // RSMeans City Cost Index data (2025 baseline: national average = 1.00)
 // Material factors adjust material pricing; Labor factors adjust all labor rates.
@@ -1208,8 +1351,8 @@ function renderInputPage() {
         '<div class="section-desc">Define your project scope, upload documents, and select a delivery model</div>' +
       '</div>' +
       '<div class="section-actions">' +
-        '<button class="btn btn-sm" onclick="clearCurrentEstimate()">Clear All</button>' +
-        '<button class="btn btn-sm btn-accent" onclick="saveCurrentEstimate()">' +
+        '<button class="btn btn-sm" data-action="clearCurrentEstimate">Clear All</button>' +
+        '<button class="btn btn-sm btn-accent" data-action="saveCurrentEstimate">' +
           ICONS.check + ' Stash It' +
         '</button>' +
       '</div>' +
@@ -1223,21 +1366,21 @@ function renderInputPage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Project Name</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Pacific Heights Mixed-Use" value="' + esc(est.name) + '" onchange="updateEstimate(\'name\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Pacific Heights Mixed-Use" value="' + esc(est.name) + '" data-change="updateEstimate" data-params=\'{"field":"name"}\'>' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Client</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Westbank Corp" value="' + esc(est.client) + '" onchange="updateEstimate(\'client\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Westbank Corp" value="' + esc(est.client) + '" data-change="updateEstimate" data-params=\'{"field":"client"}\'>' +
         '</div>' +
       '</div>' +
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Location</label>' +
-          '<input class="form-input" type="text" placeholder="e.g., Vancouver, BC" value="' + esc(est.location) + '" onchange="updateEstimate(\'location\', this.value)">' +
+          '<input class="form-input" type="text" placeholder="e.g., Vancouver, BC" value="' + esc(est.location) + '" data-change="updateEstimate" data-params=\'{"field":"location"}\'>' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Project Type</label>' +
-          '<select class="form-select" onchange="updateEstimate(\'projectType\', this.value)">' +
+          '<select class="form-select" data-change="updateEstimate" data-params=\'{"field":"projectType"}\'>' +
             '<option value="commercial"' + (est.projectType==='commercial'?' selected':'') + '>Commercial</option>' +
             '<option value="residential"' + (est.projectType==='residential'?' selected':'') + '>Residential</option>' +
             '<option value="institutional"' + (est.projectType==='institutional'?' selected':'') + '>Institutional</option>' +
@@ -1263,7 +1406,7 @@ function renderInputPage() {
           '<div class="material-toggle-group">' +
             Object.entries(PRIMARY_MATERIALS).map(function(entry) {
               var key = entry[0], mat = entry[1];
-              return '<button class="material-toggle-btn ' + ((est.primaryMaterial || 'timber') === key ? 'active' : '') + '" onclick="setPrimaryMaterial(\'' + key + '\')" title="' + mat.description + '">' + mat.name + '</button>';
+              return '<button class="material-toggle-btn ' + ((est.primaryMaterial || 'timber') === key ? 'active' : '') + '" data-action="setPrimaryMaterial" data-params=\'{"category":"' + key + '"}\'}\'  "' + mat.description + '">' + mat.name + '</button>';
             }).join('') +
           '</div>' +
         '</div>' +
@@ -1271,7 +1414,7 @@ function renderInputPage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Structural System Type</label>' +
-          '<select class="form-select" onchange="updateEstimate(\'structuralSystem\', this.value)">' +
+          '<select class="form-select" data-change="updateEstimate" data-params=\'{"field":"structuralSystem"}\'>' +
             (STRUCTURAL_SUBTYPES[est.primaryMaterial || 'timber'] || []).map(function(st) {
               return '<option value="' + st.value + '"' + (est.structuralSystem === st.value ? ' selected' : '') + '>' + st.name + ' -- ' + st.description + '</option>';
             }).join('') +
@@ -1307,7 +1450,7 @@ function renderInputPage() {
       '<div class="delivery-model-grid">' +
         Object.entries(DELIVERY_MODELS).map(function(entry) {
           var key = entry[0], model = entry[1];
-          return '<div class="delivery-model-card ' + (est.deliveryModel === key ? 'active' : '') + '" onclick="setDeliveryModel(\'' + key + '\')">' +
+          return '<div class="delivery-model-card ' + (est.deliveryModel === key ? 'active' : '') + '" data-action="setDeliveryModel" data-params=\'{"model":"' + key + '"}\'>' +
             '<div class="dm-icon">' + model.icon + '</div>' +
             '<div class="dm-title">' + model.name + '</div>' +
             '<div class="dm-desc">' + model.description + '</div>' +
@@ -1327,7 +1470,7 @@ function renderInputPage() {
           '<div class="card-title">Project Scope & Description</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="5" placeholder="Describe the full project scope: building type, number of stories, approximate square footage, structural system, key features, special requirements..." onchange="updateEstimate(\'scopeDescription\', this.value)">' + esc(est.scopeDescription) + '</textarea>' +
+          '<textarea class="form-textarea" rows="5" placeholder="Describe the full project scope: building type, number of stories, approximate square footage, structural system, key features, special requirements..." data-change="updateEstimate" data-params=\'{"field":"scopeDescription"}\'>' + esc(est.scopeDescription) + '</textarea>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
@@ -1335,7 +1478,7 @@ function renderInputPage() {
           '<div class="card-title">RFP Notes & Requirements</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="5" placeholder="Key requirements from the RFP: deadlines, scope boundaries, deliverables, evaluation criteria, pricing format requirements..." onchange="updateEstimate(\'rfpNotes\', this.value)">' + esc(est.rfpNotes) + '</textarea>' +
+          '<textarea class="form-textarea" rows="5" placeholder="Key requirements from the RFP: deadlines, scope boundaries, deliverables, evaluation criteria, pricing format requirements..." data-change="updateEstimate" data-params=\'{"field":"rfpNotes"}\'>' + esc(est.rfpNotes) + '</textarea>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1346,7 +1489,7 @@ function renderInputPage() {
           '<div class="card-title">RFIs & Clarifications</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="4" placeholder="Outstanding RFIs, design clarifications, assumptions that need confirmation..." onchange="updateEstimate(\'rfiNotes\', this.value)">' + esc(est.rfiNotes) + '</textarea>' +
+          '<textarea class="form-textarea" rows="4" placeholder="Outstanding RFIs, design clarifications, assumptions that need confirmation..." data-change="updateEstimate" data-params=\'{"field":"rfiNotes"}\'>' + esc(est.rfiNotes) + '</textarea>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
@@ -1354,7 +1497,7 @@ function renderInputPage() {
           '<div class="card-title">Client & Contractor Communications</div>' +
         '</div>' +
         '<div class="form-group">' +
-          '<textarea class="form-textarea" rows="4" placeholder="Important notes from the client, contractor, or architect. Key constraints, preferences, budget signals..." onchange="updateEstimate(\'clientComms\', this.value)">' + esc(est.clientComms) + '</textarea>' +
+          '<textarea class="form-textarea" rows="4" placeholder="Important notes from the client, contractor, or architect. Key constraints, preferences, budget signals..." data-change="updateEstimate" data-params=\'{"field":"clientComms"}\'>' + esc(est.clientComms) + '</textarea>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1363,42 +1506,42 @@ function renderInputPage() {
     '<div class="section-divider">Document Uploads</div>' +
     '<div class="upload-grid mb-16">' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-rfp" ondrop="handleDrop(event,\'rfp\')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="triggerUpload(\'rfp\')">' +
+        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-params=\'{"category":"rfp"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">RFP / Bid Documents</div>' +
           '<div class="upload-subtitle">Drop files here or click to browse</div>' +
           '<div class="upload-limit">PDF, DOCX, XLSX - Max 40 MB each</div>' +
-          '<input type="file" id="file-input-rfp" style="display:none" multiple accept=".pdf,.docx,.xlsx,.xls,.doc" onchange="handleFileSelect(event,\'rfp\')">' +
+          '<input type="file" id="file-input-rfp" style="display:none" multiple accept=".pdf,.docx,.xlsx,.xls,.doc" data-change="handleFileSelect" data-params=\'{"category":"rfp"}\'>' +
         '</div>' +
         renderFileList(est.files.rfp, 'rfp') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-drawings" ondrop="handleDrop(event,\'drawings\')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="triggerUpload(\'drawings\')">' +
+        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-params=\'{"category":"drawings"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Architectural Drawings</div>' +
           '<div class="upload-subtitle">SD or DD drawing sets</div>' +
           '<div class="upload-limit">PDF - Max 40 MB each</div>' +
-          '<input type="file" id="file-input-drawings" style="display:none" multiple accept=".pdf,.dwg" onchange="handleFileSelect(event,\'drawings\')">' +
+          '<input type="file" id="file-input-drawings" style="display:none" multiple accept=".pdf,.dwg" data-change="handleFileSelect" data-params=\'{"category":"drawings"}\'>' +
         '</div>' +
         renderFileList(est.files.drawings, 'drawings') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-structural" ondrop="handleDrop(event,\'structural\')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="triggerUpload(\'structural\')">' +
+        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-params=\'{"category":"structural"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Structural Drawings</div>' +
           '<div class="upload-subtitle">Structural engineering docs</div>' +
           '<div class="upload-limit">PDF - Max 40 MB each</div>' +
-          '<input type="file" id="file-input-structural" style="display:none" multiple accept=".pdf,.dwg" onchange="handleFileSelect(event,\'structural\')">' +
+          '<input type="file" id="file-input-structural" style="display:none" multiple accept=".pdf,.dwg" data-change="handleFileSelect" data-params=\'{"category":"structural"}\'>' +
         '</div>' +
         renderFileList(est.files.structural, 'structural') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-narratives" ondrop="handleDrop(event,\'narratives\')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="triggerUpload(\'narratives\')">' +
+        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-params=\'{"category":"narratives"}\'}\'  dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Narratives & Specs</div>' +
           '<div class="upload-subtitle">Structural narratives, specs</div>' +
           '<div class="upload-limit">PDF, DOCX - Max 40 MB each</div>' +
-          '<input type="file" id="file-input-narratives" style="display:none" multiple accept=".pdf,.docx,.doc" onchange="handleFileSelect(event,\'narratives\')">' +
+          '<input type="file" id="file-input-narratives" style="display:none" multiple accept=".pdf,.docx,.doc" data-change="handleFileSelect" data-params=\'{"category":"narratives"}\'>' +
         '</div>' +
         renderFileList(est.files.narratives, 'narratives') +
       '</div>' +
@@ -1411,7 +1554,7 @@ function renderInputPage() {
         'Claude will analyze every page, extract structural data, and generate a detailed estimate. ' +
         'Processing typically takes 1–2 minutes depending on document complexity.' +
       '</p>' +
-      '<button class="btn btn-lg btn-accent" onclick="generateEstimate()" id="btn-generate" style="padding: 14px 40px; font-size: 1rem;">' +
+      '<button class="btn btn-lg btn-accent" data-action="generateEstimate" id="btn-generate" style="padding: 14px 40px; font-size: 1rem;">' +
         ICONS.bolt + ' Generate Estimate' +
       '</button>' +
       '<div id="ai-progress-container" style="display:none; margin-top: 20px;"></div>' +
@@ -1427,7 +1570,7 @@ function renderFileList(files, category) {
         '<span class="file-icon">' + ICONS.file + '</span>' +
         '<span class="file-name">' + f.name + '</span>' +
         '<span class="file-size">' + formatFileSize(f.size) + '</span>' +
-        '<span class="file-remove" onclick="removeFile(\'' + category + '\', ' + i + ')">' + ICONS.trash + '</span>' +
+        '<span class="file-remove" data-action="removeFile" data-params=\'{"category":"' + category + '","idx":' + i + '}\'>' + ICONS.trash + '</span>' +
       '</div>';
     }).join('') +
   '</div>';
@@ -1452,7 +1595,7 @@ function renderMaterialSelect(elementType, est) {
   return '<div class="form-row" style="margin-bottom:8px;">' +
     '<div class="form-group" style="flex:1;">' +
       '<label class="form-label">' + mat.label + categoryBadge + '</label>' +
-      '<select class="form-select" onchange="updateMaterial(\'' + elementType + '\', this.value)">' +
+      '<select class="form-select" data-change="updateMaterial" data-params=\'{"elementType":"' + elementType + '"}\'>' +
         (primaryOpts.length > 0 ? '<optgroup label="' + (PRIMARY_MATERIALS[primaryCat] ? PRIMARY_MATERIALS[primaryCat].name : primaryCat) + '">' +
           primaryOpts.map(function(o) {
             return '<option value="' + o.value + '"' + (current === o.value ? ' selected' : '') + '>' + o.label + ' (' + o.pricePer + '/' + o.unit + ')</option>';
@@ -1538,19 +1681,19 @@ function renderOutputPage() {
         '<div class="section-desc">' + esc(est.name || 'Untitled Project') + ' -- ' + (model ? model.name : 'No model selected') + '</div>' +
       '</div>' +
       '<div class="section-actions">' +
-        '<button class="btn btn-sm" onclick="shareEstimateLink()" title="Copy shareable link">' +
+        '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
           ICONS.share + ' Share' +
         '</button>' +
-        '<button class="btn btn-sm' + (STATE.showUnitRateComparison ? ' btn-accent' : '') + '" onclick="toggleUnitRatePanel()" title="Compare $/SF with past estimates">' +
+        '<button class="btn btn-sm' + (STATE.showUnitRateComparison ? ' btn-accent' : '') + '" data-action="toggleUnitRatePanel" title="Compare $/SF with past estimates">' +
           ICONS.analytics + ' $/SF Compare' +
         '</button>' +
-        '<button class="btn btn-sm" onclick="exportEstimateXLSX()">' +
+        '<button class="btn btn-sm" data-action="exportEstimateXLSX">' +
           ICONS.download + ' Ship as XLSX' +
         '</button>' +
-        '<button class="btn btn-sm" onclick="exportEstimate()">' +
+        '<button class="btn btn-sm" data-action="exportEstimate">' +
           ICONS.download + ' Ship as CSV' +
         '</button>' +
-        '<button class="btn btn-sm btn-accent" onclick="saveCurrentEstimate()">' +
+        '<button class="btn btn-sm btn-accent" data-action="saveCurrentEstimate">' +
           ICONS.check + ' Stash' +
         '</button>' +
       '</div>' +
@@ -1563,18 +1706,18 @@ function renderOutputPage() {
         '<span style="margin-left:auto; font-size:0.72rem; font-weight:400; color:var(--text-secondary);">Click any value to edit</span>' +
       '</div>' +
       '<div class="assumptions-grid">' +
-        '<div class="assumption-item"><div class="assumption-label">Margin</div><div class="assumption-value editable" onclick="editAssumption(\'marginPercent\', this)">' + fmtPct(est.assumptions.marginPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Overhead</div><div class="assumption-value editable" onclick="editAssumption(\'overheadPercent\', this)">' + fmtPct(est.assumptions.overheadPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Contingency</div><div class="assumption-value editable" onclick="editAssumption(\'contingencyPercent\', this)">' + fmtPct(est.assumptions.contingencyPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Bond & Insurance</div><div class="assumption-value editable" onclick="editAssumption(\'bondInsurancePercent\', this)">' + fmtPct(est.assumptions.bondInsurancePercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Glulam (per BF)</div><div class="assumption-value editable" onclick="editAssumption(\'glulamPriceBF\', this)">' + fmtDec(est.assumptions.glulamPriceBF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">CLT 5-ply (per SF)</div><div class="assumption-value editable" onclick="editAssumption(\'cltPriceSF5\', this)">' + fmtDec(est.assumptions.cltPriceSF5) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">DLT (per SF)</div><div class="assumption-value editable" onclick="editAssumption(\'dltPriceSF\', this)">' + fmtDec(est.assumptions.dltPriceSF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Shipping (per BF)</div><div class="assumption-value editable" onclick="editAssumption(\'shippingPerBF\', this)">' + fmtDec(est.assumptions.shippingPerBF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Engineering (per hr)</div><div class="assumption-value editable" onclick="editAssumption(\'engHourlyRate\', this)">' + fmtDec(est.assumptions.engHourlyRate) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Shop Rate (per hr)</div><div class="assumption-value editable" onclick="editAssumption(\'shopHourlyRate\', this)">' + fmtDec(est.assumptions.shopHourlyRate) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Site Carpenter (per hr)</div><div class="assumption-value editable" onclick="editAssumption(\'siteCarpentrHourlyRate\', this)">' + fmtDec(est.assumptions.siteCarpentrHourlyRate) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value editable" onclick="editAssumption(\'craneDailyRate\', this)">' + fmt(est.assumptions.craneDailyRate) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Margin</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"marginPercent"}\'>' + fmtPct(est.assumptions.marginPercent) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Overhead</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"overheadPercent"}\'>' + fmtPct(est.assumptions.overheadPercent) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Contingency</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"contingencyPercent"}\'>' + fmtPct(est.assumptions.contingencyPercent) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Bond & Insurance</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"bondInsurancePercent"}\'>' + fmtPct(est.assumptions.bondInsurancePercent) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Glulam (per BF)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"glulamPriceBF"}\'>' + fmtDec(est.assumptions.glulamPriceBF) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">CLT 5-ply (per SF)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"cltPriceSF5"}\'>' + fmtDec(est.assumptions.cltPriceSF5) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">DLT (per SF)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"dltPriceSF"}\'>' + fmtDec(est.assumptions.dltPriceSF) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Shipping (per BF)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"shippingPerBF"}\'>' + fmtDec(est.assumptions.shippingPerBF) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Engineering (per hr)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"engHourlyRate"}\'>' + fmtDec(est.assumptions.engHourlyRate) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Shop Rate (per hr)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"shopHourlyRate"}\'>' + fmtDec(est.assumptions.shopHourlyRate) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Site Carpenter (per hr)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"siteCarpentrHourlyRate"}\'>' + fmtDec(est.assumptions.siteCarpentrHourlyRate) + '</div></div>' +
+        '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value editable" data-action="editAssumption" data-params=\'{"key":"craneDailyRate"}\'>' + fmt(est.assumptions.craneDailyRate) + '</div></div>' +
       '</div>' +
     '</div>' +
 
@@ -1587,11 +1730,11 @@ function renderOutputPage() {
       '<div class="assumptions-grid">' +
         '<div class="assumption-item">' +
           '<div class="assumption-label">Building Area (SF)</div>' +
-          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" onchange="updateBuildingMetric(\'buildingArea\', parseFloat(this.value) || 0)"></div>' +
+          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" data-change="updateBuildingMetric" data-params=\'{"key":"buildingArea"}\'></div>' +
         '</div>' +
         '<div class="assumption-item">' +
           '<div class="assumption-label">Stories</div>' +
-          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" onchange="updateBuildingMetric(\'numStories\', parseFloat(this.value) || 0)"></div>' +
+          '<div class="assumption-value"><input type="number" class="metrics-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" data-change="updateBuildingMetric" data-params=\'{"key":"numStories"}\'></div>' +
         '</div>' +
         '<div class="assumption-item">' +
           '<div class="assumption-label">Total Cost</div>' +
@@ -1621,27 +1764,27 @@ function renderOutputPage() {
       '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">' +
         '<div class="metric-edit-cell">' +
           '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Building Area (SF)</label>' +
-          '<input type="number" class="metric-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" onchange="updateBuildingMetric(\'buildingArea\', parseFloat(this.value) || 0)">' +
+          '<input type="number" class="metric-input" value="' + (est.buildingArea || '') + '" placeholder="e.g. 30000" data-change="updateBuildingMetric" data-params=\'{"key":"buildingArea"}\'>' +
           (bldgArea > 0 ? '<div class="metric-derived">$' + (grandTotal / bldgArea).toFixed(2) + '/SF all-in</div>' : '') +
         '</div>' +
         '<div class="metric-edit-cell">' +
           '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Stories</label>' +
-          '<input type="number" class="metric-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" onchange="updateBuildingMetric(\'numStories\', parseFloat(this.value) || 0)">' +
+          '<input type="number" class="metric-input" value="' + (est.numStories || '') + '" placeholder="e.g. 4" data-change="updateBuildingMetric" data-params=\'{"key":"numStories"}\'>' +
           (est.numStories > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.numStories)) + ' SF/floor</div>' : '') +
         '</div>' +
         '<div class="metric-edit-cell">' +
           '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Timber Volume (BF)</label>' +
-          '<input type="number" class="metric-input" value="' + (est.timberVolume || '') + '" placeholder="e.g. 45000" onchange="updateBuildingMetric(\'timberVolume\', parseFloat(this.value) || 0)">' +
+          '<input type="number" class="metric-input" value="' + (est.timberVolume || '') + '" placeholder="e.g. 45000" data-change="updateBuildingMetric" data-params=\'{"key":"timberVolume"}\'>' +
           (est.timberVolume > 0 && bldgArea > 0 ? '<div class="metric-derived">' + (est.timberVolume / bldgArea).toFixed(2) + ' BF/SF</div>' : '') +
         '</div>' +
         '<div class="metric-edit-cell">' +
           '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Total Pieces</label>' +
-          '<input type="number" class="metric-input" value="' + (est.totalPieces || '') + '" placeholder="e.g. 120" onchange="updateBuildingMetric(\'totalPieces\', parseFloat(this.value) || 0)">' +
+          '<input type="number" class="metric-input" value="' + (est.totalPieces || '') + '" placeholder="e.g. 120" data-change="updateBuildingMetric" data-params=\'{"key":"totalPieces"}\'>' +
           (est.totalPieces > 0 && bldgArea > 0 ? '<div class="metric-derived">' + (bldgArea / est.totalPieces).toFixed(0) + ' SF/piece</div>' : '') +
         '</div>' +
         '<div class="metric-edit-cell">' +
           '<label style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; display:block; margin-bottom:3px;">Install Duration (days)</label>' +
-          '<input type="number" class="metric-input" value="' + (est.installDays || '') + '" placeholder="e.g. 20" onchange="updateBuildingMetric(\'installDays\', parseFloat(this.value) || 0)">' +
+          '<input type="number" class="metric-input" value="' + (est.installDays || '') + '" placeholder="e.g. 20" data-change="updateBuildingMetric" data-params=\'{"key":"installDays"}\'>' +
           (est.installDays > 0 && bldgArea > 0 ? '<div class="metric-derived">' + fmtNum(Math.round(bldgArea / est.installDays)) + ' SF/day</div>' : '') +
         '</div>' +
       '</div>' +
@@ -1649,13 +1792,13 @@ function renderOutputPage() {
 
     '<!-- Phase Tabs -->' +
     '<div class="tabs">' +
-      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" onclick="switchOutputTab(\'summary\')">Summary</div>' +
+      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
       phaseKeys.map(function(pk) {
-        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" onclick="switchOutputTab(\'' + pk + '\')">' +
+        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' +
           (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) +
         '</div>';
       }).join('') +
-      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" onclick="switchOutputTab(\'ai-notes\')" style="color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
+      (est.aiNotes && est.aiNotes.length > 0 ? '<div class="tab ' + (activeTab === 'ai-notes' ? 'active' : '') + '" data-action="switchOutputTab" data-params=\'{"tab":"ai-notes"}\'}\'  "color: var(--accent);">' + ICONS.info + ' AI Notes</div>' : '') +
     '</div>' +
 
     '<!-- Tab Content -->' +
@@ -1884,6 +2027,9 @@ function renderOutputSummary(est, phaseKeys, subtotal, margin, overhead, conting
         (STATE.showUnitRateComparison ? renderUnitRateComparison(est, subtotal, grandTotal) : '') +
       '</div>' +
     '</div>' +
+
+    // Phase 6A: Cost waterfall chart
+    renderWaterfallChart(est, phaseKeys) +
   '</div>';
 }
 
@@ -1985,7 +2131,7 @@ function classifyEstimateItems(est, phaseKeys, bldgArea) {
       confBadge = '<span class="confidence-badge ' + confClass + '">' + item.confidence + '</span>';
     }
     var perSF = extraCol && item.total ? '$' + (item.total / bldgArea).toFixed(2) + '/SF' : '';
-    return '<tr class="vol-item-row" onclick="toggleVolRationale(this)">' +
+    return '<tr class="vol-item-row" data-action="toggleVolRationale">' +
       '<td>' + esc(item.name) + '</td>' +
       '<td class="mono">' + fmtNum(item.qty) + '</td>' +
       '<td>' + item.unit + '</td>' +
@@ -2157,7 +2303,7 @@ function renderPhaseTab(est, phaseKey) {
           '<div class="card-title">' + phaseDef.name + '</div>' +
           '<div class="card-subtitle">' + phaseDef.description + '</div>' +
         '</div>' +
-        '<button class="btn btn-sm btn-accent" onclick="addLineItem(\'' + phaseKey + '\')">' +
+        '<button class="btn btn-sm btn-accent" data-action="addLineItem" data-params=\'{"phaseKey":"' + phaseKey + '"}\'>' +
           ICONS.plus + ' Add a Stick' +
         '</button>' +
       '</div>' +
@@ -2169,30 +2315,30 @@ function renderPhaseTab(est, phaseKey) {
         var confClass = item.confidence === 'high' ? 'confidence-high' : item.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
         return '<div class="line-item-wrapper" id="rationale-' + phaseKey + '-' + idx + '">' +
           '<div class="line-item-row" draggable="true">' +
-            '<div class="line-item-info" onclick="toggleItemRationale(\'' + phaseKey + '\', ' + idx + ')" title="Show derivation">' + ICONS.chevDown + '</div>' +
+            '<div class="line-item-info" data-action="toggleItemRationale" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'}\'  "Show derivation">' + ICONS.chevDown + '</div>' +
             '<div class="line-item-grip">' + ICONS.grip + '</div>' +
-            '<div><input class="line-item-input" value="' + esc(item.name) + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'name\', this.value)"></div>' +
-            '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'qty\', parseFloat(this.value))"></div>' +
-            '<div><input class="line-item-input" value="' + esc(item.unit) + '" style="text-align:center" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'unit\', this.value)"></div>' +
-            '<div><input class="line-item-input numeric" type="number" step="0.01" value="' + item.rate + '" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'rate\', parseFloat(this.value))"></div>' +
+            '<div><input class="line-item-input" value="' + esc(item.name) + '" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"name"}\'></div>' +
+            '<div><input class="line-item-input numeric" type="number" value="' + item.qty + '" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"qty","type":"number"}\'></div>' +
+            '<div><input class="line-item-input" value="' + esc(item.unit) + '" style="text-align:center" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"unit"}\'></div>' +
+            '<div><input class="line-item-input numeric" type="number" step="0.01" value="' + item.rate + '" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"rate","type":"number"}\'></div>' +
             '<div class="cell-right cell-mono cell-bold" style="padding: 4px 6px;">' + fmt(item.total) + '</div>' +
-            '<div class="line-item-delete" onclick="removeLineItem(\'' + phaseKey + '\', ' + idx + ')">' + ICONS.trash + '</div>' +
+            '<div class="line-item-delete" data-action="removeLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'>' + ICONS.trash + '</div>' +
           '</div>' +
           '<div class="line-item-rationale">' +
             (hasRationale ?
-              '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="' + esc(item.basis || '') + '" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
-              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="' + esc(item.source || '') + '" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="' + esc(item.basis || '') + '" placeholder="How was this quantity derived?" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"basis"}\'></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="' + esc(item.source || '') + '" placeholder="Which document or drawing?" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"source"}\'></div>' +
               '<div class="rationale-field"><span class="rationale-label">Confidence:</span>' +
-                '<select class="confidence-select" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'confidence\', this.value)">' +
+                '<select class="confidence-select" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"confidence"}\'>' +
                   '<option value="high"' + (item.confidence === 'high' ? ' selected' : '') + '>High \u2014 measured from documents</option>' +
                   '<option value="medium"' + (item.confidence === 'medium' || !item.confidence ? ' selected' : '') + '>Medium \u2014 inferred/calculated</option>' +
                   '<option value="low"' + (item.confidence === 'low' ? ' selected' : '') + '>Low \u2014 assumed/estimated</option>' +
                 '</select>' +
               '</div>'
-            : '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="" placeholder="How was this quantity derived?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'basis\', this.value)"></div>' +
-              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="" placeholder="Which document or drawing?" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'source\', this.value)"></div>' +
+            : '<div class="rationale-field"><span class="rationale-label">Basis:</span><input class="rationale-input" value="" placeholder="How was this quantity derived?" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"basis"}\'></div>' +
+              '<div class="rationale-field"><span class="rationale-label">Source:</span><input class="rationale-input" value="" placeholder="Which document or drawing?" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"source"}\'></div>' +
               '<div class="rationale-field"><span class="rationale-label">Confidence:</span>' +
-                '<select class="confidence-select" onchange="updateLineItem(\'' + phaseKey + '\', ' + idx + ', \'confidence\', this.value)">' +
+                '<select class="confidence-select" data-change="updateLineItem" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + ',"field":"confidence"}\'>' +
                   '<option value="medium" selected>Medium \u2014 inferred/calculated</option>' +
                   '<option value="high">High \u2014 measured from documents</option>' +
                   '<option value="low">Low \u2014 assumed/estimated</option>' +
@@ -2259,7 +2405,7 @@ function renderPastEstimatesPage() {
         '<div class="section-desc">' + estimates.length + ' estimates in library -- compare, benchmark, and reuse historical data</div>' +
       '</div>' +
       '<div class="section-actions">' +
-        '<button class="btn btn-sm" onclick="toggleComparisonMode()">' +
+        '<button class="btn btn-sm" data-action="toggleComparisonMode">' +
           ICONS.analytics + ' ' + (STATE.comparisonMode ? 'Exit Comparison' : 'Side-by-Side') +
         '</button>' +
       '</div>' +
@@ -2269,13 +2415,13 @@ function renderPastEstimatesPage() {
     '<div class="card mb-16" style="padding: 12px 16px;">' +
       '<div class="flex items-center gap-12 flex-wrap">' +
         '<span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">' + ICONS.filter + ' Filters</span>' +
-        '<select class="form-select" style="width: auto; min-width: 160px; padding: 5px 30px 5px 10px;" onchange="STATE.pastFilterModel=this.value; renderPage();">' +
+        '<select class="form-select" style="width: auto; min-width: 160px; padding: 5px 30px 5px 10px;" data-change="pastFilterModel">' +
           '<option value="all">All Models</option>' +
           Object.entries(DELIVERY_MODELS).map(function(entry) {
             return '<option value="' + entry[0] + '"' + (filterModel===entry[0]?' selected':'') + '>' + entry[1].name + '</option>';
           }).join('') +
         '</select>' +
-        '<select class="form-select" style="width: auto; min-width: 120px; padding: 5px 30px 5px 10px;" onchange="STATE.pastFilterStatus=this.value; renderPage();">' +
+        '<select class="form-select" style="width: auto; min-width: 120px; padding: 5px 30px 5px 10px;" data-change="pastFilterStatus">' +
           '<option value="all">All Status</option>' +
           '<option value="draft"' + (filterStatus==='draft'?' selected':'') + '>Draft</option>' +
           '<option value="sent"' + (filterStatus==='sent'?' selected':'') + '>Sent</option>' +
@@ -2315,7 +2461,7 @@ function renderEstimateCard(est) {
     });
   }
 
-  return '<div class="estimate-card" onclick="viewEstimateDetail(\'' + est.id + '\')">' +
+  return '<div class="estimate-card" data-action="viewEstimateDetail" data-params=\'{"id":"' + est.id + '"}\'>' +
     '<div class="estimate-card-header">' +
       '<div>' +
         '<div class="estimate-card-title">' + esc(est.name) + '</div>' +
@@ -2341,9 +2487,9 @@ function renderEstimateCard(est) {
       }).join('') +
     '</div>' +
     '<div style="margin-top:10px; display:flex; gap:6px;">' +
-      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); connectEstimate(\'' + est.id + '\')">' + ICONS.link + ' Connect</button>' +
-      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); duplicateEstimate(\'' + est.id + '\')">' + ICONS.copy + ' Duplicate</button>' +
-      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); loadEstimateToWorkspace(\'' + est.id + '\')">' + ICONS.edit + ' Load to Workspace</button>' +
+      '<button class="btn btn-sm btn-ghost" data-action="connectEstimateFromCard" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.link + ' Connect</button>' +
+      '<button class="btn btn-sm btn-ghost" data-action="duplicateEstimate" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.copy + ' Duplicate</button>' +
+      '<button class="btn btn-sm btn-ghost" data-action="loadEstimateToWorkspace" data-params=\'{"id":"' + est.id + '"}\'>' + ICONS.edit + ' Load to Workspace</button>' +
     '</div>' +
   '</div>';
 }
@@ -2408,7 +2554,7 @@ function renderConnectorPage() {
         var itemsHtml = '';
         if (phase.items) {
           phase.items.forEach(function(item, idx) {
-            itemsHtml += '<div class="connector-item" draggable="true" ondragstart="dragConnectorItem(event, \'' + phaseKey + '\', ' + idx + ')" ondblclick="quickAddFromConnector(\'' + phaseKey + '\', ' + idx + ')">' +
+            itemsHtml += '<div class="connector-item" draggable="true" data-dragstart="true" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'}\'  dblclick="quickAddFromConnector" data-params=\'{"phaseKey":"' + phaseKey + '","idx":' + idx + '}\'>' +
               '<div class="flex items-center gap-8" style="width:100%;">' +
                 '<span class="drag-handle">' + ICONS.grip + '</span>' +
                 '<div style="flex:1; min-width:0;">' +
@@ -2487,7 +2633,7 @@ function renderConnectorPage() {
     '<div class="section-header"><div><div class="section-title">' + ICONS.connector + ' Reference & Compare</div><div class="section-desc">Compare your current estimate against a past project. Drag line items to reuse proven costs.</div></div></div>' +
 
     '<div class="card mb-16"><div class="card-header"><div class="card-title">Select Reference Estimate</div></div>' +
-      '<div class="form-group"><select class="form-select" onchange="connectEstimate(this.value)"><option value="">-- Choose a past estimate to compare --</option>' +
+      '<div class="form-group"><select class="form-select" data-change="connectEstimate"><option value="">-- Choose a past estimate to compare --</option>' +
         STATE.estimates.map(function(est) { return '<option value="' + est.id + '"' + (connectedId === est.id ? ' selected' : '') + '>' + esc(est.name) + ' -- ' + fmt(est.totalCost || calcEstimateTotal(est)) + '</option>'; }).join('') +
       '</select></div>' +
     '</div>' +
@@ -2497,7 +2643,7 @@ function renderConnectorPage() {
     '<div class="grid-2">' +
       '<div>' + connectedHtml + '</div>' +
       '<div>' +
-        '<div class="card" style="min-height: 300px;" ondrop="dropConnectorItem(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">' +
+        '<div class="card" style="min-height: 300px;" data-drop="dropConnectorItem" data-dragover="true" data-dragleave="true">' +
           '<div class="card-header"><div class="card-title">Current: ' + (currentEst.name || 'Untitled') + '</div><div class="badge badge-draft">' + (currentEst.deliveryModel && DELIVERY_MODELS[currentEst.deliveryModel] ? DELIVERY_MODELS[currentEst.deliveryModel].name : 'No model') + '</div></div>' +
           '<p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">Drag items from reference, or double-click to quick-add.</p>' +
           currentPhasesHtml +
@@ -2511,11 +2657,11 @@ function renderConnectorPage() {
 function renderPricingLibraryPage() {
   return '<div class="fade-in">' +
     '<div class="section-header"><div><div class="section-title">' + ICONS.pricing + ' Pricing Library</div><div class="section-desc">Current material costs, labor rates, and equipment pricing. All prices reflect latest supplier quotes and internal standards.</div></div>' +
-    '<div class="section-actions"><div class="search-box" style="min-width:220px;">' + ICONS.search + '<input type="text" id="pricing-search" placeholder="Search pricing..." oninput="filterPricing(this.value)"></div></div></div>' +
+    '<div class="section-actions"><div class="search-box" style="min-width:220px;">' + ICONS.search + '<input type="text" id="pricing-search" placeholder="Search pricing..." data-oninput="filterPricing"></div></div></div>' +
     Object.entries(PRICING_LIBRARY).map(function(entry) {
       var category = entry[0], items = entry[1];
       return '<div class="pricing-category mb-12" data-category="' + category + '">' +
-        '<div class="pricing-category-header" onclick="togglePricingCategory(this)"><div class="pricing-category-title">' + category + '</div><div class="flex items-center gap-8"><span class="pricing-category-count">' + items.length + ' items</span>' + ICONS.chevDown + '</div></div>' +
+        '<div class="pricing-category-header" data-action="togglePricingCategory"><div class="pricing-category-title">' + category + '</div><div class="flex items-center gap-8"><span class="pricing-category-count">' + items.length + ' items</span>' + ICONS.chevDown + '</div></div>' +
         '<div class="pricing-category-body" style="display:block;"><div class="table-container" style="border:none; border-radius:0;"><table><thead><tr><th>Item</th><th class="cell-center">Unit</th><th class="cell-right">Current Price</th><th class="cell-right">Low</th><th class="cell-right">High</th><th>Supplier</th><th class="cell-center">Updated</th></tr></thead><tbody>' +
         items.map(function(item) {
           var priceDisplay = (['hr','day','month','truck','each','ton','LS'].indexOf(item.unit) >= 0) ? fmt(item.price) : fmtDec(item.price);
@@ -2624,7 +2770,7 @@ function renderQAPage() {
   return '<div class="fade-in">' +
     '<div class="section-header"><div><div class="section-title">' + ICONS.qa + ' Questions & Answers</div><div class="section-desc">Common questions about using the estimator</div></div></div>' +
     faqs.map(function(faq, i) {
-      return '<div class="qa-item" id="qa-' + i + '"><div class="qa-question" onclick="toggleQA(' + i + ')"><span>' + faq.q + '</span>' + ICONS.chevDown + '</div><div class="qa-answer">' + faq.a + '</div></div>';
+      return '<div class="qa-item" id="qa-' + i + '"><div class="qa-question" data-action="toggleQA" data-params=\'{"idx":' + i + '}\'><span>' + faq.q + '</span>' + ICONS.chevDown + '</div><div class="qa-answer">' + faq.a + '</div></div>';
     }).join('') +
     '<div class="section-divider mt-24">Keyboard Shortcuts</div>' +
     '<div class="card"><div class="table-container" style="border:none;"><table><tbody>' +
@@ -2650,44 +2796,44 @@ function renderSettingsPage() {
     '<div class="card mb-20"><div class="card-header"><div class="card-title">Display Theme</div><div class="card-subtitle">Choose from 10 carefully designed themes</div></div>' +
       '<div class="theme-grid">' +
         THEMES.map(function(theme) {
-          return '<div class="theme-card ' + (currentTheme === theme.id ? 'active' : '') + '" onclick="setTheme(\'' + theme.id + '\')"><div class="theme-preview" style="background:' + theme.preview + ';"></div><div class="theme-card-name">' + theme.name + '</div></div>';
+          return '<div class="theme-card ' + (currentTheme === theme.id ? 'active' : '') + '" data-action="setTheme" data-params=\'{"id":"' + theme.id + '"}\'><div class="theme-preview" style="background:' + theme.preview + ';"></div><div class="theme-card-name">' + theme.name + '</div></div>';
         }).join('') +
       '</div>' +
     '</div>' +
 
-    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">Default Pricing Assumptions</div><div class="card-subtitle">These defaults apply to all new estimates. Existing estimates are not affected.</div></div><button class="btn btn-sm" onclick="resetAssumptions()">Reset to Defaults</button></div>' +
+    '<div class="card mb-20"><div class="card-header"><div><div class="card-title">Default Pricing Assumptions</div><div class="card-subtitle">These defaults apply to all new estimates. Existing estimates are not affected.</div></div><button class="btn btn-sm" data-action="resetAssumptions">Reset to Defaults</button></div>' +
       '<div class="section-divider">Markup & Overhead</div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Margin %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.marginPercent + '" onchange="updateAssumption(\'marginPercent\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Overhead %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.overheadPercent + '" onchange="updateAssumption(\'overheadPercent\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Contingency %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.contingencyPercent + '" onchange="updateAssumption(\'contingencyPercent\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Bond & Insurance %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.bondInsurancePercent + '" onchange="updateAssumption(\'bondInsurancePercent\', parseFloat(this.value))"></div>' +
+        '<div class="form-group"><label class="form-label">Margin %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.marginPercent + '" data-change="updateAssumption" data-params=\'{"key":"marginPercent"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Overhead %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.overheadPercent + '" data-change="updateAssumption" data-params=\'{"key":"overheadPercent"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Contingency %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.contingencyPercent + '" data-change="updateAssumption" data-params=\'{"key":"contingencyPercent"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Bond & Insurance %</label><input class="form-input" type="number" step="0.5" value="' + assumptions.bondInsurancePercent + '" data-change="updateAssumption" data-params=\'{"key":"bondInsurancePercent"}\'></div>' +
       '</div>' +
       '<div class="section-divider">Material Pricing</div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Glulam ($/BF)</label><input class="form-input" type="number" step="0.05" value="' + assumptions.glulamPriceBF + '" onchange="updateAssumption(\'glulamPriceBF\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">CLT 3-ply ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.cltPriceSF3 + '" onchange="updateAssumption(\'cltPriceSF3\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">CLT 5-ply ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.cltPriceSF5 + '" onchange="updateAssumption(\'cltPriceSF5\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">DLT ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.dltPriceSF + '" onchange="updateAssumption(\'dltPriceSF\', parseFloat(this.value))"></div>' +
+        '<div class="form-group"><label class="form-label">Glulam ($/BF)</label><input class="form-input" type="number" step="0.05" value="' + assumptions.glulamPriceBF + '" data-change="updateAssumption" data-params=\'{"key":"glulamPriceBF"}\'></div>' +
+        '<div class="form-group"><label class="form-label">CLT 3-ply ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.cltPriceSF3 + '" data-change="updateAssumption" data-params=\'{"key":"cltPriceSF3"}\'></div>' +
+        '<div class="form-group"><label class="form-label">CLT 5-ply ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.cltPriceSF5 + '" data-change="updateAssumption" data-params=\'{"key":"cltPriceSF5"}\'></div>' +
+        '<div class="form-group"><label class="form-label">DLT ($/SF)</label><input class="form-input" type="number" step="0.5" value="' + assumptions.dltPriceSF + '" data-change="updateAssumption" data-params=\'{"key":"dltPriceSF"}\'></div>' +
       '</div>' +
       '<div class="section-divider">Labor Rates</div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Engineering ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.engHourlyRate + '" onchange="updateAssumption(\'engHourlyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Drafting ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.draftHourlyRate + '" onchange="updateAssumption(\'draftHourlyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Shop Fabrication ($/hr)</label><input class="form-input" type="number" step="1" value="' + assumptions.shopHourlyRate + '" onchange="updateAssumption(\'shopHourlyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Site Carpenter ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.siteCarpentrHourlyRate + '" onchange="updateAssumption(\'siteCarpentrHourlyRate\', parseFloat(this.value))"></div>' +
+        '<div class="form-group"><label class="form-label">Engineering ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.engHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"engHourlyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Drafting ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.draftHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"draftHourlyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Shop Fabrication ($/hr)</label><input class="form-input" type="number" step="1" value="' + assumptions.shopHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"shopHourlyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Site Carpenter ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.siteCarpentrHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"siteCarpentrHourlyRate"}\'></div>' +
       '</div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Site Super ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.siteSuperHourlyRate + '" onchange="updateAssumption(\'siteSuperHourlyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Crane Daily Rate ($)</label><input class="form-input" type="number" step="100" value="' + assumptions.craneDailyRate + '" onchange="updateAssumption(\'craneDailyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">PM ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.pmHourlyRate + '" onchange="updateAssumption(\'pmHourlyRate\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Shop Hrs/Piece</label><input class="form-input" type="number" step="0.1" value="' + assumptions.shopManHoursPerPiece + '" onchange="updateAssumption(\'shopManHoursPerPiece\', parseFloat(this.value))"></div>' +
+        '<div class="form-group"><label class="form-label">Site Super ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.siteSuperHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"siteSuperHourlyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Crane Daily Rate ($)</label><input class="form-input" type="number" step="100" value="' + assumptions.craneDailyRate + '" data-change="updateAssumption" data-params=\'{"key":"craneDailyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">PM ($/hr)</label><input class="form-input" type="number" step="5" value="' + assumptions.pmHourlyRate + '" data-change="updateAssumption" data-params=\'{"key":"pmHourlyRate"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Shop Hrs/Piece</label><input class="form-input" type="number" step="0.1" value="' + assumptions.shopManHoursPerPiece + '" data-change="updateAssumption" data-params=\'{"key":"shopManHoursPerPiece"}\'></div>' +
       '</div>' +
       '<div class="section-divider">Shipping & Escalation</div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Shipping ($/BF)</label><input class="form-input" type="number" step="0.05" value="' + assumptions.shippingPerBF + '" onchange="updateAssumption(\'shippingPerBF\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Shipping ($/Truck)</label><input class="form-input" type="number" step="100" value="' + assumptions.shippingPerTruck + '" onchange="updateAssumption(\'shippingPerTruck\', parseFloat(this.value))"></div>' +
-        '<div class="form-group"><label class="form-label">Escalation %/yr</label><input class="form-input" type="number" step="0.5" value="' + assumptions.escalationPercent + '" onchange="updateAssumption(\'escalationPercent\', parseFloat(this.value))"></div>' +
+        '<div class="form-group"><label class="form-label">Shipping ($/BF)</label><input class="form-input" type="number" step="0.05" value="' + assumptions.shippingPerBF + '" data-change="updateAssumption" data-params=\'{"key":"shippingPerBF"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Shipping ($/Truck)</label><input class="form-input" type="number" step="100" value="' + assumptions.shippingPerTruck + '" data-change="updateAssumption" data-params=\'{"key":"shippingPerTruck"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Escalation %/yr</label><input class="form-input" type="number" step="0.5" value="' + assumptions.escalationPercent + '" data-change="updateAssumption" data-params=\'{"key":"escalationPercent"}\'></div>' +
       '</div>' +
     '</div>' +
 
@@ -2721,7 +2867,7 @@ function renderSettingsPage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Claude Model</label>' +
-          '<select class="form-select" onchange="localStorage.setItem(\'sc-anthropic-model\', this.value)">' +
+          '<select class="form-select" data-change="setAIModel">' +
             '<option value="claude-opus-4-6"' + (localStorage.getItem('sc-anthropic-model') === 'claude-opus-4-6' || !localStorage.getItem('sc-anthropic-model') ? ' selected' : '') + '>Claude Opus 4.6 (Extended Thinking)</option>' +
             '<option value="claude-sonnet-4-6"' + (localStorage.getItem('sc-anthropic-model') === 'claude-sonnet-4-6' ? ' selected' : '') + '>Claude Sonnet 4.6 (Faster)</option>' +
             '<option value="claude-haiku-4-5-20251001"' + (localStorage.getItem('sc-anthropic-model') === 'claude-haiku-4-5-20251001' ? ' selected' : '') + '>Claude Haiku 4.5 (Fastest)</option>' +
@@ -2738,12 +2884,12 @@ function renderSettingsPage() {
           '<div class="form-row">' +
             '<div class="form-group" style="flex: 2;">' +
               '<label class="form-label">Anthropic API Key</label>' +
-              '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" onchange="saveAPIKey(this.value)" style="font-family: JetBrains Mono, monospace;">' +
+              '<input class="form-input" type="password" id="anthropic-key-input" placeholder="sk-ant-..." value="' + (localStorage.getItem('sc-anthropic-key') || '') + '" data-change="saveAPIKey" style="font-family: JetBrains Mono, monospace;">' +
               '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">Your key is stored locally in your browser and never sent to any server other than Anthropic\'s API.</div>' +
             '</div>' +
           '</div>' +
           '<div style="margin-top: 8px;">' +
-            '<button class="btn btn-sm" onclick="testAPIKey()">Test Key</button>' +
+            '<button class="btn btn-sm" data-action="testAPIKey">Test Key</button>' +
             (localStorage.getItem('sc-anthropic-key') ? '<span style="margin-left: 12px; font-size: 0.78rem; color: var(--success);">' + ICONS.check + ' Key saved</span>' : '') +
           '</div>' +
         '</div>' +
@@ -2752,11 +2898,11 @@ function renderSettingsPage() {
 
     '<div class="card mb-20"><div class="card-header"><div class="card-title">Data Management</div></div>' +
       '<div class="flex gap-8 flex-wrap">' +
-        '<button class="btn" onclick="exportAllDataXLSX()">' + ICONS.download + ' Export All Data (XLSX)</button>' +
-        '<button class="btn" onclick="exportAllData()">' + ICONS.download + ' Export All Data (CSV)</button>' +
-        '<button class="btn" onclick="document.getElementById(\'import-file\').click()">' + ICONS.upload + ' Import Data</button>' +
-        '<input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">' +
-        '<button class="btn btn-danger" onclick="confirmClearData()">' + ICONS.trash + ' Clear All Data</button>' +
+        '<button class="btn" data-action="exportAllDataXLSX">' + ICONS.download + ' Export All Data (XLSX)</button>' +
+        '<button class="btn" data-action="exportAllData">' + ICONS.download + ' Export All Data (CSV)</button>' +
+        '<button class="btn" data-action="importDataTrigger">' + ICONS.upload + ' Import Data</button>' +
+        '<input type="file" id="import-file" style="display:none" accept=".json" data-change="importData">' +
+        '<button class="btn btn-danger" data-action="confirmClearData">' + ICONS.trash + ' Clear All Data</button>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -3000,7 +3146,7 @@ function renderFootbridgePage() {
           '<div style="font-size:1.8rem; font-weight:800; color:var(--accent); font-family:JetBrains Mono, monospace;">' + fmt(fbGrand) + '</div>' +
           '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">' + Object.keys(fbEst.phases).length + ' phases &middot; ' + Object.values(fbEst.phases).reduce(function(s, p) { return s + (p.items ? p.items.length : 0); }, 0) + ' line items</div>' +
         '</div>' +
-        '<button class="btn btn-accent" onclick="STATE.currentEstimate=JSON.parse(JSON.stringify(STATE.footbridgeEstimate)); STATE.outputActiveTab=\'summary\'; navigateTo(\'output\');">' +
+        '<button class="btn btn-accent" data-action="fbViewOutput">' +
           ICONS.output + ' View Full Output &rarr;' +
         '</button>' +
       '</div>';
@@ -3018,7 +3164,7 @@ function renderFootbridgePage() {
       '<div class="form-row" style="margin-bottom:16px;">' +
         '<div class="form-group" style="flex:2;">' +
           '<label class="form-label">Bridge Type</label>' +
-          '<select class="form-select" onchange="updateFootbridgeConfig(\'bridgeType\', this.value)">' +
+          '<select class="form-select" data-change="updateFootbridgeConfig" data-params=\'{"key":"bridgeType","type":"string"}\'>' +
             Object.entries(BRIDGE_TYPES).map(function(entry) {
               return '<option value="' + entry[0] + '"' + (cfg.bridgeType === entry[0] ? ' selected' : '') + '>' + entry[1].name + ' -- ' + entry[1].description + '</option>';
             }).join('') +
@@ -3031,13 +3177,13 @@ function renderFootbridgePage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Span Length: <span id="fb-label-span">' + cfg.spanLength + '</span>m</label>' +
-          '<input type="range" min="10" max="100" step="1" value="' + cfg.spanLength + '" class="fb-slider" oninput="updateFootbridgeConfig(\'spanLength\', parseInt(this.value))">' +
+          '<input type="range" min="10" max="100" step="1" value="' + cfg.spanLength + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"spanLength","type":"int"}\'>' +
         '</div>' +
-        (isArch ? '<div class="form-group"><label class="form-label">Arch Rise Ratio: <span id="fb-label-rise">' + cfg.archRise.toFixed(2) + '</span></label><input type="range" min="0.10" max="0.50" step="0.01" value="' + cfg.archRise + '" class="fb-slider" oninput="updateFootbridgeConfig(\'archRise\', parseFloat(this.value))"></div>' : '') +
-        (isMulti ? '<div class="form-group"><label class="form-label">Number of Spans: <span id="fb-label-spans">' + cfg.numSpans + '</span></label><input type="range" min="2" max="5" step="1" value="' + cfg.numSpans + '" class="fb-slider" oninput="updateFootbridgeConfig(\'numSpans\', parseInt(this.value))"></div>' : '') +
+        (isArch ? '<div class="form-group"><label class="form-label">Arch Rise Ratio: <span id="fb-label-rise">' + cfg.archRise.toFixed(2) + '</span></label><input type="range" min="0.10" max="0.50" step="0.01" value="' + cfg.archRise + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"archRise"}\'></div>' : '') +
+        (isMulti ? '<div class="form-group"><label class="form-label">Number of Spans: <span id="fb-label-spans">' + cfg.numSpans + '</span></label><input type="range" min="2" max="5" step="1" value="' + cfg.numSpans + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"numSpans","type":"int"}\'></div>' : '') +
         '<div class="form-group">' +
           '<label class="form-label">Clear Width: <span id="fb-label-width">' + cfg.clearWidth.toFixed(1) + '</span>m</label>' +
-          '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" class="fb-slider" oninput="updateFootbridgeConfig(\'clearWidth\', parseFloat(this.value))">' +
+          '<input type="range" min="2" max="6" step="0.1" value="' + cfg.clearWidth + '" class="fb-slider" data-oninput="updateFootbridgeConfig" data-params=\'{"key":"clearWidth"}\'>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -3046,14 +3192,14 @@ function renderFootbridgePage() {
     '<div class="card mb-16">' +
       '<div class="card-header"><div class="card-title">' + ICONS.building + ' Footbridge Scope & Parameters</div></div>' +
       '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Project Name</label><input class="form-input" type="text" id="fb-project-name" placeholder="e.g., Stanley Park Pedestrian Bridge" value="' + (STATE.fbProjectName || '') + '" onchange="STATE.fbProjectName=this.value"></div>' +
-        '<div class="form-group"><label class="form-label">Client</label><input class="form-input" type="text" id="fb-client" placeholder="e.g., Vancouver Parks Board" value="' + (STATE.fbClient || '') + '" onchange="STATE.fbClient=this.value"></div>' +
-        '<div class="form-group"><label class="form-label">Location</label><input class="form-input" type="text" id="fb-location" placeholder="e.g., Vancouver, BC" value="' + (STATE.fbLocation || '') + '" onchange="STATE.fbLocation=this.value"></div>' +
+        '<div class="form-group"><label class="form-label">Project Name</label><input class="form-input" type="text" id="fb-project-name" placeholder="e.g., Stanley Park Pedestrian Bridge" value="' + (STATE.fbProjectName || '') + '" data-change="setFbState" data-params=\'{"key":"fbProjectName"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Client</label><input class="form-input" type="text" id="fb-client" placeholder="e.g., Vancouver Parks Board" value="' + (STATE.fbClient || '') + '" data-change="setFbState" data-params=\'{"key":"fbClient"}\'></div>' +
+        '<div class="form-group"><label class="form-label">Location</label><input class="form-input" type="text" id="fb-location" placeholder="e.g., Vancouver, BC" value="' + (STATE.fbLocation || '') + '" data-change="setFbState" data-params=\'{"key":"fbLocation"}\'></div>' +
       '</div>' +
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Loading Condition</label>' +
-          '<select class="form-select" id="fb-loading" onchange="STATE.fbLoading=this.value">' +
+          '<select class="form-select" id="fb-loading" data-change="setFbState" data-params=\'{"key":"fbLoading"}\'>' +
             '<option value="pedestrian"' + (STATE.fbLoading==='pedestrian'?' selected':'') + '>Pedestrian Only</option>' +
             '<option value="ped-cyclist"' + (STATE.fbLoading==='ped-cyclist'?' selected':'') + '>Pedestrian + Cyclist</option>' +
             '<option value="light-vehicle"' + (STATE.fbLoading==='light-vehicle'?' selected':'') + '>Light Vehicle (< 5t)</option>' +
@@ -3061,7 +3207,7 @@ function renderFootbridgePage() {
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Geotechnical Conditions</label>' +
-          '<select class="form-select" id="fb-geotech" onchange="STATE.fbGeotech=this.value">' +
+          '<select class="form-select" id="fb-geotech" data-change="setFbState" data-params=\'{"key":"fbGeotech"}\'>' +
             '<option value="rock"' + (STATE.fbGeotech==='rock'?' selected':'') + '>Competent Rock</option>' +
             '<option value="dense-soil"' + (STATE.fbGeotech==='dense-soil'?' selected':'') + '>Dense Soil / Gravel</option>' +
             '<option value="soft-soil"' + (STATE.fbGeotech==='soft-soil'?' selected':'') + '>Soft Soil / Clay</option>' +
@@ -3072,7 +3218,7 @@ function renderFootbridgePage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Structural Material</label>' +
-          '<select class="form-select" id="fb-material" onchange="STATE.fbMaterial=this.value">' +
+          '<select class="form-select" id="fb-material" data-change="setFbState" data-params=\'{"key":"fbMaterial"}\'>' +
             '<option value="glulam-df"' + (STATE.fbMaterial==='glulam-df'?' selected':'') + '>Glulam (Douglas Fir)</option>' +
             '<option value="glulam-spruce"' + (STATE.fbMaterial==='glulam-spruce'?' selected':'') + '>Glulam (Spruce)</option>' +
             '<option value="clt-hybrid"' + (STATE.fbMaterial==='clt-hybrid'?' selected':'') + '>CLT + Glulam Hybrid</option>' +
@@ -3081,7 +3227,7 @@ function renderFootbridgePage() {
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Deck System</label>' +
-          '<select class="form-select" id="fb-deck" onchange="STATE.fbDeck=this.value">' +
+          '<select class="form-select" id="fb-deck" data-change="setFbState" data-params=\'{"key":"fbDeck"}\'>' +
             '<option value="dlt"' + (STATE.fbDeck==='dlt'?' selected':'') + '>Timber Deck (DLT)</option>' +
             '<option value="clt"' + (STATE.fbDeck==='clt'?' selected':'') + '>Timber Deck (CLT)</option>' +
             '<option value="concrete-timber"' + (STATE.fbDeck==='concrete-timber'?' selected':'') + '>Concrete on Timber</option>' +
@@ -3092,7 +3238,7 @@ function renderFootbridgePage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Railing Type</label>' +
-          '<select class="form-select" id="fb-railing" onchange="STATE.fbRailing=this.value">' +
+          '<select class="form-select" id="fb-railing" data-change="setFbState" data-params=\'{"key":"fbRailing"}\'>' +
             '<option value="timber-cable"' + (STATE.fbRailing==='timber-cable'?' selected':'') + '>Timber + Steel Cable</option>' +
             '<option value="steel-mesh"' + (STATE.fbRailing==='steel-mesh'?' selected':'') + '>Steel Mesh</option>' +
             '<option value="glass"' + (STATE.fbRailing==='glass'?' selected':'') + '>Glass Panel</option>' +
@@ -3101,7 +3247,7 @@ function renderFootbridgePage() {
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Site Access</label>' +
-          '<select class="form-select" id="fb-access" onchange="STATE.fbAccess=this.value">' +
+          '<select class="form-select" id="fb-access" data-change="setFbState" data-params=\'{"key":"fbAccess"}\'>' +
             '<option value="standard"' + (STATE.fbAccess==='standard'?' selected':'') + '>Standard vehicular</option>' +
             '<option value="restricted"' + (STATE.fbAccess==='restricted'?' selected':'') + '>Restricted / pedestrian only</option>' +
             '<option value="helicopter"' + (STATE.fbAccess==='helicopter'?' selected':'') + '>Helicopter required</option>' +
@@ -3112,7 +3258,7 @@ function renderFootbridgePage() {
       '<div class="form-row">' +
         '<div class="form-group">' +
           '<label class="form-label">Coverage</label>' +
-          '<select class="form-select" id="fb-coverage" onchange="STATE.fbCoverage=this.value">' +
+          '<select class="form-select" id="fb-coverage" data-change="setFbState" data-params=\'{"key":"fbCoverage"}\'>' +
             '<option value="open"' + (STATE.fbCoverage==='open'?' selected':'') + '>Open (uncovered)</option>' +
             '<option value="covered"' + (STATE.fbCoverage==='covered'?' selected':'') + '>Covered / canopy</option>' +
             '<option value="partial"' + (STATE.fbCoverage==='partial'?' selected':'') + '>Partially covered</option>' +
@@ -3120,7 +3266,7 @@ function renderFootbridgePage() {
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">StructureCraft Scope</label>' +
-          '<select class="form-select" id="fb-scope" onchange="STATE.fbScope=this.value">' +
+          '<select class="form-select" id="fb-scope" data-change="setFbState" data-params=\'{"key":"fbScope"}\'>' +
             '<option value="prime-db"' + (STATE.fbScope==='prime-db'?' selected':'') + '>Prime Contractor (Design-Build)</option>' +
             '<option value="eng-supply"' + (STATE.fbScope==='eng-supply'?' selected':'') + '>Engineering + Supply</option>' +
             '<option value="supply-only"' + (STATE.fbScope==='supply-only'?' selected':'') + '>Supply Only</option>' +
@@ -3133,7 +3279,7 @@ function renderFootbridgePage() {
     '<!-- Generate Button -->' +
     '<div class="card mb-16" style="text-align:center; padding: 30px;">' +
       '<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Configure parameters above, then generate a detailed footbridge cost estimate.</p>' +
-      '<button class="btn btn-lg btn-accent" onclick="generateFootbridgeEstimate()" style="padding: 14px 40px; font-size: 1rem;">' +
+      '<button class="btn btn-lg btn-accent" data-action="generateFootbridgeEstimate" style="padding: 14px 40px; font-size: 1rem;">' +
         ICONS.bolt + ' Mill This Bridge' +
       '</button>' +
     '</div>' +
@@ -3211,9 +3357,9 @@ function renderFootbridgeOutput(fbEst) {
     '</div>' +
 
     '<div class="tabs">' +
-      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" onclick="STATE.footbridgeOutputTab=\'summary\'; renderPage();">Summary</div>' +
+      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
       phaseKeys.map(function(pk) {
-        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" onclick="STATE.footbridgeOutputTab=\'' + pk + '\'; renderPage();">' + (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) + '</div>';
+        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' + (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) + '</div>';
       }).join('') +
     '</div>' +
 
@@ -5224,8 +5370,8 @@ function renderQueuePage() {
       '<div class="section-desc">Track estimates being analyzed by Claude AI and view completed results</div>' +
     '</div>' +
     (hasAny ? '<div class="section-actions">' +
-      (hasFinished ? '<button class="btn btn-sm" onclick="clearCompletedQueue()" title="Clear completed & failed">' + ICONS.trash + ' Clear Finished</button>' : '') +
-      '<button class="btn btn-sm" onclick="if(confirm(\'Clear entire queue?\')) clearAllQueue();" title="Clear all items">' + ICONS.trash + ' Clear All</button>' +
+      (hasFinished ? '<button class="btn btn-sm" data-action="clearCompletedQueue" title="Clear completed & failed">' + ICONS.trash + ' Clear Finished</button>' : '') +
+      '<button class="btn btn-sm" data-action="clearAllQueue" title="Clear all items">' + ICONS.trash + ' Clear All</button>' +
     '</div>' : '') +
     '</div>' +
 
@@ -5275,7 +5421,7 @@ function renderQueuePage() {
               '</div>' +
               '<div style="display:flex; align-items:center; gap:8px;">' +
                 '<span class="queue-elapsed" style="font-size:0.78rem; color:var(--text-muted);">' + elapsedStr + ' elapsed</span>' +
-                '<button class="btn btn-sm" style="padding:3px 8px; font-size:0.7rem; color:var(--danger, #ef4444); border-color:var(--danger, #ef4444);" onclick="stopQueueItem(\'' + q.id + '\')" title="Stop this estimate">' + ICONS.trash + ' Stop</button>' +
+                '<button class="btn btn-sm" style="padding:3px 8px; font-size:0.7rem; color:var(--danger, #ef4444); border-color:var(--danger, #ef4444);" data-action="stopQueueItem" data-params=\'{"id":"' + q.id + '"}\'}\'  "Stop this estimate">' + ICONS.trash + ' Stop</button>' +
               '</div>' +
             '</div>' +
             '<div class="queue-step-text" style="font-size:0.8rem; color:var(--accent); margin-bottom:6px;">' + (q.step || 'Processing...') + '</div>' +
@@ -5300,8 +5446,8 @@ function renderQueuePage() {
               '<div style="font-size:0.72rem; color:var(--text-muted);">' + (q.deliveryModel || '') + ' &middot; Completed ' + formatTimeAgo(q.completedTime || q.startTime) + (q.totalCost ? ' &middot; ' + fmt(q.totalCost) : '') + '</div>' +
             '</div>' +
             '<div style="display:flex; gap:8px;">' +
-              '<button class="btn btn-sm btn-accent" onclick="viewQueueEstimate(\'' + q.id + '\')">View Output</button>' +
-              '<button class="btn btn-sm" onclick="removeFromQueue(\'' + q.id + '\')">' + ICONS.trash + '</button>' +
+              '<button class="btn btn-sm btn-accent" data-action="viewQueueEstimate" data-params=\'{"id":"' + q.id + '"}\'>View Output</button>' +
+              '<button class="btn btn-sm" data-action="removeFromQueue" data-params=\'{"id":"' + q.id + '"}\'>' + ICONS.trash + '</button>' +
             '</div>' +
           '</div>';
         }).join('') +
@@ -5318,7 +5464,7 @@ function renderQueuePage() {
               '<div style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">' + (q.name || 'Untitled') + '</div>' +
               '<div style="font-size:0.72rem; color:var(--text-muted);">' + (q.error || 'Unknown error') + '</div>' +
             '</div>' +
-            '<button class="btn btn-sm" onclick="removeFromQueue(\'' + q.id + '\')">' + ICONS.trash + '</button>' +
+            '<button class="btn btn-sm" data-action="removeFromQueue" data-params=\'{"id":"' + q.id + '"}\'>' + ICONS.trash + '</button>' +
           '</div>';
         }).join('') +
       '</div>'
@@ -5329,7 +5475,7 @@ function renderQueuePage() {
       '<div class="card" style="padding:60px; text-align:center;">' +
         '<div style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">No estimates in queue</div>' +
         '<div style="color:var(--text-muted); font-size:0.78rem;">Go to Input, fill in your project details, and click Generate Estimate to start.</div>' +
-        '<button class="btn btn-accent" style="margin-top:20px;" onclick="navigateTo(\'input\')">' + ICONS.plus + ' New Estimate</button>' +
+        '<button class="btn btn-accent" style="margin-top:20px;" data-action="navigateTo" data-params=\'{"page":"input"}\'>' + ICONS.plus + ' New Estimate</button>' +
       '</div>'
     : '') +
 
@@ -5427,7 +5573,7 @@ function showNotificationsPanel() {
   var html = '<div class="notif-panel" id="notif-panel">' +
     '<div style="padding:16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">' +
       '<div style="font-weight:700; font-size:0.9rem; color:var(--text-primary);">Notifications & Activity</div>' +
-      '<button class="icon-btn" onclick="document.getElementById(\'notif-panel\').remove();">' +
+      '<button class="icon-btn" data-action="closeNotifPanel">' +
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
       '</button>' +
     '</div>' +
@@ -5439,7 +5585,7 @@ function showNotificationsPanel() {
         inProgress.map(function(q) {
           return '<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">' + (q.name || 'Untitled') + ' &mdash; ' + Math.round(q.progress || 0) + '% &middot; ' + (q.step || '') + '</div>';
         }).join('') +
-        '<button class="btn btn-sm btn-accent" style="margin-top:8px;" onclick="navigateTo(\'queue\'); document.getElementById(\'notif-panel\').remove();">View Queue</button>' +
+        '<button class="btn btn-sm btn-accent" style="margin-top:8px;" data-action="viewQueue">View Queue</button>' +
       '</div>'
     : '') +
 
@@ -5461,7 +5607,7 @@ function showNotificationsPanel() {
     '</div>' +
 
     '<div style="padding:12px 16px; text-align:center;">' +
-      '<button class="btn btn-sm" onclick="ACTIVITY_LOG=[]; localStorage.removeItem(\'sc-activity-log\'); document.getElementById(\'notif-panel\').remove(); showToast(\'Activity log cleared.\', \'info\');">Clear Log</button>' +
+      '<button class="btn btn-sm" data-action="clearActivityLog">Clear Log</button>' +
     '</div>' +
   '</div>';
 
@@ -5477,15 +5623,18 @@ function showNotificationsPanel() {
 // ---- SECTION 11: ROUTING & RENDERING ----
 
 var PAGE_MAP = {
-  'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Workspace > Estimate Input' },
-  'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Workspace > Estimate Queue' },
-  'output': { title: 'Estimate Output', render: renderOutputPage, breadcrumb: 'Workspace > Estimate Output' },
-  'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Workspace > Footbridge Estimator' },
-  'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Reference > Past Estimates' },
-  'connector': { title: 'Reference & Compare', render: renderConnectorPage, breadcrumb: 'Workspace > Reference & Compare' },
-  'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Reference > Pricing Library' },
-  'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Reference > Analytics' },
-  'qa': { title: 'FAQ', render: renderQAPage, breadcrumb: 'Reference > FAQ' },
+  'dashboard': { title: 'Dashboard', render: renderDashboardPage, breadcrumb: 'Home > Dashboard' },
+  'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Estimate > Input' },
+  'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Estimate > Queue' },
+  'output': { title: 'Estimate Output', render: renderOutputPage, breadcrumb: 'Estimate > Output' },
+  'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Estimate > Footbridge' },
+  'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Library > Past Estimates' },
+  'benchmarks': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
+  'connector': { title: 'Reference & Compare', render: renderConnectorPage, breadcrumb: 'Tools > Reference & Compare' },
+  'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Library > Pricing Library' },
+  'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Library > Analytics' },
+  'scenarios': { title: 'What-If Scenarios', render: renderScenariosPage, breadcrumb: 'Tools > What-If Scenarios' },
+  'qa': { title: 'FAQ', render: renderQAPage, breadcrumb: 'System > FAQ' },
   'settings': { title: 'Settings', render: renderSettingsPage, breadcrumb: 'System > Settings' },
 };
 
@@ -5522,6 +5671,10 @@ function renderPage(forceFullRender) {
     content.setAttribute('data-queue-finished', String(finishedCount));
   }
   updateBreadcrumb(page.breadcrumb);
+  // Phase 1D: Initialize custom dropdown selects after render
+  setTimeout(initCustomSelects, 0);
+  // Phase 3A: Run rule engine after render
+  setTimeout(runRuleEngine, 0);
 }
 
 function doQueueIncrementalUpdate(inProgress) {
@@ -5585,9 +5738,7 @@ function updateBreadcrumb(text) {
   }).join('');
 }
 
-var _navigating = false;
 function navigateTo(page, skipHash) {
-  _navigating = true;
   STATE.currentPage = page;
   if (!skipHash) {
     var hash = '#' + page;
@@ -5595,41 +5746,30 @@ function navigateTo(page, skipHash) {
       hash += '/' + STATE.currentEstimate.id;
     }
     if (window.location.hash !== hash) {
-      window.location.hash = hash;
+      history.replaceState(null, '', hash);
     }
   }
   updateNavigation();
   renderPage(true);
   saveState();
-  _navigating = false;
-  scottOnPageChange(page);
+  if (typeof scottOnPageChange === 'function') scottOnPageChange(page);
 }
 
 function handleHashChange() {
-  if (_navigating) return; // navigateTo already handling this
   var hash = window.location.hash.replace('#', '');
   if (!hash) return;
   var parts = hash.split('/');
   var page = parts[0];
   var estId = parts[1] || null;
-
-  // Validate page exists
   if (!PAGE_MAP[page]) return;
-
-  // If navigating to output with a specific estimate ID, load it
   if (page === 'output' && estId) {
     var found = STATE.estimates.find(function(e) { return e.id === estId; });
-    if (found) {
-      STATE.currentEstimate = JSON.parse(JSON.stringify(found));
-    }
+    if (found) STATE.currentEstimate = JSON.parse(JSON.stringify(found));
   }
-
-  if (STATE.currentPage !== page) {
-    STATE.currentPage = page;
-    updateNavigation();
-    renderPage();
-    saveState();
-  }
+  STATE.currentPage = page;
+  updateNavigation();
+  renderPage(true);
+  saveState();
 }
 
 function updateNavigation() {
@@ -5726,7 +5866,7 @@ function renderPaletteResults(query) {
   var q = query.toLowerCase();
   var filtered = window._commands.filter(function(c) { return c.label.toLowerCase().indexOf(q) >= 0; }).slice(0, 10);
   results.innerHTML = filtered.map(function(cmd, i) {
-    return '<div class="palette-item ' + (i === 0 ? 'selected' : '') + '" data-idx="' + i + '" onclick="executePaletteCommand(' + i + ')">' +
+    return '<div class="palette-item ' + (i === 0 ? 'selected' : '') + '" data-idx="' + i + '" data-action="executePaletteCommand" data-params=\'{"idx":' + i + '}\'>' +
       '<span class="palette-item-icon">' + cmd.icon + '</span>' +
       '<span class="palette-item-label">' + cmd.label + '</span>' +
     '</div>';
@@ -6015,8 +6155,10 @@ function initApp() {
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
   document.getElementById('nav-icon-connector').innerHTML = ICONS.connector;
   document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
-  document.getElementById('nav-icon-analytics').innerHTML = ICONS.analytics;
-  document.getElementById('nav-icon-qa').innerHTML = ICONS.qa;
+  var analyticsNav = document.getElementById('nav-icon-analytics');
+  if (analyticsNav) analyticsNav.innerHTML = ICONS.analytics;
+  var qaNav = document.getElementById('nav-icon-qa');
+  if (qaNav) qaNav.innerHTML = ICONS.qa;
   document.getElementById('nav-icon-settings').innerHTML = ICONS.settings;
 
   // Badge counts
@@ -6141,6 +6283,12 @@ function initApp() {
   });
   saveQueue();
 
+  // Init event delegation
+  initDelegation();
+
+  // Init v2.0 features (dashboard, FAQ modal, client mode, new nav icons)
+  initV2Features();
+
   // Render initial page
   renderPage();
   updateNavigation();
@@ -6153,6 +6301,601 @@ function initApp() {
     var ls = document.getElementById('loading-screen');
     if (ls) ls.classList.add('hidden');
   }, 1600);
+}
+
+// ============================================
+// V2.0 ADDITIONS
+// ============================================
+
+// ---- PHASE 1D: CUSTOM DROPDOWN COMPONENT ----
+function initCustomSelects() {
+  document.querySelectorAll('select.form-select').forEach(function(sel) {
+    if (sel.parentElement.classList.contains('cs-wrapper')) return;
+    buildCustomSelect(sel);
+  });
+}
+
+function buildCustomSelect(sel) {
+  var wrapper = document.createElement('div');
+  wrapper.className = 'cs-wrapper';
+  sel.parentElement.insertBefore(wrapper, sel);
+  wrapper.appendChild(sel);
+  sel.style.display = 'none';
+
+  var trigger = document.createElement('div');
+  trigger.className = 'cs-trigger';
+  trigger.setAttribute('tabindex', '0');
+  var selectedOpt = sel.options[sel.selectedIndex];
+  trigger.innerHTML = '<span class="cs-trigger-text">' + (selectedOpt ? selectedOpt.textContent : '') + '</span><span class="cs-arrow">\u25BE</span>';
+  wrapper.appendChild(trigger);
+
+  var dropdown = document.createElement('div');
+  dropdown.className = 'cs-dropdown';
+  var hasSearch = sel.options.length > 6;
+  if (hasSearch) {
+    var searchInput = document.createElement('input');
+    searchInput.className = 'cs-search';
+    searchInput.placeholder = 'Filter...';
+    searchInput.type = 'text';
+    dropdown.appendChild(searchInput);
+    searchInput.addEventListener('input', function() {
+      var q = this.value.toLowerCase();
+      dropdown.querySelectorAll('.cs-option').forEach(function(opt) {
+        opt.style.display = opt.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+      });
+    });
+    searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
+  }
+
+  var optList = document.createElement('div');
+  optList.className = 'cs-option-list';
+  Array.from(sel.options).forEach(function(opt, i) {
+    var div = document.createElement('div');
+    div.className = 'cs-option' + (i === sel.selectedIndex ? ' selected' : '');
+    div.textContent = opt.textContent;
+    div.setAttribute('data-value', opt.value);
+    div.addEventListener('click', function(e) {
+      e.stopPropagation();
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      trigger.querySelector('.cs-trigger-text').textContent = opt.textContent;
+      dropdown.querySelectorAll('.cs-option').forEach(function(o) { o.classList.remove('selected'); });
+      div.classList.add('selected');
+      closeCustomSelect(wrapper);
+    });
+    optList.appendChild(div);
+  });
+  dropdown.appendChild(optList);
+  wrapper.appendChild(dropdown);
+
+  trigger.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var isOpen = wrapper.classList.contains('open');
+    closeAllCustomSelects();
+    if (!isOpen) {
+      wrapper.classList.add('open');
+      var rect = wrapper.getBoundingClientRect();
+      if (rect.bottom + 250 > window.innerHeight) dropdown.classList.add('flip-up');
+      else dropdown.classList.remove('flip-up');
+      if (hasSearch) searchInput.focus();
+    }
+  });
+
+  trigger.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.click(); }
+    if (e.key === 'Escape') closeCustomSelect(wrapper);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      var opts = optList.querySelectorAll('.cs-option:not([style*="display: none"])');
+      var current = optList.querySelector('.cs-option.highlighted') || optList.querySelector('.cs-option.selected');
+      var idx = Array.from(opts).indexOf(current);
+      if (e.key === 'ArrowDown') idx = Math.min(idx + 1, opts.length - 1);
+      else idx = Math.max(idx - 1, 0);
+      opts.forEach(function(o) { o.classList.remove('highlighted'); });
+      if (opts[idx]) { opts[idx].classList.add('highlighted'); opts[idx].scrollIntoView({ block: 'nearest' }); }
+    }
+  });
+}
+
+function closeCustomSelect(wrapper) { wrapper.classList.remove('open'); }
+function closeAllCustomSelects() { document.querySelectorAll('.cs-wrapper.open').forEach(function(w) { w.classList.remove('open'); }); }
+document.addEventListener('click', closeAllCustomSelects);
+
+// ---- PHASE 3A: LIVE RULE ENGINE ----
+var ESTIMATE_RULES = [
+  {
+    id: 'missing-area',
+    level: 'warning',
+    check: function(est) { return !est.buildingArea || est.buildingArea <= 0; },
+    message: 'Building area not set — $/SF metrics unavailable. Add area in Output page metrics.'
+  },
+  {
+    id: 'high-contingency',
+    level: 'info',
+    check: function(est) { return est.assumptions && est.assumptions.contingencyPercent > 12; },
+    message: 'Contingency above 12% — typical for early-stage budgets, consider reducing for DD/CD.'
+  },
+  {
+    id: 'no-scope',
+    level: 'warning',
+    check: function(est) { return !est.scopeDescription || est.scopeDescription.length < 20; },
+    message: 'Project scope is thin — AI estimates improve significantly with detailed scope descriptions.'
+  },
+  {
+    id: 'no-files',
+    level: 'info',
+    check: function(est) {
+      var files = est.files || {};
+      var total = 0;
+      Object.keys(files).forEach(function(k) { total += (files[k] || []).length; });
+      return total === 0;
+    },
+    message: 'No documents uploaded — uploading drawings and RFPs enables AI-powered quantity takeoff.'
+  },
+  {
+    id: 'high-margin',
+    level: 'warning',
+    check: function(est) { return est.assumptions && est.assumptions.marginPercent > 20; },
+    message: 'Margin above 20% — verify this is intentional for competitive bid scenarios.'
+  },
+  {
+    id: 'low-escalation',
+    level: 'info',
+    check: function(est) { return est.assumptions && est.assumptions.escalationPercent < 2; },
+    message: 'Escalation below 2%/yr — current market trends suggest 3-4% for 2025-2026.'
+  }
+];
+
+function runRuleEngine() {
+  var est = STATE.currentEstimate;
+  if (!est) return;
+  var bar = document.getElementById('rule-alerts');
+  if (!bar) return;
+
+  var alerts = [];
+  ESTIMATE_RULES.forEach(function(rule) {
+    try {
+      if (rule.check(est)) {
+        alerts.push({ level: rule.level, message: rule.message, id: rule.id });
+      }
+    } catch(e) { /* skip broken rules */ }
+  });
+
+  if (alerts.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'block';
+  bar.innerHTML = alerts.map(function(a) {
+    var icon = a.level === 'warning' ? ICONS.warning : ICONS.info;
+    return '<div class="rule-alert-item ' + a.level + '">' + icon + ' <span>' + a.message + '</span></div>';
+  }).join('');
+}
+
+// ---- PHASE 5A: DASHBOARD PAGE ----
+function renderDashboardPage() {
+  var estimates = STATE.estimates;
+  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
+  var avgEstimate = estimates.length > 0 ? totalPipeline / estimates.length : 0;
+  var recentEstimates = estimates.slice(-5).reverse();
+  var wonCount = estimates.filter(function(e) { return e.status === 'won'; }).length;
+  var decidedCount = estimates.filter(function(e) { return ['won', 'lost'].indexOf(e.status) >= 0; }).length;
+  var winRate = decidedCount > 0 ? Math.round(wonCount / decidedCount * 100) : 0;
+
+  // Recent activity from activity log
+  var recentActivity = (typeof ACTIVITY_LOG !== 'undefined' ? ACTIVITY_LOG : []).slice(-8).reverse();
+
+  return '<div class="fade-in">' +
+    '<div class="dashboard-hero">' +
+      '<div class="dashboard-welcome">' +
+        '<h2>Welcome to StructureCraft Estimator</h2>' +
+        '<p>AI-powered structural cost estimation for mass timber and hybrid building projects. Upload drawings, generate estimates, and benchmark with confidence.</p>' +
+        '<div class="dashboard-quick-actions">' +
+          '<button class="btn btn-accent" data-action="navigateTo" data-params=\'{"page":"input"}\'>' + ICONS.plus + ' New Estimate</button>' +
+          '<button class="btn" data-action="navigateTo" data-params=\'{"page":"footbridge"}\'>' + ICONS.footbridge + ' Footbridge</button>' +
+          '<button class="btn" data-action="navigateTo" data-params=\'{"page":"benchmarks"}\'>' + ICONS.analytics + ' Benchmarks</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dashboard-activity">' +
+        '<h3>Recent Activity</h3>' +
+        (recentActivity.length > 0 ?
+          recentActivity.map(function(a) {
+            return '<div class="activity-item">' +
+              '<div class="activity-dot"></div>' +
+              '<div class="activity-time">' + (a.ts || '') + '</div>' +
+              '<div style="color:var(--text-secondary);">' + (a.message || '') + '</div>' +
+            '</div>';
+          }).join('')
+          : '<div style="color:var(--text-muted); font-size:0.82rem;">No recent activity. Create your first estimate to get started.</div>'
+        ) +
+      '</div>' +
+    '</div>' +
+
+    '<div class="kpi-grid mb-20">' +
+      '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(totalPipeline) + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">' + winRate + '%</div><div class="kpi-change up">' + ICONS.arrowUp + ' ' + wonCount + ' won</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Avg Estimate</div><div class="kpi-value">' + fmt(avgEstimate) + '</div></div>' +
+    '</div>' +
+
+    (recentEstimates.length > 0 ?
+      '<div class="section-divider">Recent Estimates</div>' +
+      '<div class="dashboard-grid">' +
+        recentEstimates.map(function(est) {
+          var total = est.totalCost || calcEstimateTotal(est);
+          var model = DELIVERY_MODELS[est.deliveryModel];
+          return '<div class="card" style="cursor:pointer;" data-action="viewEstimateDetail" data-params=\'{"id":"' + est.id + '"}\'>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">' +
+              '<div>' +
+                '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
+                '<div style="font-size:0.75rem; color:var(--text-muted);">' + esc(est.client) + ' &mdash; ' + (model ? model.name : '') + '</div>' +
+              '</div>' +
+              '<div class="badge badge-' + (est.status || 'draft') + '">' + (est.status || 'draft') + '</div>' +
+            '</div>' +
+            '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(total) + '</div>' +
+            (est.buildingArea > 0 ? '<div style="font-size:0.72rem; color:var(--text-muted);">$' + (total / est.buildingArea).toFixed(2) + '/SF</div>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>'
+      : '<div class="card" style="text-align:center; padding:40px;">' +
+          '<div style="color:var(--text-muted); margin-bottom:16px;">' + ICONS.building + '</div>' +
+          '<h3 style="color:var(--text-primary); margin-bottom:8px;">No estimates yet</h3>' +
+          '<p style="color:var(--text-secondary); margin-bottom:16px;">Create your first estimate to see it here.</p>' +
+          '<button class="btn btn-accent" data-action="navigateTo" data-params=\'{"page":"input"}\'>' + ICONS.plus + ' Create First Estimate</button>' +
+        '</div>'
+    ) +
+  '</div>';
+}
+
+// ---- PHASE 2B: BENCHMARKS PAGE ----
+var INDUSTRY_BENCHMARKS = {
+  'commercial-timber': { label: 'Commercial Mass Timber', low: 45, mid: 65, high: 95, unit: '$/SF' },
+  'residential-timber': { label: 'Residential Mass Timber', low: 40, mid: 58, high: 82, unit: '$/SF' },
+  'institutional-timber': { label: 'Institutional Mass Timber', low: 55, mid: 78, high: 110, unit: '$/SF' },
+  'commercial-steel': { label: 'Commercial Steel Frame', low: 35, mid: 52, high: 75, unit: '$/SF' },
+  'commercial-concrete': { label: 'Commercial Concrete', low: 38, mid: 55, high: 80, unit: '$/SF' },
+  'footbridge': { label: 'Pedestrian Footbridge', low: 2500, mid: 4500, high: 8000, unit: '$/LF' },
+};
+
+function renderBenchmarksPage() {
+  var estimates = STATE.estimates;
+  var withArea = estimates.filter(function(e) { return e.buildingArea > 0 && e.totalCost > 0; });
+
+  var byMaterial = {};
+  withArea.forEach(function(e) {
+    var mat = e.primaryMaterial || 'timber';
+    if (!byMaterial[mat]) byMaterial[mat] = [];
+    byMaterial[mat].push({ name: e.name, costPerSF: e.totalCost / e.buildingArea, total: e.totalCost, area: e.buildingArea });
+  });
+
+  var maxSF = 0;
+  withArea.forEach(function(e) { var sf = e.totalCost / e.buildingArea; if (sf > maxSF) maxSF = sf; });
+
+  return '<div class="fade-in">' +
+    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Benchmarks</div><div class="section-desc">$/SF benchmarks across your estimate library and industry data</div></div></div>' +
+
+    '<div class="section-divider">Industry Benchmarks (2025-2026)</div>' +
+    '<div class="benchmark-matrix">' +
+      Object.keys(INDUSTRY_BENCHMARKS).map(function(key) {
+        var bm = INDUSTRY_BENCHMARKS[key];
+        return '<div class="benchmark-cell">' +
+          '<div class="bm-type">' + bm.label + '</div>' +
+          '<div class="bm-value">$' + bm.mid + '</div>' +
+          '<div class="bm-unit">' + bm.unit + '</div>' +
+          '<div class="bm-range">Range: $' + bm.low + ' — $' + bm.high + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    (withArea.length > 0 ?
+      '<div class="section-divider">Your Estimates — $/SF Comparison</div>' +
+      '<div class="card mb-20">' +
+        '<div class="chart-container">' +
+          withArea.map(function(e) {
+            var sf = e.totalCost / e.buildingArea;
+            var pct = maxSF > 0 ? (sf / maxSF * 100) : 0;
+            return '<div class="bar-chart-row">' +
+              '<div class="bar-chart-label" title="' + esc(e.name) + '">' + esc(e.name || 'Untitled') + '</div>' +
+              '<div class="bar-chart-track"><div class="bar-chart-fill" style="width:' + Math.max(pct, 5) + '%;">' +
+                (pct > 25 ? '<span class="bar-chart-value">$' + sf.toFixed(2) + '/SF</span>' : '') +
+              '</div></div>' +
+              '<div class="bar-chart-amount">$' + sf.toFixed(2) + '/SF</div>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>'
+    : '<div class="card mb-20" style="text-align:center; padding:30px; color:var(--text-muted);">No estimates with building area set. Add building area on the Output page to see $/SF benchmarks.</div>'
+    ) +
+
+    // By material breakdown
+    (Object.keys(byMaterial).length > 0 ?
+      '<div class="section-divider">$/SF by Primary Material</div>' +
+      '<div class="grid-2 mb-20">' +
+        Object.keys(byMaterial).map(function(mat) {
+          var entries = byMaterial[mat];
+          var avg = entries.reduce(function(s, e) { return s + e.costPerSF; }, 0) / entries.length;
+          var min = Math.min.apply(null, entries.map(function(e) { return e.costPerSF; }));
+          var max = Math.max.apply(null, entries.map(function(e) { return e.costPerSF; }));
+          return '<div class="card">' +
+            '<div style="font-weight:600; color:var(--accent); margin-bottom:8px; text-transform:capitalize;">' + mat + '</div>' +
+            '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">' +
+              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Low</div><div style="font-family:JetBrains Mono; font-weight:600;">$' + min.toFixed(2) + '</div></div>' +
+              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">Avg</div><div style="font-family:JetBrains Mono; font-weight:700; color:var(--accent);">$' + avg.toFixed(2) + '</div></div>' +
+              '<div><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">High</div><div style="font-family:JetBrains Mono; font-weight:600;">$' + max.toFixed(2) + '</div></div>' +
+            '</div>' +
+            '<div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">' + entries.length + ' estimate' + (entries.length !== 1 ? 's' : '') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>'
+    : '') +
+  '</div>';
+}
+
+// ---- PHASE 6A: WATERFALL CHART ----
+function renderWaterfallChart(est, phaseKeys) {
+  if (!est || !est.phases) return '';
+  var phases = [];
+  var runningTotal = 0;
+  phaseKeys.forEach(function(pk) {
+    if (est.phases[pk]) {
+      var cost = calcPhaseTotal(est.phases[pk]);
+      if (cost > 0) {
+        phases.push({ key: pk, name: PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk, cost: cost, start: runningTotal });
+        runningTotal += cost;
+      }
+    }
+  });
+  var subtotal = runningTotal;
+  var margin = subtotal * ((est.assumptions.marginPercent || 0) / 100);
+  var overhead = subtotal * ((est.assumptions.overheadPercent || 0) / 100);
+  var contingency = subtotal * ((est.assumptions.contingencyPercent || 0) / 100);
+  var bondIns = subtotal * ((est.assumptions.bondInsurancePercent || 0) / 100);
+
+  phases.push({ key: 'subtotal', name: 'Subtotal', cost: subtotal, start: 0, isSubtotal: true });
+  if (margin > 0) { phases.push({ key: 'margin', name: 'Margin', cost: margin, start: subtotal }); runningTotal += margin; }
+  if (overhead > 0) { phases.push({ key: 'overhead', name: 'Overhead', cost: overhead, start: runningTotal - overhead }); }
+  if (contingency > 0) { phases.push({ key: 'contingency', name: 'Contingency', cost: contingency, start: runningTotal }); runningTotal += contingency; }
+  if (bondIns > 0) { phases.push({ key: 'bond', name: 'Bond/Ins', cost: bondIns, start: runningTotal }); runningTotal += bondIns; }
+  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
+  phases.push({ key: 'total', name: 'Total', cost: grandTotal, start: 0, isTotal: true });
+
+  var maxVal = grandTotal;
+  return '<div class="card mb-20">' +
+    '<div class="card-header"><div class="card-title">' + ICONS.analytics + ' Cost Waterfall</div></div>' +
+    '<div class="waterfall-chart">' +
+      phases.map(function(p) {
+        var heightPct = maxVal > 0 ? (p.cost / maxVal * 100) : 0;
+        var barClass = p.isTotal ? 'total' : p.isSubtotal ? 'subtotal' : 'positive';
+        return '<div class="waterfall-bar-group">' +
+          '<div class="waterfall-bar ' + barClass + '" style="height:' + Math.max(heightPct, 3) + '%;">' +
+            '<div class="waterfall-bar-tooltip">' + fmt(p.cost) + '</div>' +
+          '</div>' +
+          '<div class="waterfall-label">' + p.name + '</div>' +
+          '<div class="waterfall-value">' + fmt(p.cost) + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+// ---- PHASE 6B: WHAT-IF SCENARIOS ----
+STATE.scenarios = STATE.scenarios || [];
+STATE.activeScenarioIdx = STATE.activeScenarioIdx || 0;
+
+function renderScenariosPage() {
+  var est = STATE.currentEstimate;
+  var scenarios = STATE.scenarios;
+
+  // Create base scenario from current estimate if none exist
+  if (scenarios.length === 0 && est) {
+    scenarios.push({
+      name: 'Base Case',
+      isBase: true,
+      margin: est.assumptions.marginPercent,
+      contingency: est.assumptions.contingencyPercent,
+      overhead: est.assumptions.overheadPercent,
+      escalation: est.assumptions.escalationPercent,
+      materialFactor: 1.0,
+      laborFactor: 1.0
+    });
+    STATE.scenarios = scenarios;
+  }
+
+  // Calculate scenario results
+  var modelKey = est.deliveryModel || 'eor-build';
+  var model = DELIVERY_MODELS[modelKey];
+  var phaseKeys = model ? model.phases : [];
+  var baseSubtotal = 0;
+  phaseKeys.forEach(function(pk) {
+    if (est.phases && est.phases[pk]) baseSubtotal += calcPhaseTotal(est.phases[pk]);
+  });
+
+  var results = scenarios.map(function(sc) {
+    var adjusted = baseSubtotal * (sc.materialFactor || 1) * (sc.laborFactor || 1);
+    var total = adjusted * (1 + (sc.margin || 0) / 100 + (sc.overhead || 0) / 100 + (sc.contingency || 0) / 100);
+    return { scenario: sc, subtotal: adjusted, total: total };
+  });
+
+  var baseTotal = results.length > 0 ? results[0].total : 0;
+  var maxTotal = Math.max.apply(null, results.map(function(r) { return r.total; }).concat([1]));
+
+  return '<div class="fade-in">' +
+    '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' What-If Scenarios</div><div class="section-desc">Compare cost impacts of different assumptions on ' + esc(est.name || 'current estimate') + '</div></div>' +
+      '<div class="section-actions"><button class="btn btn-accent" data-action="addScenario">' + ICONS.plus + ' Add Scenario</button></div>' +
+    '</div>' +
+
+    // Comparison chart
+    (results.length > 1 ?
+      '<div class="card mb-20">' +
+        '<div class="card-header"><div class="card-title">Scenario Comparison</div></div>' +
+        '<div class="scenario-comparison-chart">' +
+          results.map(function(r) {
+            var pct = maxTotal > 0 ? (r.total / maxTotal * 100) : 0;
+            var diff = baseTotal > 0 ? ((r.total - baseTotal) / baseTotal * 100) : 0;
+            return '<div class="scenario-chart-bar">' +
+              '<div class="scenario-chart-fill' + (r.scenario.isBase ? ' base' : '') + '" style="height:' + Math.max(pct, 5) + '%;"></div>' +
+              '<div class="scenario-chart-label">' + esc(r.scenario.name) + '</div>' +
+              '<div class="scenario-chart-value">' + fmt(r.total) + '</div>' +
+              (!r.scenario.isBase && diff !== 0 ? '<div class="scenario-diff ' + (diff > 0 ? 'up' : 'down') + '">' + (diff > 0 ? '+' : '') + diff.toFixed(1) + '%</div>' : '') +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>' : ''
+    ) +
+
+    // Scenario cards
+    scenarios.map(function(sc, idx) {
+      var r = results[idx];
+      var diff = baseTotal > 0 ? ((r.total - baseTotal) / baseTotal * 100) : 0;
+      return '<div class="scenario-card' + (idx === STATE.activeScenarioIdx ? ' active' : '') + '">' +
+        '<div class="scenario-header">' +
+          '<div class="scenario-name">' + esc(sc.name) + '</div>' +
+          '<span class="scenario-badge ' + (sc.isBase ? 'base' : 'variant') + '">' + (sc.isBase ? 'Base' : 'Variant') + '</span>' +
+        '</div>' +
+        '<div class="scenario-params">' +
+          '<div class="scenario-param"><label>Margin %</label><input type="number" step="0.5" value="' + sc.margin + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"margin"}\'></div>' +
+          '<div class="scenario-param"><label>Contingency %</label><input type="number" step="0.5" value="' + sc.contingency + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"contingency"}\'></div>' +
+          '<div class="scenario-param"><label>Overhead %</label><input type="number" step="0.5" value="' + sc.overhead + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"overhead"}\'></div>' +
+          '<div class="scenario-param"><label>Material Factor</label><input type="number" step="0.05" value="' + (sc.materialFactor || 1) + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"materialFactor"}\'></div>' +
+          '<div class="scenario-param"><label>Labor Factor</label><input type="number" step="0.05" value="' + (sc.laborFactor || 1) + '" data-change="updateScenario" data-params=\'{"idx":' + idx + ',"field":"laborFactor"}\'></div>' +
+        '</div>' +
+        '<div class="scenario-results">' +
+          '<div class="scenario-result-cell"><div class="value">' + fmt(r.total) + '</div><div class="label">Total</div></div>' +
+          '<div class="scenario-result-cell"><div class="value">' + (est.buildingArea > 0 ? '$' + (r.total / est.buildingArea).toFixed(2) : '—') + '</div><div class="label">$/SF</div></div>' +
+          '<div class="scenario-result-cell">' +
+            (sc.isBase ? '<div class="value">—</div><div class="label">vs Base</div>' :
+              '<div class="value scenario-diff ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral') + '">' + (diff > 0 ? '+' : '') + diff.toFixed(1) + '%</div><div class="label">vs Base</div>') +
+          '</div>' +
+        '</div>' +
+        (!sc.isBase ? '<div style="margin-top:8px; text-align:right;"><button class="btn btn-sm" data-action="removeScenario" data-params=\'{"idx":' + idx + '}\'>' + ICONS.trash + ' Remove</button></div>' : '') +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+// Register scenario actions
+registerAction('addScenario', function() {
+  var est = STATE.currentEstimate;
+  STATE.scenarios.push({
+    name: 'Scenario ' + (STATE.scenarios.length + 1),
+    isBase: false,
+    margin: est.assumptions.marginPercent,
+    contingency: est.assumptions.contingencyPercent,
+    overhead: est.assumptions.overheadPercent,
+    escalation: est.assumptions.escalationPercent,
+    materialFactor: 1.0,
+    laborFactor: 1.0
+  });
+  renderPage(true);
+});
+
+registerAction('removeScenario', function(p) {
+  STATE.scenarios.splice(parseInt(p.idx), 1);
+  renderPage(true);
+});
+
+registerAction('updateScenario', function(p) {
+  var idx = parseInt(p.idx);
+  if (STATE.scenarios[idx]) {
+    STATE.scenarios[idx][p.field] = parseFloat(p._value) || 0;
+    renderPage(true);
+  }
+});
+
+// ---- PHASE 6C: CLIENT-FACING VIEW TOGGLE ----
+STATE.clientMode = false;
+
+function toggleClientMode() {
+  STATE.clientMode = !STATE.clientMode;
+  document.body.classList.toggle('client-mode', STATE.clientMode);
+  var btn = document.getElementById('btn-client-mode');
+  if (btn) btn.classList.toggle('active', STATE.clientMode);
+
+  // Add/remove banner
+  var existing = document.querySelector('.client-mode-banner');
+  if (STATE.clientMode) {
+    if (!existing) {
+      var banner = document.createElement('div');
+      banner.className = 'client-mode-banner';
+      banner.textContent = 'CLIENT VIEW — Internal details hidden';
+      document.getElementById('main-content').prepend(banner);
+    }
+  } else {
+    if (existing) existing.remove();
+  }
+  renderPage(true);
+}
+
+// ---- PHASE 5B: FAQ MODAL ----
+function showFAQModal() {
+  var modal = document.getElementById('faq-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  var body = document.getElementById('faq-modal-body');
+  if (body) {
+    body.innerHTML = renderQAPage();
+  }
+}
+
+function closeFAQModal() {
+  var modal = document.getElementById('faq-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// ---- PHASE 4C: ANIMATED GENERATION REVEAL ----
+function animateEstimateReveal() {
+  var cards = document.querySelectorAll('#page-content .card');
+  cards.forEach(function(card, i) {
+    card.classList.add('estimate-reveal');
+    card.style.animationDelay = (i * 0.1) + 's';
+  });
+}
+
+// ---- V2.0 ICON ADDITIONS ----
+ICONS.dashboard = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>';
+ICONS.scenario = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L20.5 3.5M21 16v5h-5M15 15l5.5 5.5M4 4l5 5"/></svg>';
+ICONS.benchmarks = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/><path d="M2 20h20"/></svg>';
+
+// ---- V2.0 INIT UPDATES ----
+// These are called during initApp to set up new nav items and features
+
+function initV2Features() {
+  // Set dashboard nav icon
+  var dashNav = document.getElementById('nav-icon-dashboard');
+  if (dashNav) dashNav.innerHTML = ICONS.dashboard;
+  var bmNav = document.getElementById('nav-icon-benchmarks');
+  if (bmNav) bmNav.innerHTML = ICONS.benchmarks;
+  var scNav = document.getElementById('nav-icon-scenarios');
+  if (scNav) scNav.innerHTML = ICONS.scenario;
+
+  // FAQ modal button
+  var faqBtn = document.getElementById('btn-faq');
+  if (faqBtn) {
+    faqBtn.addEventListener('click', showFAQModal);
+  }
+  var closeFaq = document.getElementById('close-faq');
+  if (closeFaq) {
+    closeFaq.addEventListener('click', closeFAQModal);
+  }
+  // Close FAQ on backdrop click
+  var faqOverlay = document.getElementById('faq-modal');
+  if (faqOverlay) {
+    faqOverlay.addEventListener('click', function(e) {
+      if (e.target === faqOverlay) closeFAQModal();
+    });
+  }
+
+  // Client mode toggle
+  var clientBtn = document.getElementById('btn-client-mode');
+  if (clientBtn) {
+    clientBtn.addEventListener('click', toggleClientMode);
+  }
+
+  // Default to dashboard on first visit
+  if (!window.location.hash && STATE.currentPage === 'input') {
+    STATE.currentPage = 'dashboard';
+  }
 }
 
 // Boot
