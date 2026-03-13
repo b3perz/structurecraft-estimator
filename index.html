@@ -59,28 +59,32 @@
 
       <div class="sidebar-nav">
         <ul class="nav-items" id="home-nav">
-          <li class="nav-item" data-page="dashboard">
-            <span class="nav-icon" id="nav-icon-dashboard"></span>
-            <span class="nav-label">Dashboard</span>
+          <li class="nav-item" data-page="home">
+            <span class="nav-icon" id="nav-icon-home"></span>
+            <span class="nav-label">Home</span>
           </li>
         </ul>
 
-        <div class="nav-section-label">Estimate</div>
+        <div class="nav-section-label">Estimator</div>
         <ul class="nav-items" id="main-nav">
-          <li class="nav-item active" data-page="input">
+          <li class="nav-item" data-page="input">
             <span class="nav-icon" id="nav-icon-input"></span>
-            <span class="nav-label">Estimate Input</span>
+            <span class="nav-label">New Estimate</span>
             <span class="nav-badge" id="badge-input"></span>
           </li>
           <li class="nav-item" data-page="queue">
             <span class="nav-icon" id="nav-icon-queue"></span>
-            <span class="nav-label">Estimate Queue</span>
+            <span class="nav-label">Queue</span>
             <span class="nav-badge" id="badge-queue"></span>
           </li>
           <li class="nav-item" data-page="output">
             <span class="nav-icon" id="nav-icon-output"></span>
-            <span class="nav-label">Estimate Output</span>
+            <span class="nav-label">Output</span>
           </li>
+        </ul>
+
+        <div class="nav-section-label">Specialty</div>
+        <ul class="nav-items" id="specialty-nav">
           <li class="nav-item" data-page="footbridge">
             <span class="nav-icon" id="nav-icon-footbridge"></span>
             <span class="nav-label">Footbridge</span>
@@ -94,21 +98,13 @@
             <span class="nav-label">Past Estimates</span>
             <span class="nav-badge" id="badge-past"></span>
           </li>
-          <li class="nav-item" data-page="benchmarks">
-            <span class="nav-icon" id="nav-icon-benchmarks"></span>
-            <span class="nav-label">Benchmarks</span>
-          </li>
           <li class="nav-item" data-page="pricing-library">
             <span class="nav-icon" id="nav-icon-pricing"></span>
             <span class="nav-label">Pricing Library</span>
           </li>
-        </ul>
-
-        <div class="nav-section-label">Tools</div>
-        <ul class="nav-items" id="tools-nav">
-          <li class="nav-item" data-page="scenarios">
-            <span class="nav-icon" id="nav-icon-scenarios"></span>
-            <span class="nav-label">What-If Scenarios</span>
+          <li class="nav-item" data-page="benchmarks">
+            <span class="nav-icon" id="nav-icon-benchmarks"></span>
+            <span class="nav-label">Benchmarks</span>
           </li>
         </ul>
 
@@ -122,10 +118,6 @@
       </div>
 
       <div class="sidebar-footer">
-        <button id="btn-faq" class="sidebar-faq-btn" title="FAQ & Help">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          <span>FAQ & Help</span>
-        </button>
         <div class="theme-quick-switch">
           <button id="theme-cycle" class="icon-btn" title="Cycle theme">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
@@ -158,6 +150,9 @@
           <button id="btn-new-estimate" class="btn btn-accent">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
             New Estimate
+          </button>
+          <button id="btn-help" class="icon-btn" title="Help & FAQ" onclick="showHelpModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
           <button id="btn-notifications" class="icon-btn" title="Notifications">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>

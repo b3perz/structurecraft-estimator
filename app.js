@@ -67,7 +67,7 @@ const THEMES = [
 
 // ---- SECTION 3: STATE MANAGEMENT ----
 const STATE = {
-  currentPage: 'input',
+  currentPage: 'home',
   currentTheme: localStorage.getItem('sc-theme') || 'midnight',
   sidebarCollapsed: false,
   guideOpen: false,
@@ -316,6 +316,18 @@ registerAction('toggleFbEnv', function(p, target) {
 });
 registerAction('closeNotifPanel', function() { var el = document.getElementById('notif-panel'); if(el) el.remove(); });
 registerAction('viewQueue', function() { navigateTo('queue'); var el = document.getElementById('notif-panel'); if(el) el.remove(); });
+registerAction('newEstimateFromHome', function() {
+  STATE.currentEstimate = createNewEstimate();
+  navigateTo('input');
+});
+registerAction('loadEstimateFromHome', function(p) {
+  var found = STATE.estimates.find(function(e) { return e.id === p.id; });
+  if (found) {
+    STATE.currentEstimate = JSON.parse(JSON.stringify(found));
+    STATE.outputActiveTab = 'summary';
+    navigateTo('output');
+  }
+});
 registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.removeItem('sc-activity-log'); var el = document.getElementById('notif-panel'); if(el) el.remove(); showToast('Activity log cleared.', 'info'); });
 registerAction('executePaletteCommand', function(p) { executePaletteCommand(parseInt(p.idx)); });
 
@@ -5776,6 +5788,7 @@ function showNotificationsPanel() {
 // ---- SECTION 11: ROUTING & RENDERING ----
 
 var PAGE_MAP = {
+  'home': { title: 'Home', render: renderHomePage, breadcrumb: 'Home' },
   'dashboard': { title: 'Dashboard', render: renderDashboardPage, breadcrumb: 'Home > Dashboard' },
   'input': { title: 'Estimate Input', render: renderInputPage, breadcrumb: 'Estimate > Input' },
   'queue': { title: 'Estimate Queue', render: renderQueuePage, breadcrumb: 'Estimate > Queue' },
@@ -5910,7 +5923,7 @@ function navigateTo(page, skipHash) {
 
 function handleHashChange() {
   var hash = window.location.hash.replace('#', '');
-  if (!hash) return;
+  if (!hash) { navigateTo('home', true); return; }
   var parts = hash.split('/');
   var page = parts[0];
   var estId = parts[1] || null;
@@ -6433,6 +6446,8 @@ function initApp() {
   loadState();
 
   // Set nav icons
+  var homeNav = document.getElementById('nav-icon-home');
+  if (homeNav) homeNav.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
   document.getElementById('nav-icon-input').innerHTML = ICONS.input;
   var queueNav = document.getElementById('nav-icon-queue');
   if (queueNav) queueNav.innerHTML = ICONS.bolt;
@@ -6440,10 +6455,8 @@ function initApp() {
   document.getElementById('nav-icon-footbridge').innerHTML = ICONS.footbridge;
   document.getElementById('nav-icon-past').innerHTML = ICONS.past;
   document.getElementById('nav-icon-pricing').innerHTML = ICONS.pricing;
-  var analyticsNav = document.getElementById('nav-icon-analytics');
-  if (analyticsNav) analyticsNav.innerHTML = ICONS.analytics;
-  var qaNav = document.getElementById('nav-icon-qa');
-  if (qaNav) qaNav.innerHTML = ICONS.qa;
+  var bmNav2 = document.getElementById('nav-icon-benchmarks');
+  if (bmNav2) bmNav2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>';
   document.getElementById('nav-icon-settings').innerHTML = ICONS.settings;
 
   // Badge counts
@@ -6758,7 +6771,110 @@ function runRuleEngine() {
   }).join('');
 }
 
-// ---- PHASE 5A: DASHBOARD PAGE ----
+// ---- PHASE 5A: HOME PAGE ----
+function renderHomePage() {
+  var estimates = STATE.estimates;
+  var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
+  var estimatesWithArea = estimates.filter(function(e) { return e.buildingArea > 0; });
+  var avgPerSF = estimatesWithArea.length > 0
+    ? estimatesWithArea.reduce(function(s, e) { return s + (e.totalCost || 0) / e.buildingArea; }, 0) / estimatesWithArea.length
+    : 0;
+  var activeQueue = (typeof ESTIMATE_QUEUE !== 'undefined' ? ESTIMATE_QUEUE : []).filter(function(q) { return q.status === 'processing'; }).length;
+  var recentEstimates = estimates.slice(-5).reverse();
+
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  return '<div class="fade-in">' +
+
+    // Branded header
+    '<div class="home-header">' +
+      '<div class="home-header-left">' +
+        '<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">' +
+          '<svg width="40" height="40" viewBox="0 0 100 100" fill="none"><rect x="15" y="30" width="70" height="8" rx="2" fill="var(--accent)"/><rect x="30" y="18" width="8" height="64" rx="2" fill="var(--accent)"/><rect x="62" y="18" width="8" height="64" rx="2" fill="var(--accent)"/><rect x="15" y="62" width="70" height="8" rx="2" fill="var(--accent)" opacity="0.7"/></svg>' +
+          '<div><div style="font-size:1.3rem; font-weight:800; color:var(--text-primary);">StructureCraft Estimator</div>' +
+          '<div style="font-size:0.82rem; color:var(--text-muted);">Structural cost intelligence</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="home-header-right">' +
+        '<div style="font-size:0.82rem; color:var(--text-muted); text-align:right;">' + dateStr + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI row
+    '<div class="kpi-grid mb-20">' +
+      '<div class="kpi-card"><div class="kpi-label">Total Estimates</div><div class="kpi-value">' + estimates.length + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Pipeline Value</div><div class="kpi-value">' + fmt(totalPipeline) + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Avg $/SF</div><div class="kpi-value">' + (avgPerSF > 0 ? '$' + avgPerSF.toFixed(2) : '—') + '</div></div>' +
+      '<div class="kpi-card"><div class="kpi-label">Active Queue</div><div class="kpi-value">' + activeQueue + '</div></div>' +
+    '</div>' +
+
+    // Recent Estimates
+    (recentEstimates.length > 0 ?
+      '<div class="section-divider">Recent Estimates</div>' +
+      '<div class="dashboard-grid mb-20">' +
+        recentEstimates.map(function(est) {
+          var total = est.totalCost || calcEstimateTotal(est);
+          var model = DELIVERY_MODELS[est.deliveryModel];
+          var perSF = est.buildingArea > 0 ? '$' + (total / est.buildingArea).toFixed(2) + '/SF' : '';
+          var ago = timeAgo(est.updatedAt || est.createdAt);
+          return '<div class="card home-estimate-card" data-action="loadEstimateFromHome" data-params=\'{"id":"' + est.id + '"}\'>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">' +
+              '<div>' +
+                '<div style="font-weight:600; color:var(--text-primary);">' + esc(est.name || 'Untitled') + '</div>' +
+                '<div style="font-size:0.75rem; color:var(--text-muted);">' + esc(est.client || '') + (model ? ' &mdash; ' + model.name : '') + '</div>' +
+              '</div>' +
+              '<div style="font-size:0.7rem; color:var(--text-muted);">' + ago + '</div>' +
+            '</div>' +
+            '<div style="font-size:1.1rem; font-weight:700; font-family:JetBrains Mono, monospace; color:var(--accent);">' + fmt(total) + '</div>' +
+            (perSF ? '<div style="font-size:0.72rem; color:var(--text-muted);">' + perSF + '</div>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>'
+      : ''
+    ) +
+
+    // New Estimate button
+    '<div style="text-align:center; margin:24px 0;">' +
+      '<button class="btn btn-lg btn-accent" data-action="newEstimateFromHome" style="padding:14px 48px; font-size:1rem;">' +
+        ICONS.plus + ' New Estimate' +
+      '</button>' +
+    '</div>' +
+
+    // Quick links
+    '<div class="section-divider">Quick Links</div>' +
+    '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"footbridge"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.footbridge + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Footbridge Estimator</div>' +
+      '</div>' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"pricing-library"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.pricing + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Pricing Library</div>' +
+      '</div>' +
+      '<div class="card" style="cursor:pointer; text-align:center; padding:20px;" data-action="navigateTo" data-params=\'{"page":"benchmarks"}\'>' +
+        '<div style="margin-bottom:8px; color:var(--accent);">' + ICONS.benchmarks + '</div>' +
+        '<div style="font-weight:600; color:var(--text-primary); font-size:0.85rem;">Benchmarks</div>' +
+      '</div>' +
+    '</div>' +
+
+  '</div>';
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  var diff = Date.now() - new Date(dateStr).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.floor(days / 30) + 'mo ago';
+}
+
+// ---- PHASE 5A (LEGACY): DASHBOARD PAGE ----
 function renderDashboardPage() {
   var estimates = STATE.estimates;
   var totalPipeline = estimates.reduce(function(s, e) { return s + (e.totalCost || 0); }, 0);
@@ -7228,6 +7344,11 @@ function toggleClientMode() {
 }
 
 // ---- PHASE 5B: FAQ MODAL ----
+function showHelpModal() {
+  // Topbar ? button → reuse the FAQ modal
+  showFAQModal();
+}
+
 function showFAQModal() {
   var modal = document.getElementById('faq-modal');
   if (!modal) return;
@@ -7261,9 +7382,12 @@ ICONS.benchmarks = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" 
 // These are called during initApp to set up new nav items and features
 
 function initV2Features() {
-  // Set dashboard nav icon
+  // Set nav icons for v2 features
   var dashNav = document.getElementById('nav-icon-dashboard');
   if (dashNav) dashNav.innerHTML = ICONS.dashboard;
+  // Home icon (if present)
+  var homeNavV2 = document.getElementById('nav-icon-home');
+  if (homeNavV2 && !homeNavV2.innerHTML.trim()) homeNavV2.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
   var bmNav = document.getElementById('nav-icon-benchmarks');
   if (bmNav) bmNav.innerHTML = ICONS.benchmarks;
   var scNav = document.getElementById('nav-icon-scenarios');
@@ -7292,9 +7416,9 @@ function initV2Features() {
     clientBtn.addEventListener('click', toggleClientMode);
   }
 
-  // Default to dashboard on first visit
-  if (!window.location.hash && STATE.currentPage === 'input') {
-    STATE.currentPage = 'dashboard';
+  // Default to home on first visit
+  if (!window.location.hash && (STATE.currentPage === 'input' || STATE.currentPage === 'dashboard')) {
+    STATE.currentPage = 'home';
   }
 }
 

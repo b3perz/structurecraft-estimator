@@ -481,6 +481,7 @@ a { color: var(--accent); text-decoration: none; }
   padding: 10px 24px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
   min-height: 52px;
   flex-shrink: 0;
 }
@@ -2360,6 +2361,21 @@ tbody tr:last-child td { border-bottom: none; }
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
   margin-bottom: 20px;
+}
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding: 20px 0;
+}
+.home-estimate-card {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.home-estimate-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lg);
 }
 .dashboard-hero {
   display: grid;
