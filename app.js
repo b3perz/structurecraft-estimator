@@ -330,6 +330,8 @@ registerAction('loadEstimateFromHome', function(p) {
 });
 registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.removeItem('sc-activity-log'); var el = document.getElementById('notif-panel'); if(el) el.remove(); showToast('Activity log cleared.', 'info'); });
 registerAction('executePaletteCommand', function(p) { executePaletteCommand(parseInt(p.idx)); });
+registerAction('startVoiceInput', function() { startVoiceInput(); });
+registerAction('submitVoiceText', function() { submitVoiceText(); });
 
 // ---- SECTION 3B: REGIONAL COST FACTORS ----
 // RSMeans City Cost Index data (2025 baseline: national average = 1.00)
@@ -1454,6 +1456,19 @@ function renderInputPage() {
             }).join('') +
           '</select>' +
         '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<!-- 3D Building Visualizer -->' +
+    '<div class="card mb-16">' +
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="card-title">' + ICONS.building + ' 3D Preview</div>' +
+          '<div class="card-subtitle">Interactive building model. Drag to orbit, scroll to zoom.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="building-viz-container" style="width:100%; height:260px; border-radius:8px; overflow:hidden; background:var(--bg-tertiary); position:relative;">' +
+        '<div id="building-viz-fallback" style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:0.78rem;">Loading 3D view...</div>' +
       '</div>' +
     '</div>' +
 
@@ -5883,6 +5898,10 @@ function renderPage(forceFullRender) {
   setTimeout(initCustomSelects, 0);
   // Phase 3A: Run rule engine after render
   setTimeout(runRuleEngine, 0);
+  // Phase 7C: Initialize 3D building visualizer on input page
+  if (STATE.currentPage === 'input') {
+    setTimeout(initBuildingVisualizer, 50);
+  }
 }
 
 function doQueueIncrementalUpdate(inProgress) {
@@ -7014,14 +7033,23 @@ function renderBenchmarksPage() {
   var filterType = STATE.benchmarkFilterType || 'all';
   var filteredWithArea = filterType === 'all' ? withArea : withArea.filter(function(e) { return e.projectType === filterType; });
 
+  // Escalation helper: returns adjusted total for an estimate
+  var escOn = STATE.escalationEnabled;
+  function getAdjustedTotal(e) {
+    var raw = e.totalCost || calcEstimateTotal(e);
+    if (!escOn || !e.createdAt) return raw;
+    var fromQ = getQuarterKey(e.createdAt);
+    return raw * getBlendedEscalation(fromQ);
+  }
+
   // Current estimate $/SF
-  var currentTotal = currentEst ? (currentEst.totalCost || calcEstimateTotal(currentEst)) : 0;
+  var currentTotal = currentEst ? getAdjustedTotal(currentEst) : 0;
   var currentArea = currentEst ? (currentEst.buildingArea || 0) : 0;
   var currentSF = currentArea > 0 ? (currentTotal / currentArea) : 0;
 
   // Distribution chart SVG
   var chartWidth = 700, chartHeight = 120, dotR = 6, padding = 40;
-  var allSF = filteredWithArea.map(function(e) { return (e.totalCost || calcEstimateTotal(e)) / e.buildingArea; });
+  var allSF = filteredWithArea.map(function(e) { return getAdjustedTotal(e) / e.buildingArea; });
   if (currentSF > 0) allSF.push(currentSF);
   var minSF = allSF.length > 0 ? Math.min.apply(null, allSF) : 0;
   var maxSF = allSF.length > 0 ? Math.max.apply(null, allSF) : 100;
@@ -7031,11 +7059,13 @@ function renderBenchmarksPage() {
   range = maxSF - minSF;
 
   var svgDots = filteredWithArea.map(function(e) {
-    var sf = (e.totalCost || calcEstimateTotal(e)) / e.buildingArea;
+    var sf = getAdjustedTotal(e) / e.buildingArea;
+    var origSF = (e.totalCost || calcEstimateTotal(e)) / e.buildingArea;
     var x = padding + ((sf - minSF) / range) * (chartWidth - padding * 2);
     var isCurrent = currentEst && e.id === currentEst.id;
+    var tooltipExtra = escOn && sf !== origSF ? ' (orig $' + origSF.toFixed(2) + ')' : '';
     return '<circle cx="' + x + '" cy="' + (chartHeight / 2) + '" r="' + (isCurrent ? dotR + 3 : dotR) + '" fill="' + (isCurrent ? 'var(--accent)' : 'var(--text-muted)') + '" opacity="' + (isCurrent ? '1' : '0.5') + '" style="cursor:pointer;">' +
-      '<title>' + esc(e.name || 'Untitled') + ': $' + sf.toFixed(2) + '/SF</title></circle>';
+      '<title>' + esc(e.name || 'Untitled') + ': $' + sf.toFixed(2) + '/SF' + tooltipExtra + '</title></circle>';
   }).join('');
 
   // Add current estimate dot if not in saved list
@@ -7068,7 +7098,7 @@ function renderBenchmarksPage() {
       '<select class="form-select" data-change="setBenchmarkComp" data-params=\'{"index":"' + ci + '"}\'>' +
         '<option value="">-- Select --</option>' +
         estimates.map(function(e) {
-          var eTotal = e.totalCost || calcEstimateTotal(e);
+          var eTotal = getAdjustedTotal(e);
           var disabled = !e.buildingArea || e.buildingArea <= 0;
           return '<option value="' + e.id + '"' + (selId === e.id ? ' selected' : '') + (disabled ? ' disabled style="color:var(--text-muted);"' : '') + '>' + esc(e.name || 'Untitled') + (disabled ? ' (no area)' : ' — $' + (eTotal / e.buildingArea).toFixed(2) + '/SF') + '</option>';
         }).join('') +
@@ -7153,11 +7183,38 @@ function renderBenchmarksPage() {
       }).join('') +
     '</div>';
 
+  // Escalation toggle and adjustments
+  var escEnabled = STATE.escalationEnabled;
+  var escToggleHtml = '<div class="card mb-20" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px;">' +
+    '<div><div style="font-weight:600; font-size:0.85rem;">Historical Cost Escalation</div>' +
+    '<div style="font-size:0.72rem; color:var(--text-muted);">Adjust past estimates to current-quarter dollars using lumber/steel/labor indices</div></div>' +
+    '<label class="toggle-switch" style="flex-shrink:0;">' +
+      '<input type="checkbox"' + (escEnabled ? ' checked' : '') + ' data-action="toggleEscalation">' +
+      '<span class="toggle-slider"></span>' +
+    '</label>' +
+  '</div>';
+
+  var escInfoHtml = '';
+  if (escEnabled) {
+    var nowQ = '2026-Q1';
+    escInfoHtml = '<div class="card mb-20" style="padding:12px 16px;">' +
+      '<div style="font-size:0.75rem; font-weight:600; margin-bottom:8px; color:var(--accent);">Cost Index Values (base 2023-Q1 = 1.00)</div>' +
+      '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:0.72rem;">' +
+        '<div><span style="color:var(--text-muted);">Lumber:</span> <span class="mono">' + (COST_INDICES.lumber[nowQ] || 1).toFixed(2) + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Steel:</span> <span class="mono">' + (COST_INDICES.steel[nowQ] || 1).toFixed(2) + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Labor:</span> <span class="mono">' + (COST_INDICES.labor[nowQ] || 1).toFixed(2) + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+
   return '<div class="fade-in">' +
     '<div class="section-header"><div><div class="section-title">' + ICONS.analytics + ' Benchmarks</div><div class="section-desc">$/SF benchmarks across your estimate library and industry data</div></div></div>' +
 
+    // Escalation toggle
+    escToggleHtml + escInfoHtml +
+
     // Section 1: Distribution Chart
-    '<div class="section-divider">$/SF Distribution</div>' +
+    '<div class="section-divider">$/SF Distribution' + (escEnabled ? ' <span style="font-size:0.7rem; color:var(--accent); font-weight:400;">(escalation-adjusted)</span>' : '') + '</div>' +
     '<div class="card mb-20">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
         '<div style="font-size:0.72rem; color:var(--text-muted);">' +
@@ -7637,6 +7694,392 @@ function animateEstimateReveal() {
   });
 }
 
+// ---- PHASE 7C: 3D BUILDING VISUALIZER ----
+var _vizScene, _vizCamera, _vizRenderer, _vizAnimId;
+
+function initBuildingVisualizer() {
+  if (typeof THREE === 'undefined') {
+    var fb = document.getElementById('building-viz-fallback');
+    if (fb) fb.textContent = '3D not available (WebGL required)';
+    return;
+  }
+  var container = document.getElementById('building-viz-container');
+  if (!container) return;
+  var fallback = document.getElementById('building-viz-fallback');
+  if (fallback) fallback.style.display = 'none';
+
+  // Clean up previous
+  if (_vizRenderer) {
+    cancelAnimationFrame(_vizAnimId);
+    container.removeChild(_vizRenderer.domElement);
+    _vizRenderer.dispose();
+  }
+
+  var w = container.clientWidth, h = container.clientHeight;
+  _vizScene = new THREE.Scene();
+  _vizScene.background = new THREE.Color(0x1a1e2e);
+
+  _vizCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 500);
+  _vizCamera.position.set(30, 20, 30);
+  _vizCamera.lookAt(0, 5, 0);
+
+  _vizRenderer = new THREE.WebGLRenderer({ antialias: true });
+  _vizRenderer.setSize(w, h);
+  _vizRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(_vizRenderer.domElement);
+
+  // Lights
+  var ambient = new THREE.AmbientLight(0xffffff, 0.5);
+  _vizScene.add(ambient);
+  var dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(20, 30, 10);
+  _vizScene.add(dir);
+
+  // Ground plane
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshStandardMaterial({ color: 0x2a2e3e, roughness: 0.9 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.05;
+  _vizScene.add(ground);
+
+  // Grid helper
+  var grid = new THREE.GridHelper(80, 40, 0x3a3e4e, 0x2a2e3e);
+  _vizScene.add(grid);
+
+  updateBuildingModel();
+
+  // Mouse orbit (simplified)
+  var isDragging = false, prevX = 0, prevY = 0, angleX = 0.6, angleY = 0.4, radius = 40;
+  function updateCamera() {
+    _vizCamera.position.x = radius * Math.sin(angleX) * Math.cos(angleY);
+    _vizCamera.position.y = radius * Math.sin(angleY) + 5;
+    _vizCamera.position.z = radius * Math.cos(angleX) * Math.cos(angleY);
+    _vizCamera.lookAt(0, 5, 0);
+  }
+  updateCamera();
+
+  _vizRenderer.domElement.addEventListener('mousedown', function(e) { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+  window.addEventListener('mouseup', function() { isDragging = false; });
+  window.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    angleX += (e.clientX - prevX) * 0.008;
+    angleY = Math.max(0.05, Math.min(1.4, angleY + (e.clientY - prevY) * 0.008));
+    prevX = e.clientX; prevY = e.clientY;
+    updateCamera();
+  });
+  _vizRenderer.domElement.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    radius = Math.max(10, Math.min(80, radius + e.deltaY * 0.05));
+    updateCamera();
+  }, { passive: false });
+
+  // Touch support
+  _vizRenderer.domElement.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; }
+  });
+  _vizRenderer.domElement.addEventListener('touchmove', function(e) {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    angleX += (e.touches[0].clientX - prevX) * 0.008;
+    angleY = Math.max(0.05, Math.min(1.4, angleY + (e.touches[0].clientY - prevY) * 0.008));
+    prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+    updateCamera();
+  }, { passive: false });
+  _vizRenderer.domElement.addEventListener('touchend', function() { isDragging = false; });
+
+  function animate() {
+    _vizAnimId = requestAnimationFrame(animate);
+    _vizRenderer.render(_vizScene, _vizCamera);
+  }
+  animate();
+}
+
+function updateBuildingModel() {
+  if (!_vizScene) return;
+  // Remove old building group
+  var old = _vizScene.getObjectByName('buildingGroup');
+  if (old) _vizScene.remove(old);
+
+  var group = new THREE.Group();
+  group.name = 'buildingGroup';
+
+  var est = STATE.currentEstimate;
+  var stories = Math.max(1, Math.min(20, est ? (est.stories || 3) : 3));
+  var area = est ? (est.buildingArea || 10000) : 10000;
+  var mat = est ? (est.primaryMaterial || 'timber') : 'timber';
+
+  // Derive floor dimensions from area and stories
+  var floorArea = area / stories;
+  var aspect = 1.5;
+  var floorW = Math.sqrt(floorArea / aspect) * 0.3; // scale to scene
+  var floorD = floorW * aspect;
+  var storyH = 2.0;
+
+  // Material colors
+  var matColors = {
+    timber: { col: 0xc8956c, floor: 0xa87c56 },
+    steel: { col: 0x8899aa, floor: 0x667788 },
+    concrete: { col: 0x999999, floor: 0x888888 },
+    hybrid: { col: 0xbbaa88, floor: 0x998877 }
+  };
+  var mc = matColors[mat] || matColors.timber;
+  var colMat = new THREE.MeshStandardMaterial({ color: mc.col, roughness: 0.6 });
+  var floorMat = new THREE.MeshStandardMaterial({ color: mc.floor, roughness: 0.5, transparent: true, opacity: 0.85 });
+
+  // Column grid: ~6m spacing
+  var colSpacingX = Math.max(2, floorW / Math.max(1, Math.round(floorW / 3)));
+  var colSpacingZ = Math.max(2, floorD / Math.max(1, Math.round(floorD / 3)));
+  var nColsX = Math.round(floorW / colSpacingX) + 1;
+  var nColsZ = Math.round(floorD / colSpacingZ) + 1;
+  var colGeo = new THREE.BoxGeometry(0.25, storyH, 0.25);
+
+  for (var s = 0; s < stories; s++) {
+    // Floor plate
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(floorW, 0.15, floorD), floorMat);
+    plate.position.y = s * storyH;
+    group.add(plate);
+
+    // Columns
+    for (var cx = 0; cx < nColsX; cx++) {
+      for (var cz = 0; cz < nColsZ; cz++) {
+        var col = new THREE.Mesh(colGeo, colMat);
+        col.position.set(
+          -floorW / 2 + cx * colSpacingX,
+          s * storyH + storyH / 2,
+          -floorD / 2 + cz * colSpacingZ
+        );
+        group.add(col);
+      }
+    }
+  }
+
+  // Roof plate
+  var roof = new THREE.Mesh(new THREE.BoxGeometry(floorW, 0.15, floorD), floorMat);
+  roof.position.y = stories * storyH;
+  group.add(roof);
+
+  // Center the building
+  group.position.y = 0.05;
+
+  _vizScene.add(group);
+}
+
+// ---- PHASE 7B: HISTORICAL COST ESCALATION ----
+var COST_INDICES = {
+  lumber: {
+    '2023-Q1': 1.00, '2023-Q2': 1.03, '2023-Q3': 1.05, '2023-Q4': 1.04,
+    '2024-Q1': 1.06, '2024-Q2': 1.09, '2024-Q3': 1.12, '2024-Q4': 1.11,
+    '2025-Q1': 1.14, '2025-Q2': 1.17, '2025-Q3': 1.19, '2025-Q4': 1.21,
+    '2026-Q1': 1.24
+  },
+  steel: {
+    '2023-Q1': 1.00, '2023-Q2': 1.02, '2023-Q3': 1.01, '2023-Q4': 1.03,
+    '2024-Q1': 1.05, '2024-Q2': 1.08, '2024-Q3': 1.10, '2024-Q4': 1.09,
+    '2025-Q1': 1.11, '2025-Q2': 1.13, '2025-Q3': 1.15, '2025-Q4': 1.17,
+    '2026-Q1': 1.19
+  },
+  labor: {
+    '2023-Q1': 1.00, '2023-Q2': 1.01, '2023-Q3': 1.02, '2023-Q4': 1.03,
+    '2024-Q1': 1.04, '2024-Q2': 1.06, '2024-Q3': 1.07, '2024-Q4': 1.08,
+    '2025-Q1': 1.10, '2025-Q2': 1.12, '2025-Q3': 1.13, '2025-Q4': 1.15,
+    '2026-Q1': 1.17
+  }
+};
+
+function getQuarterKey(dateStr) {
+  if (!dateStr) return '2026-Q1';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '2026-Q1';
+  var y = d.getFullYear();
+  var q = Math.ceil((d.getMonth() + 1) / 3);
+  return y + '-Q' + q;
+}
+
+function getBlendedEscalation(fromQuarter, toQuarter) {
+  toQuarter = toQuarter || '2026-Q1';
+  var lFrom = COST_INDICES.lumber[fromQuarter] || 1.0;
+  var lTo = COST_INDICES.lumber[toQuarter] || 1.24;
+  var sFrom = COST_INDICES.steel[fromQuarter] || 1.0;
+  var sTo = COST_INDICES.steel[toQuarter] || 1.19;
+  var labFrom = COST_INDICES.labor[fromQuarter] || 1.0;
+  var labTo = COST_INDICES.labor[toQuarter] || 1.17;
+  // Blended: 40% lumber, 25% steel, 35% labor (typical mass timber project)
+  var factor = 0.40 * (lTo / lFrom) + 0.25 * (sTo / sFrom) + 0.35 * (labTo / labFrom);
+  return factor;
+}
+
+if (STATE.escalationEnabled === undefined) STATE.escalationEnabled = false;
+
+registerAction('toggleEscalation', function() {
+  STATE.escalationEnabled = !STATE.escalationEnabled;
+  saveState();
+  renderPage(true);
+});
+
+// ---- PHASE 7A: VOICE-TO-ESTIMATE ----
+function startVoiceInput() {
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    startSpeechRecognition(SpeechRecognition);
+  } else {
+    showVoiceTextFallback();
+  }
+}
+
+function startSpeechRecognition(SpeechRecognition) {
+  var recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  var micBtn = document.getElementById('btn-voice-input');
+  if (micBtn) micBtn.classList.add('voice-active');
+
+  showModal(
+    '<div class="voice-listening-modal">' +
+      '<div class="voice-pulse-ring"></div>' +
+      '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>' +
+      '<div class="voice-status">Listening...</div>' +
+      '<div class="voice-transcript" id="voice-transcript" style="min-height:40px; color:var(--text-secondary); font-size:0.85rem; margin-top:12px;"></div>' +
+      '<button class="btn btn-ghost" style="margin-top:16px;" onclick="hideModal()">Cancel</button>' +
+    '</div>'
+  );
+
+  var finalTranscript = '';
+
+  recognition.onresult = function(event) {
+    var interim = '';
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    var el = document.getElementById('voice-transcript');
+    if (el) el.textContent = finalTranscript + (interim ? ' ' + interim : '');
+  };
+
+  recognition.onend = function() {
+    if (micBtn) micBtn.classList.remove('voice-active');
+    if (finalTranscript.trim()) {
+      hideModal();
+      processVoiceTranscript(finalTranscript.trim());
+    } else {
+      hideModal();
+      showToast('No speech detected. Try again or use text input.', 'warning');
+    }
+  };
+
+  recognition.onerror = function(e) {
+    if (micBtn) micBtn.classList.remove('voice-active');
+    hideModal();
+    if (e.error === 'not-allowed') {
+      showToast('Microphone access denied. Check browser permissions.', 'error');
+    } else {
+      showVoiceTextFallback();
+    }
+  };
+
+  recognition.start();
+}
+
+function showVoiceTextFallback() {
+  showModal(
+    '<div style="max-width:460px;">' +
+      '<div class="card-title" style="margin-bottom:12px;">' + ICONS.bolt + ' Voice-to-Estimate</div>' +
+      '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Speech recognition unavailable. Describe your project below and AI will extract estimate parameters.</div>' +
+      '<textarea id="voice-text-input" class="form-input" rows="4" placeholder="e.g. 5-story mass timber office building, 45000 sqft, post-and-beam, Vancouver BC" style="width:100%; resize:vertical;"></textarea>' +
+      '<div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">' +
+        '<button class="btn btn-ghost" onclick="hideModal()">Cancel</button>' +
+        '<button class="btn btn-accent" data-action="submitVoiceText">Extract Parameters</button>' +
+      '</div>' +
+    '</div>'
+  );
+  setTimeout(function() { var ta = document.getElementById('voice-text-input'); if (ta) ta.focus(); }, 100);
+}
+
+function submitVoiceText() {
+  var ta = document.getElementById('voice-text-input');
+  if (!ta || !ta.value.trim()) return;
+  hideModal();
+  processVoiceTranscript(ta.value.trim());
+}
+
+function processVoiceTranscript(transcript) {
+  showToast('Parsing project description...', 'info');
+
+  var apiKey = localStorage.getItem('sc-anthropic-key');
+  var proxyUrl = typeof CLAUDE_PROXY_URL !== 'undefined' ? CLAUDE_PROXY_URL : null;
+
+  if (!apiKey && !proxyUrl) {
+    showToast('No API key configured. Go to Settings to add your Anthropic API key.', 'error');
+    return;
+  }
+
+  var systemPrompt = 'You are a structural cost estimation assistant. Extract building parameters from the user description. Return ONLY valid JSON with these fields (use null for unknowns): {"name": string, "projectType": "commercial"|"residential"|"institutional"|"mixed-use", "buildingArea": number (sqft), "stories": number, "primaryMaterial": "timber"|"steel"|"concrete"|"hybrid", "structuralSystem": string or null, "region": string matching a city-state slug or null, "notes": string summary}';
+
+  var payload = {
+    model: localStorage.getItem('sc-anthropic-model') || 'claude-sonnet-4-20250514',
+    max_tokens: 500,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: transcript }]
+  };
+
+  var headers = { 'Content-Type': 'application/json' };
+  var url;
+
+  if (apiKey) {
+    url = 'https://api.anthropic.com/v1/messages';
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  } else {
+    url = proxyUrl;
+  }
+
+  fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var text = '';
+      if (data.content && data.content[0]) text = data.content[0].text;
+      else if (data.error) { showToast('API error: ' + (data.error.message || 'Unknown'), 'error'); return; }
+      try {
+        var jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON found');
+        var params = JSON.parse(jsonMatch[0]);
+        applyVoiceParams(params, transcript);
+      } catch (e) {
+        showToast('Could not parse AI response. Try rephrasing.', 'error');
+      }
+    })
+    .catch(function(err) {
+      showToast('Voice parsing failed: ' + err.message, 'error');
+    });
+}
+
+function applyVoiceParams(params, transcript) {
+  var est = STATE.currentEstimate;
+  if (!est) { STATE.currentEstimate = createNewEstimate(); est = STATE.currentEstimate; }
+  if (params.name) est.name = params.name;
+  if (params.projectType) est.projectType = params.projectType;
+  if (params.buildingArea) est.buildingArea = params.buildingArea;
+  if (params.stories) est.stories = params.stories;
+  if (params.primaryMaterial) {
+    est.primaryMaterial = params.primaryMaterial;
+    if (typeof setPrimaryMaterial === 'function') setPrimaryMaterial(params.primaryMaterial);
+  }
+  if (params.structuralSystem) est.structuralSystem = params.structuralSystem;
+  if (params.region) est.region = params.region;
+  if (params.notes) est.notes = (est.notes ? est.notes + '\n' : '') + '[Voice] ' + params.notes;
+  saveState();
+  navigateTo('input');
+  showToast('Project parameters extracted from voice input!', 'success');
+}
+
 // ---- V2.0 ICON ADDITIONS ----
 ICONS.dashboard = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>';
 ICONS.scenario = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L20.5 3.5M21 16v5h-5M15 15l5.5 5.5M4 4l5 5"/></svg>';
@@ -7672,6 +8115,12 @@ function initV2Features() {
     faqOverlay.addEventListener('click', function(e) {
       if (e.target === faqOverlay) closeFAQModal();
     });
+  }
+
+  // Voice input button
+  var voiceBtn = document.getElementById('btn-voice-input');
+  if (voiceBtn) {
+    voiceBtn.addEventListener('click', startVoiceInput);
   }
 
   // Client mode toggle

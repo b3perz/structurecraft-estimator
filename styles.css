@@ -2909,3 +2909,38 @@ body.client-mode .estimate-card { pointer-events: auto; }
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
+
+/* --- PHASE 7A: VOICE INPUT --- */
+.voice-active { color: var(--danger) !important; animation: voicePulse 1s ease-in-out infinite; }
+@keyframes voicePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+.voice-listening-modal { display: flex; flex-direction: column; align-items: center; padding: 32px; text-align: center; }
+.voice-pulse-ring {
+  width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--accent); opacity: 0.4;
+  position: absolute; animation: voiceRing 1.5s ease-out infinite;
+}
+@keyframes voiceRing {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.voice-status { font-size: 1rem; font-weight: 600; color: var(--accent); margin-top: 16px; }
+
+/* --- PHASE 7B: ESCALATION TOGGLE --- */
+.toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; inset: 0; background: var(--bg-tertiary);
+  border-radius: 22px; border: 1px solid var(--border); transition: 0.2s;
+}
+.toggle-slider:before {
+  content: ""; position: absolute; width: 16px; height: 16px; left: 2px; bottom: 2px;
+  background: var(--text-muted); border-radius: 50%; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background: var(--bg-primary); }
+
+/* --- PHASE 7C: 3D BUILDING VISUALIZER --- */
+#building-viz-container canvas { display: block; border-radius: 8px; cursor: grab; }
+#building-viz-container canvas:active { cursor: grabbing; }
