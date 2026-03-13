@@ -239,6 +239,29 @@ function initDelegation() {
     var params = raw ? JSON.parse(raw) : {};
     if (action === 'handleDrop') handleDrop(e, params.category);
   });
+
+  // Delegation on modal overlay so data-action works inside modals
+  var modalOverlay = document.getElementById('modal-overlay');
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) {
+      var t = e.target.closest('[data-action]');
+      if (!t) return;
+      e.preventDefault();
+      var action = t.getAttribute('data-action');
+      var raw = t.getAttribute('data-params');
+      var params = raw ? JSON.parse(raw) : {};
+      if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+    });
+    modalOverlay.addEventListener('change', function(e) {
+      var t = e.target.closest('[data-change]');
+      if (!t) return;
+      var action = t.getAttribute('data-change');
+      var raw = t.getAttribute('data-params');
+      var params = raw ? JSON.parse(raw) : {};
+      params._value = t.value;
+      if (ACTION_HANDLERS[action]) ACTION_HANDLERS[action](params, t, e);
+    });
+  }
 }
 
 // Register all action handlers
@@ -263,7 +286,6 @@ registerAction('shareEstimateLink', function() { shareEstimateLink(); });
 registerAction('toggleUnitRatePanel', function() { toggleUnitRatePanel(); });
 registerAction('exportEstimateXLSX', function() { exportEstimateXLSX(); });
 registerAction('exportEstimate', function() { exportEstimate(); });
-registerAction('connectEstimate', function(p) { navigateTo('benchmarks'); });
 registerAction('viewQueueEstimate', function(p) { viewQueueEstimate(p.id); });
 registerAction('removeFromQueue', function(p) { removeFromQueue(p.id); });
 registerAction('stopQueueItem', function(p) { stopQueueItem(p.id); });
@@ -285,7 +307,6 @@ registerAction('toggleVolRationale', function(p, target) { toggleVolRationale(ta
 registerAction('viewEstimateDetail', function(p) { viewEstimateDetail(p.id); });
 registerAction('duplicateEstimate', function(p, t, e) { e.stopPropagation(); duplicateEstimate(p.id); });
 registerAction('loadEstimateToWorkspace', function(p, t, e) { e.stopPropagation(); loadEstimateToWorkspace(p.id); });
-registerAction('connectEstimateFromCard', function(p, t, e) { e.stopPropagation(); navigateTo('benchmarks'); });
 registerAction('toggleComparisonMode', function() { toggleComparisonMode(); });
 registerAction('pastFilterModel', function(p) { STATE.pastFilterModel = p._value; renderPage(); });
 registerAction('pastFilterStatus', function(p) { STATE.pastFilterStatus = p._value; renderPage(); });
@@ -332,6 +353,8 @@ registerAction('clearActivityLog', function() { ACTIVITY_LOG = []; localStorage.
 registerAction('executePaletteCommand', function(p) { executePaletteCommand(parseInt(p.idx)); });
 registerAction('startVoiceInput', function() { startVoiceInput(); });
 registerAction('submitVoiceText', function() { submitVoiceText(); });
+registerAction('hideModal', function() { hideModal(); });
+registerAction('printPage', function() { window.print(); });
 
 // ---- SECTION 3B: REGIONAL COST FACTORS ----
 // RSMeans City Cost Index data (2025 baseline: national average = 1.00)
@@ -1301,11 +1324,6 @@ function calcEstimateTotal(estimate) {
   return total;
 }
 
-function getEstimatePhases(deliveryModel) {
-  const model = DELIVERY_MODELS[deliveryModel];
-  return model ? model.phases : [];
-}
-
 function saveState() {
   try {
     localStorage.setItem('sc-theme', STATE.currentTheme);
@@ -1555,7 +1573,7 @@ function renderInputPage() {
     '<div class="section-divider">Document Uploads</div>' +
     '<div class="upload-grid mb-16">' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-params=\'{"category":"rfp"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
+        '<div class="upload-zone" id="upload-rfp" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"rfp"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">RFP / Bid Documents</div>' +
           '<div class="upload-subtitle">Drop files here or click to browse</div>' +
@@ -1565,7 +1583,7 @@ function renderInputPage() {
         renderFileList(est.files.rfp, 'rfp') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-params=\'{"category":"drawings"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
+        '<div class="upload-zone" id="upload-drawings" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"drawings"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Architectural Drawings</div>' +
           '<div class="upload-subtitle">SD or DD drawing sets</div>' +
@@ -1575,7 +1593,7 @@ function renderInputPage() {
         renderFileList(est.files.drawings, 'drawings') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-params=\'{"category":"structural"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
+        '<div class="upload-zone" id="upload-structural" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"structural"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Structural Drawings</div>' +
           '<div class="upload-subtitle">Structural engineering docs</div>' +
@@ -1585,7 +1603,7 @@ function renderInputPage() {
         renderFileList(est.files.structural, 'structural') +
       '</div>' +
       '<div class="card">' +
-        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-params=\'{"category":"narratives"}\' data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
+        '<div class="upload-zone" id="upload-narratives" data-drop="handleDrop" data-dragover="true" data-dragleave="true" data-action="triggerUpload" data-params=\'{"category":"narratives"}\'>' +
           '<div class="upload-icon">' + ICONS.upload + '</div>' +
           '<div class="upload-title">Narratives & Specs</div>' +
           '<div class="upload-subtitle">Structural narratives, specs</div>' +
@@ -1736,7 +1754,7 @@ function renderOutputPage() {
         '<button class="btn btn-sm' + (isClient ? ' btn-accent' : '') + '" data-action="toggleClientView">' +
           (isClient ? '&larr; Internal View' : 'Client View &rarr;') +
         '</button>' +
-        (isClient ? '<button class="btn btn-sm no-hide" onclick="window.print()">' + ICONS.download + ' Export PDF</button>' : '') +
+        (isClient ? '<button class="btn btn-sm no-hide" data-action="printPage">' + ICONS.download + ' Export PDF</button>' : '') +
         (!isClient ? '<button class="btn btn-sm" data-action="shareEstimateLink" title="Copy shareable link">' +
           ICONS.share + ' Share' +
         '</button>' +
@@ -3507,73 +3525,6 @@ function updateFootbridgeConfig(key, value) {
   renderPage();
   scottNotifyChange();
 }
-
-function renderFootbridgeOutput(fbEst) {
-  var phaseKeys = ['fb-engineering', 'fb-fabrication', 'fb-shipping', 'fb-foundations', 'fb-installation', 'fb-railing-finishes', 'fb-general-conditions'];
-  var activeTab = STATE.footbridgeOutputTab || 'summary';
-
-  var subtotal = 0;
-  phaseKeys.forEach(function(pk) {
-    if (fbEst.phases && fbEst.phases[pk]) {
-      subtotal += calcPhaseTotal(fbEst.phases[pk]);
-    }
-  });
-  var a = fbEst.assumptions || getDefaultAssumptions();
-  var margin = subtotal * (a.marginPercent / 100);
-  var overhead = subtotal * (a.overheadPercent / 100);
-  var contingency = subtotal * (a.contingencyPercent / 100);
-  var bondIns = subtotal * (a.bondInsurancePercent / 100);
-  var grandTotal = subtotal + margin + overhead + contingency + bondIns;
-
-  return '<div class="section-divider mt-24">Footbridge Estimate Output</div>' +
-
-    '<div class="assumptions-box mb-20">' +
-      '<div class="assumptions-header">' + ICONS.warning + ' Footbridge Pricing Assumptions</div>' +
-      '<div class="assumptions-grid">' +
-        '<div class="assumption-item"><div class="assumption-label">Margin</div><div class="assumption-value">' + fmtPct(a.marginPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Overhead</div><div class="assumption-value">' + fmtPct(a.overheadPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Contingency</div><div class="assumption-value">' + fmtPct(a.contingencyPercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Bond & Insurance</div><div class="assumption-value">' + fmtPct(a.bondInsurancePercent) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Glulam (per BF)</div><div class="assumption-value">' + fmtDec(a.glulamPriceBF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">DLT (per SF)</div><div class="assumption-value">' + fmtDec(a.dltPriceSF) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Steel Connections (per ton)</div><div class="assumption-value">' + fmt(a.steelConnectionsTon) + '</div></div>' +
-        '<div class="assumption-item"><div class="assumption-label">Crane (per day)</div><div class="assumption-value">' + fmt(a.craneDailyRate) + '</div></div>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="tabs">' +
-      '<div class="tab ' + (activeTab === 'summary' ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"summary"}\'>Summary</div>' +
-      phaseKeys.map(function(pk) {
-        return '<div class="tab ' + (activeTab === pk ? 'active' : '') + '" data-action="setFootbridgeOutputTab" data-params=\'{"tab":"' + pk + '"}\'>' + (PHASE_DEFS[pk] ? PHASE_DEFS[pk].name : pk) + '</div>';
-      }).join('') +
-    '</div>' +
-
-    (activeTab === 'summary' ? renderOutputSummary(fbEst, phaseKeys, subtotal, margin, overhead, contingency, bondIns, grandTotal) : '') +
-    phaseKeys.map(function(pk) { return activeTab === pk ? renderFootbridgePhaseTab(fbEst, pk) : ''; }).join('');
-}
-
-function renderFootbridgePhaseTab(fbEst, phaseKey) {
-  var phase = fbEst.phases && fbEst.phases[phaseKey] ? fbEst.phases[phaseKey] : { items: [] };
-  var phaseDef = PHASE_DEFS[phaseKey] || { name: phaseKey, description: '' };
-  var phaseSubtotal = calcPhaseTotal(phase);
-
-  return '<div class="slide-up"><div class="card">' +
-    '<div class="card-header"><div><div class="card-title">' + phaseDef.name + '</div><div class="card-subtitle">' + phaseDef.description + '</div></div></div>' +
-    '<div class="line-items-header"><div></div><div>Description</div><div class="cell-right">Qty</div><div class="cell-center">Unit</div><div class="cell-right">Rate</div><div class="cell-right">Total</div></div>' +
-    phase.items.map(function(item) {
-      return '<div class="line-item-row">' +
-        '<div></div>' +
-        '<div style="padding:6px 8px; font-size:0.82rem;">' + esc(item.name) + '</div>' +
-        '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtNum(item.qty) + '</div>' +
-        '<div class="cell-center" style="padding:6px 8px;">' + item.unit + '</div>' +
-        '<div class="cell-right cell-mono" style="padding:6px 8px;">' + fmtDec(item.rate) + '</div>' +
-        '<div class="cell-right cell-mono cell-bold" style="padding:6px 8px;">' + fmt(item.total) + '</div>' +
-      '</div>';
-    }).join('') +
-    (phase.items.length > 0 ? '<div class="line-item-row subtotal-row"><div></div><div style="font-weight:700; color:var(--text-primary);">Phase Subtotal</div><div></div><div></div><div></div><div class="cell-right cell-mono cell-accent" style="padding:4px 6px; font-size:0.92rem;">' + fmt(phaseSubtotal) + '</div></div>' : '') +
-  '</div></div>';
-}
-
 
 // ---- SECTION 9D: FOOTBRIDGE ESTIMATE GENERATOR ----
 // Parametric estimating model based on CAN/CSA O86, NDS, and AASHTO LRFD
@@ -5853,7 +5804,6 @@ var PAGE_MAP = {
   'footbridge': { title: 'Footbridge Estimator', render: renderFootbridgePage, breadcrumb: 'Estimate > Footbridge' },
   'past-estimates': { title: 'Past Estimates', render: renderPastEstimatesPage, breadcrumb: 'Library > Past Estimates' },
   'benchmarks': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
-  'connector': { title: 'Benchmarks', render: renderBenchmarksPage, breadcrumb: 'Library > Benchmarks' },
   'pricing-library': { title: 'Pricing Library', render: renderPricingLibraryPage, breadcrumb: 'Library > Pricing Library' },
   'analytics': { title: 'Analytics', render: renderAnalyticsPage, breadcrumb: 'Library > Analytics' },
   'scenarios': { title: 'What-If Scenarios', render: renderScenariosPage, breadcrumb: 'Tools > What-If Scenarios' },
@@ -7486,6 +7436,11 @@ function renderScenariosTab(est, phaseKeys, baseSubtotal, baseGrandTotal) {
   return html;
 }
 
+function showModal(html) {
+  document.getElementById('modal-container').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
 function hideModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
 }
@@ -7565,7 +7520,7 @@ registerAction('editScenarioModal', function(p) {
         '<div><label class="form-label">Stories</label><input type="number" class="form-input" id="sc-edit-stories" value="' + (snap.numStories || est.numStories || '') + '"></div>' +
       '</div>' +
       '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">' +
-        '<button class="btn" onclick="hideModal()">Cancel</button>' +
+        '<button class="btn" data-action="hideModal">Cancel</button>' +
         '<button class="btn btn-accent" data-action="saveScenarioEdit" data-params=\'{"idx":' + idx + '}\'>Save</button>' +
       '</div>' +
     '</div>';
@@ -7686,16 +7641,8 @@ function closeFAQModal() {
 }
 
 // ---- PHASE 4C: ANIMATED GENERATION REVEAL ----
-function animateEstimateReveal() {
-  var cards = document.querySelectorAll('#page-content .card');
-  cards.forEach(function(card, i) {
-    card.classList.add('estimate-reveal');
-    card.style.animationDelay = (i * 0.1) + 's';
-  });
-}
-
 // ---- PHASE 7C: 3D BUILDING VISUALIZER ----
-var _vizScene, _vizCamera, _vizRenderer, _vizAnimId;
+var _vizScene, _vizCamera, _vizRenderer, _vizAnimId, _vizAbort;
 
 function initBuildingVisualizer() {
   if (typeof THREE === 'undefined') {
@@ -7708,12 +7655,14 @@ function initBuildingVisualizer() {
   var fallback = document.getElementById('building-viz-fallback');
   if (fallback) fallback.style.display = 'none';
 
-  // Clean up previous
+  // Clean up previous renderer and event listeners
   if (_vizRenderer) {
     cancelAnimationFrame(_vizAnimId);
-    container.removeChild(_vizRenderer.domElement);
+    if (_vizRenderer.domElement.parentNode) _vizRenderer.domElement.parentNode.removeChild(_vizRenderer.domElement);
     _vizRenderer.dispose();
   }
+  if (_vizAbort) _vizAbort.abort();
+  _vizAbort = new AbortController();
 
   var w = container.clientWidth, h = container.clientHeight;
   _vizScene = new THREE.Scene();
@@ -7760,25 +7709,26 @@ function initBuildingVisualizer() {
   }
   updateCamera();
 
-  _vizRenderer.domElement.addEventListener('mousedown', function(e) { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
-  window.addEventListener('mouseup', function() { isDragging = false; });
+  var sig = { signal: _vizAbort.signal };
+  _vizRenderer.domElement.addEventListener('mousedown', function(e) { isDragging = true; prevX = e.clientX; prevY = e.clientY; }, sig);
+  window.addEventListener('mouseup', function() { isDragging = false; }, sig);
   window.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
     angleX += (e.clientX - prevX) * 0.008;
     angleY = Math.max(0.05, Math.min(1.4, angleY + (e.clientY - prevY) * 0.008));
     prevX = e.clientX; prevY = e.clientY;
     updateCamera();
-  });
+  }, sig);
   _vizRenderer.domElement.addEventListener('wheel', function(e) {
     e.preventDefault();
     radius = Math.max(10, Math.min(80, radius + e.deltaY * 0.05));
     updateCamera();
-  }, { passive: false });
+  }, { passive: false, signal: _vizAbort.signal });
 
   // Touch support
   _vizRenderer.domElement.addEventListener('touchstart', function(e) {
     if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; }
-  });
+  }, sig);
   _vizRenderer.domElement.addEventListener('touchmove', function(e) {
     if (!isDragging || e.touches.length !== 1) return;
     e.preventDefault();
@@ -7786,8 +7736,8 @@ function initBuildingVisualizer() {
     angleY = Math.max(0.05, Math.min(1.4, angleY + (e.touches[0].clientY - prevY) * 0.008));
     prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
     updateCamera();
-  }, { passive: false });
-  _vizRenderer.domElement.addEventListener('touchend', function() { isDragging = false; });
+  }, { passive: false, signal: _vizAbort.signal });
+  _vizRenderer.domElement.addEventListener('touchend', function() { isDragging = false; }, sig);
 
   function animate() {
     _vizAnimId = requestAnimationFrame(animate);
@@ -7806,7 +7756,7 @@ function updateBuildingModel() {
   group.name = 'buildingGroup';
 
   var est = STATE.currentEstimate;
-  var stories = Math.max(1, Math.min(20, est ? (est.stories || 3) : 3));
+  var stories = Math.max(1, Math.min(20, est ? (est.numStories || 3) : 3));
   var area = est ? (est.buildingArea || 10000) : 10000;
   var mat = est ? (est.primaryMaterial || 'timber') : 'timber';
 
@@ -7944,7 +7894,7 @@ function startSpeechRecognition(SpeechRecognition) {
       '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>' +
       '<div class="voice-status">Listening...</div>' +
       '<div class="voice-transcript" id="voice-transcript" style="min-height:40px; color:var(--text-secondary); font-size:0.85rem; margin-top:12px;"></div>' +
-      '<button class="btn btn-ghost" style="margin-top:16px;" onclick="hideModal()">Cancel</button>' +
+      '<button class="btn btn-ghost" style="margin-top:16px;" data-action="hideModal">Cancel</button>' +
     '</div>'
   );
 
@@ -7994,7 +7944,7 @@ function showVoiceTextFallback() {
       '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Speech recognition unavailable. Describe your project below and AI will extract estimate parameters.</div>' +
       '<textarea id="voice-text-input" class="form-input" rows="4" placeholder="e.g. 5-story mass timber office building, 45000 sqft, post-and-beam, Vancouver BC" style="width:100%; resize:vertical;"></textarea>' +
       '<div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">' +
-        '<button class="btn btn-ghost" onclick="hideModal()">Cancel</button>' +
+        '<button class="btn btn-ghost" data-action="hideModal">Cancel</button>' +
         '<button class="btn btn-accent" data-action="submitVoiceText">Extract Parameters</button>' +
       '</div>' +
     '</div>'
@@ -8067,7 +8017,7 @@ function applyVoiceParams(params, transcript) {
   if (params.name) est.name = params.name;
   if (params.projectType) est.projectType = params.projectType;
   if (params.buildingArea) est.buildingArea = params.buildingArea;
-  if (params.stories) est.stories = params.stories;
+  if (params.stories) est.numStories = params.stories;
   if (params.primaryMaterial) {
     est.primaryMaterial = params.primaryMaterial;
     if (typeof setPrimaryMaterial === 'function') setPrimaryMaterial(params.primaryMaterial);
